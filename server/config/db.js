@@ -21,10 +21,8 @@ export async function query(text, params) {
 }
 
 export async function testConnection() {
-  const result = await pool.query(
+  const result = await query(
     'SELECT current_database() AS database, current_user AS user',
   )
   return result.rows[0]
 }
-
-export default pool
