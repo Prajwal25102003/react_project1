@@ -1,11 +1,11 @@
 ---
-description: Enforce MVC folder structure for server and React client
+description: Enforce MVC folder structure for server and React client on every change
 alwaysApply: true
 ---
 
 # MVC Structure
 
-Keep Model–View–Controller separation on both sides. Do not dump logic into `App.jsx` or `server/index.js`.
+Follow this on **every** feature, fix, and refactor. Do not dump logic into `App.jsx` or `server/index.js`.
 
 ## Server (`server/`)
 
@@ -23,18 +23,30 @@ Flow: `routes` → `controllers` → `models`
 
 | Layer | Folder | Responsibility |
 |-------|--------|----------------|
-| View | `views/` | Presentational UI (layout, pages, components) |
-| Controller | `controllers/` | Hooks/handlers: state, events, call models |
-| Model | `models/` | API calls and client data access |
+| View | `views/` | Presentational UI only (JSX, styling, props) |
+| Controller | `controllers/` | Hooks: state, events, call models — no JSX |
+| Model | `models/` | API calls, static data access, client data sources |
 | Config | `config/` | API base URL and client config |
 | Utils | `utils/` | Shared helpers |
 
-Flow: `views` → `controllers` → `models` → API
+Flow: `views` → `controllers` → `models` → API (or local data)
 
-## Rules
+## Mandatory checklist (every prompt)
 
-- New features get matching files in the correct layer (e.g. `healthModel` + `healthController` + route/view).
-- Views stay presentational; no `fetch` inside views.
-- Controllers do not contain raw SQL or HTML markup.
-- Models do not handle HTTP status codes or JSX.
-- Prefer extending this layout over adding one-off folders at the root of `src/` or `server/`.
+1. New feature → matching files in the correct layers (model + controller + view/route as needed).
+2. Views: no `fetch`, no business rules, no data lists hardcoded — receive data via props/hooks from controllers.
+3. Controllers: no SQL, no JSX/HTML markup.
+4. Models: no HTTP status codes (server), no JSX (client). Static lists/config data belong in models (e.g. `getNavModules`), not controllers.
+5. Prefer extending this layout over one-off folders at the root of `src/` or `server/`.
+
+## Examples
+
+```text
+✅ src/models/navModel.js        → getNavModules()
+✅ src/controllers/navController.js → useNavModules() calls model, holds active id
+✅ src/views/layout/ModuleNav.jsx → renders modules from props
+
+❌ NAV_MODULES array inside a controller
+❌ fetch() inside a view
+❌ route handlers inside server/index.js
+```

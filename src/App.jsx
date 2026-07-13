@@ -1,13 +1,7 @@
-import LeftPanel from './views/layout/LeftPanel.jsx'
-import RightPanel from './views/layout/RightPanel.jsx'
+import AppShell from './views/layout/AppShell.jsx'
 
 function App() {
-  return (
-    <div className="flex h-screen w-full">
-      <LeftPanel />
-      <RightPanel />
-    </div>
-  )
+  return <AppShell />
 }
 
 export default App

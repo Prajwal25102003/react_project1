@@ -1,4 +1,4 @@
-import { useHealthStatus } from '../../controllers/healthController.js'
+import ModuleNav from './ModuleNav.jsx'
 
 function HexLogo({ className }) {
   return (
@@ -32,10 +32,26 @@ function HexLogo({ className }) {
   )
 }
 
+function CloseIcon({ className }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  )
+}
+
 function BrandBlock({ mark, titleClassName, subtitle, subtitleClassName }) {
   return (
-    <div className="relative leading-tight text-center">
-      <div className="absolute top-1/2 right-full mr-3 -translate-y-1/2">
+    <div className="relative mx-auto w-fit max-w-full leading-tight text-center">
+      <div className="absolute top-1/2 right-full mr-2 -translate-y-1/2 sm:mr-3">
         {mark}
       </div>
       <p className={titleClassName}>EMP:SYS</p>
@@ -44,32 +60,58 @@ function BrandBlock({ mark, titleClassName, subtitle, subtitleClassName }) {
   )
 }
 
-function LeftPanel() {
-  const { nodeLabel } = useHealthStatus()
-
+function LeftPanel({
+  isOpen,
+  onClose,
+  modules,
+  activeModuleId,
+  onSelectModule,
+  nodeLabel,
+}) {
   return (
-    <aside className="flex w-[20%] flex-col bg-[#0E4752] px-4 py-5">
-      <header className="flex items-center justify-center">
-        <div className="relative leading-tight text-center">
+    <aside
+      className={`fixed inset-y-0 left-0 z-50 flex w-[min(18rem,88vw)] flex-col bg-[#0E4752] px-3 py-4 transition-transform duration-200 ease-out sm:px-4 sm:py-5 md:static md:z-auto md:w-[20%] md:min-w-[14rem] md:max-w-[18rem] md:translate-x-0 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}
+    >
+      <div className="mb-2 flex items-center justify-end md:hidden">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-white/90 hover:bg-white/10"
+          aria-label="Close menu"
+        >
+          <CloseIcon className="h-5 w-5" />
+        </button>
+      </div>
+
+      <header className="flex items-center justify-center px-6 sm:px-8">
+        <div className="relative w-fit leading-tight text-center">
           <img
             src="/logo.png?v=4"
             alt=""
-            className="absolute top-1/2 right-full mr-3 h-12 w-12 -translate-y-1/2 object-contain"
+            className="absolute top-1/2 right-full mr-2 h-10 w-10 -translate-y-1/2 object-contain sm:mr-3 sm:h-12 sm:w-12"
           />
-          <p className="text-lg font-bold tracking-[0.08em] text-[#E8C547]">
+          <p className="text-base font-bold tracking-[0.08em] text-[#E8C547] sm:text-lg">
             EMP:SYS
           </p>
-          <p className="text-xs font-medium tracking-[0.12em] text-white">
+          <p className="text-[11px] font-medium tracking-[0.12em] text-white sm:text-xs">
             SEC-OPS
           </p>
         </div>
       </header>
 
+      <ModuleNav
+        modules={modules}
+        activeModuleId={activeModuleId}
+        onSelectModule={onSelectModule}
+      />
+
       <div className="flex-1" />
 
-      <footer className="flex items-center justify-center border-t border-white/15 pt-4">
+      <footer className="flex items-center justify-center border-t border-white/15 px-6 pt-4 sm:px-8">
         <BrandBlock
-          mark={<HexLogo className="h-9 w-8 text-[#E8C547]" />}
+          mark={<HexLogo className="h-8 w-7 text-[#E8C547] sm:h-9 sm:w-8" />}
           titleClassName="text-sm font-semibold tracking-[0.2em] text-[#E8C547]"
           subtitle={nodeLabel}
           subtitleClassName="mt-0.5 text-[10px] font-medium tracking-[0.18em] text-white/80"
