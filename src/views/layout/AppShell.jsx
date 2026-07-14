@@ -1,43 +1,51 @@
-import { useHealthStatus } from '../../controllers/healthController.js'
-import { useNavModules } from '../../controllers/navController.js'
-import { useSidebar } from '../../controllers/layoutController.js'
-import LeftPanel from './LeftPanel.jsx'
-import RightPanel from './RightPanel.jsx'
-import MobileHeader from './MobileHeader.jsx'
+import { Outlet } from 'react-router-dom'
+import { useHeader } from '../../controllers/headerController.js'
+import { useNav, useSidebar } from '../../controllers/navController.js'
+import Header from './Header.jsx'
+import Sidebar from './Sidebar.jsx'
 
 function AppShell() {
-  const { isSidebarOpen, openSidebar, closeSidebar } = useSidebar()
-  const { modules, activeModuleId, selectModule } = useNavModules()
-  const { nodeLabel } = useHealthStatus()
-
-  function handleSelectModule(moduleId) {
-    selectModule(moduleId)
-    closeSidebar()
-  }
+  const { groups, promo } = useNav()
+  const { sidebarToggle, toggleSidebar, closeSidebar } = useSidebar()
+  const header = useHeader()
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-[#E9ECF3]">
-      <MobileHeader onOpenSidebar={openSidebar} />
-
-      {isSidebarOpen ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 bg-black/45 md:hidden"
-          aria-label="Close menu"
-          onClick={closeSidebar}
-        />
-      ) : null}
-
-      <LeftPanel
-        isOpen={isSidebarOpen}
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar
+        groups={groups}
+        promo={promo}
+        sidebarToggle={sidebarToggle}
         onClose={closeSidebar}
-        modules={modules}
-        activeModuleId={activeModuleId}
-        onSelectModule={handleSelectModule}
-        nodeLabel={nodeLabel}
       />
 
-      <RightPanel />
+      <div className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
+        <Header
+          sidebarToggle={sidebarToggle}
+          onToggleSidebar={toggleSidebar}
+          menuToggle={header.menuToggle}
+          onToggleMenu={header.toggleMenu}
+          searchQuery={header.searchQuery}
+          onSearchChange={header.setSearchQuery}
+          darkMode={header.darkMode}
+          onToggleDarkMode={header.toggleDarkMode}
+          notificationsOpen={header.notificationsOpen}
+          notifying={header.notifying}
+          onToggleNotifications={header.toggleNotifications}
+          onCloseNotifications={header.closeNotifications}
+          notifications={header.notifications}
+          notificationsRef={header.notificationsRef}
+          user={header.user}
+          userOpen={header.userOpen}
+          onToggleUserMenu={header.toggleUserMenu}
+          userMenuItems={header.userMenuItems}
+          userRef={header.userRef}
+        />
+        <main>
+          <div className="mx-auto max-w-(--breakpoint-2xl) p-4 md:p-6">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

@@ -1,25 +1,13 @@
 ---
-description: Enforce MVC folder structure for server and React client on every change
+description: Enforce MVC folder structure for React client (and server when added)
 alwaysApply: true
 ---
 
 # MVC Structure
 
-Follow this on **every** feature, fix, and refactor. Do not dump logic into `App.jsx` or `server/index.js`.
+Follow this on **every** feature, fix, and refactor. Do not dump logic into `App.jsx`.
 
-## Server (`server/`)
-
-| Layer | Folder | Responsibility |
-|-------|--------|----------------|
-| Model | `models/` | DB queries and data access |
-| Controller | `controllers/` | Request handling, call models, shape responses |
-| Routes | `routes/` | Wire HTTP paths to controllers only |
-| Config | `config/` | DB and env setup |
-| Utils | `utils/` | Shared helpers |
-
-Flow: `routes` → `controllers` → `models`
-
-## Client (`src/`)
+## Client (`src/`) — required now
 
 | Layer | Folder | Responsibility |
 |-------|--------|----------------|
@@ -31,22 +19,24 @@ Flow: `routes` → `controllers` → `models`
 
 Flow: `views` → `controllers` → `models` → API (or local data)
 
+## Server (`server/`) — add later when needed
+
+| Layer | Folder | Responsibility |
+|-------|--------|----------------|
+| Model | `models/` | DB queries and data access |
+| Controller | `controllers/` | Request handling, call models, shape responses |
+| Routes | `routes/` | Wire HTTP paths to controllers only |
+| Config | `config/` | DB and env setup |
+| Utils | `utils/` | Shared helpers |
+
+Flow: `routes` → `controllers` → `models`
+
+Do not put route handlers in `server/index.js` when the server is added.
+
 ## Mandatory checklist (every prompt)
 
-1. New feature → matching files in the correct layers (model + controller + view/route as needed).
-2. Views: no `fetch`, no business rules, no data lists hardcoded — receive data via props/hooks from controllers.
+1. New feature → matching files in the correct layers.
+2. Views: no `fetch`, no business rules, no hardcoded data lists — use controllers.
 3. Controllers: no SQL, no JSX/HTML markup.
-4. Models: no HTTP status codes (server), no JSX (client). Static lists/config data belong in models (e.g. `getNavModules`), not controllers.
+4. Models: no HTTP status codes (server), no JSX (client). Static lists belong in models.
 5. Prefer extending this layout over one-off folders at the root of `src/` or `server/`.
-
-## Examples
-
-```text
-✅ src/models/navModel.js        → getNavModules()
-✅ src/controllers/navController.js → useNavModules() calls model, holds active id
-✅ src/views/layout/ModuleNav.jsx → renders modules from props
-
-❌ NAV_MODULES array inside a controller
-❌ fetch() inside a view
-❌ route handlers inside server/index.js
-```
