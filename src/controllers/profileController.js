@@ -1,18 +1,40 @@
-import { useCallback, useState } from 'react'
-import { getProfileData } from '../models/profileModel.js'
+import { useEffect, useState } from "react";
+import { mapAuthProfile } from "../models/profileModel.js";
+import { fetchAuthProfile } from "../services/authService.js";
 
 export function useProfile() {
-  const profile = getProfileData()
-  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false)
-  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false)
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError("");
+        const data = await fetchAuthProfile();
+        if (!cancelled) setProfile(mapAuthProfile(data));
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Failed to load profile");
+          setProfile(null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return {
     profile,
-    isInfoModalOpen,
-    isAddressModalOpen,
-    openInfoModal: useCallback(() => setIsInfoModalOpen(true), []),
-    closeInfoModal: useCallback(() => setIsInfoModalOpen(false), []),
-    openAddressModal: useCallback(() => setIsAddressModalOpen(true), []),
-    closeAddressModal: useCallback(() => setIsAddressModalOpen(false), []),
-  }
+    loading,
+    error,
+  };
 }

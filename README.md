@@ -1,23 +1,38 @@
-# TailAdmin React + Tailwind (MVC)
+# Employee Management System
 
-React port of **TailAdmin Free** with Tailwind CSS and client MVC.
+React + Tailwind admin UI (TailAdmin patterns) with Node/Express API and PostgreSQL (`employee_management`).
 
 ## Run
 
 ```bash
 npm install
+# Copy server/.env.example → server/.env and set DB_* + JWT_SECRET
+npm run seed:users
 npm run dev
 ```
 
-App: http://localhost:5173
+- App: http://localhost:5173  
+- API: http://localhost:5000  
+- Health: http://localhost:5000/api/health  
 
-## MVC (client)
+`JWT_SECRET` is required in `server/.env` (no default). For existing DBs, also run `server/sql/migrations/002_attendance_unique_employee_date.sql`.
 
-- `src/views` → UI
-- `src/controllers` → hooks / state
-- `src/models` → data
-- `src/config/api.js` → ready for a future API base URL
+## Modules
 
-## Server
+Dashboard, Employees, Departments, Attendance, Leave Requests
 
-No `server/` folder yet. You can add Node/Express later under `server/` using the same MVC layout (`routes` → `controllers` → `models`) and point the client at it via `VITE_API_URL`.
+Demo logins (password `12345678`): `hr@company.com`, `arjuntejas@company.in`, `admin@company.com`.
+
+To reload Indian sample data:
+
+```bash
+npm run seed:indian
+```
+
+## MVC
+
+**Client:** `src/views` → `src/controllers` → `src/services` → `src/models` → API  
+
+**Server:** `server/routes` → `server/controllers` → `server/models` → PostgreSQL  
+
+New UI should reuse TailAdmin building blocks (`PageCard`, `Breadcrumb`, dashboard cards/charts, table layouts).

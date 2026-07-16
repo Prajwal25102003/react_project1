@@ -12,14 +12,18 @@ Follow this on **every** feature, fix, and refactor. Do not dump logic into `App
 | Layer | Folder | Responsibility |
 |-------|--------|----------------|
 | View | `views/` | Presentational UI only (JSX, styling, props) |
-| Controller | `controllers/` | Hooks: state, events, call models — no JSX |
-| Model | `models/` | API calls, static data access, client data sources |
+| Controller | `controllers/` | Hooks: state, events — call services + models — no JSX |
+| Service | `services/` | HTTP / API calls (`fetch`), response wiring — no JSX |
+| Model | `models/` | Validation, form shapes, mappers, static lists, constants |
 | Config | `config/` | API base URL and client config |
 | Utils | `utils/` | Shared helpers |
 
-Flow: `views` → `controllers` → `models` → API (or local data)
+Flow: `views` → `controllers` → `services` → API  
+          ↘ `models` (validation, constants, mapping helpers)
 
-## Server (`server/`) — add later when needed
+Services may call model mappers to shape API data. Controllers call services for network work and models for local rules/data.
+
+## Server (`server/`)
 
 | Layer | Folder | Responsibility |
 |-------|--------|----------------|
@@ -31,12 +35,13 @@ Flow: `views` → `controllers` → `models` → API (or local data)
 
 Flow: `routes` → `controllers` → `models`
 
-Do not put route handlers in `server/index.js` when the server is added.
+Do not put route handlers in `server/index.js`.
 
 ## Mandatory checklist (every prompt)
 
 1. New feature → matching files in the correct layers.
 2. Views: no `fetch`, no business rules, no hardcoded data lists — use controllers.
-3. Controllers: no SQL, no JSX/HTML markup.
-4. Models: no HTTP status codes (server), no JSX (client). Static lists belong in models.
-5. Prefer extending this layout over one-off folders at the root of `src/` or `server/`.
+3. Controllers: no SQL, no JSX/HTML markup, no raw `fetch` — use services.
+4. Services: HTTP only (plus thin wiring to model mappers); no React hooks/JSX.
+5. Models: no `fetch`/HTTP; no JSX. Validation, forms, static lists, and mappers belong here.
+6. Prefer extending this layout over one-off folders at the root of `src/` or `server/`.

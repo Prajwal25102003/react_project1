@@ -1,19 +1,40 @@
-function PasswordField({ showPassword, onToggle, placeholder = 'Enter your password', className = '' }) {
+function PasswordField({
+  showPassword,
+  onToggle,
+  placeholder = "Enter your password",
+  className = "",
+  value,
+  onChange,
+  name,
+  id,
+  ...inputProps
+}) {
   return (
-    <div className="relative">
+    <div className="relative min-w-0 w-full">
       <input
-        type={showPassword ? 'text' : 'password'}
+        id={id}
+        name={name}
+        type={showPassword ? "text" : "password"}
         placeholder={placeholder}
         className={className}
+        value={value}
+        onChange={onChange}
+        {...inputProps}
       />
       <button
         type="button"
         onClick={onToggle}
-        className="absolute top-1/2 right-4 z-30 -translate-y-1/2 cursor-pointer text-gray-500 dark:text-gray-400"
-        aria-label={showPassword ? 'Hide password' : 'Show password'}
+        className="absolute top-1/2 right-4 z-30 -translate-y-1/2 cursor-pointer text-gray-500"
+        aria-label={showPassword ? "Hide password" : "Show password"}
       >
         {!showPassword ? (
-          <svg className="fill-current" width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg
+            className="fill-current"
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+          >
             <path
               fillRule="evenodd"
               clipRule="evenodd"
@@ -21,7 +42,13 @@ function PasswordField({ showPassword, onToggle, placeholder = 'Enter your passw
             />
           </svg>
         ) : (
-          <svg className="fill-current" width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg
+            className="fill-current"
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+          >
             <path
               fillRule="evenodd"
               clipRule="evenodd"
@@ -31,7 +58,7 @@ function PasswordField({ showPassword, onToggle, placeholder = 'Enter your passw
         )}
       </button>
     </div>
-  )
+  );
 }
 
-export default PasswordField
+export default PasswordField;

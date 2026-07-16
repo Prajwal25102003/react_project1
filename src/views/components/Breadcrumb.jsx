@@ -1,13 +1,11 @@
 function Breadcrumb({ pageName }) {
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">
-        {pageName}
-      </h2>
+    <div className="mb-6 flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3">
+      <h2 className="min-w-0 text-xl font-semibold text-gray-800">{pageName}</h2>
       <nav>
         <ol className="flex items-center gap-1.5">
           <li>
-            <span className="text-sm text-gray-500 dark:text-gray-400">Home</span>
+            <span className="text-sm text-gray-500">Home</span>
           </li>
           <li>
             <svg
@@ -28,14 +26,12 @@ function Breadcrumb({ pageName }) {
             </svg>
           </li>
           <li>
-            <span className="text-sm text-gray-800 dark:text-white/90">
-              {pageName}
-            </span>
+            <span className="text-sm text-gray-800">{pageName}</span>
           </li>
         </ol>
       </nav>
     </div>
-  )
+  );
 }
 
-export default Breadcrumb
+export default Breadcrumb;

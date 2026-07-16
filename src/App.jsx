@@ -1,58 +1,84 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import AppShell from './views/layout/AppShell.jsx'
-import DashboardPage from './views/dashboard/DashboardPage.jsx'
-import CalendarPage from './views/pages/CalendarPage.jsx'
-import LineChartPage from './views/pages/LineChartPage.jsx'
-import BarChartPage from './views/pages/BarChartPage.jsx'
-import AlertsPage from './views/pages/AlertsPage.jsx'
-import AvatarsPage from './views/pages/AvatarsPage.jsx'
-import BadgePage from './views/pages/BadgePage.jsx'
-import ButtonsPage from './views/pages/ButtonsPage.jsx'
-import ImagesPage from './views/pages/ImagesPage.jsx'
-import VideosPage from './views/pages/VideosPage.jsx'
-import BasicTablesPage from './views/pages/BasicTablesPage.jsx'
-import FormElementsPage from './views/pages/FormElementsPage.jsx'
-import ProfilePage from './views/pages/ProfilePage.jsx'
-import BlankPage from './views/pages/BlankPage.jsx'
-import NotFoundPage from './views/pages/NotFoundPage.jsx'
-import SignInPage from './views/pages/SignInPage.jsx'
-import SignUpPage from './views/pages/SignUpPage.jsx'
+import { AuthProvider } from "./controllers/authContext.jsx";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import {
+  GuestRoute,
+  ProtectedRoute,
+  RoleRoute,
+} from "./views/components/ProtectedRoute.jsx";
+import { HR_ADMIN_ROLES, ROLES } from "./models/authModel.js";
+import AppShell from "./views/layout/AppShell.jsx";
+import DashboardPage from "./views/dashboard/DashboardPage.jsx";
+import EmployeesPage from "./views/pages/EmployeesPage.jsx";
+import EmployeeFormPage from "./views/pages/EmployeeFormPage.jsx";
+import DepartmentsPage from "./views/pages/DepartmentsPage.jsx";
+import DepartmentFormPage from "./views/pages/DepartmentFormPage.jsx";
+import AttendancePage from "./views/pages/AttendancePage.jsx";
+import AttendanceFormPage from "./views/pages/AttendanceFormPage.jsx";
+import LeaveRequestsPage from "./views/pages/LeaveRequestsPage.jsx";
+import LeaveFormPage from "./views/pages/LeaveFormPage.jsx";
+import ProfilePage from "./views/pages/ProfilePage.jsx";
+import NotFoundPage from "./views/pages/NotFoundPage.jsx";
+import SignInPage from "./views/pages/SignInPage.jsx";
 
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/signin" element={<SignInPage />} />
-      <Route path="/signup" element={<SignUpPage />} />
+      <Route element={<GuestRoute />}>
+        <Route path="/signin" element={<SignInPage />} />
+      </Route>
+
       <Route path="/404" element={<NotFoundPage />} />
 
-      <Route element={<AppShell />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="calendar" element={<CalendarPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="form-elements" element={<FormElementsPage />} />
-        <Route path="basic-tables" element={<BasicTablesPage />} />
-        <Route path="blank" element={<BlankPage />} />
-        <Route path="line-chart" element={<LineChartPage />} />
-        <Route path="bar-chart" element={<BarChartPage />} />
-        <Route path="alerts" element={<AlertsPage />} />
-        <Route path="avatars" element={<AvatarsPage />} />
-        <Route path="badge" element={<BadgePage />} />
-        <Route path="buttons" element={<ButtonsPage />} />
-        <Route path="images" element={<ImagesPage />} />
-        <Route path="videos" element={<VideosPage />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppShell />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+
+          <Route element={<RoleRoute roles={HR_ADMIN_ROLES} />}>
+            <Route path="employees" element={<EmployeesPage />} />
+            <Route path="employees/new" element={<EmployeeFormPage />} />
+            <Route path="employees/:id/edit" element={<EmployeeFormPage />} />
+            <Route path="departments" element={<DepartmentsPage />} />
+            <Route path="departments/new" element={<DepartmentFormPage />} />
+            <Route
+              path="departments/:id/edit"
+              element={<DepartmentFormPage />}
+            />
+            <Route path="attendance/new" element={<AttendanceFormPage />} />
+            <Route
+              path="attendance/:id/edit"
+              element={<AttendanceFormPage />}
+            />
+          </Route>
+
+          <Route
+            element={
+              <RoleRoute roles={[ROLES.HR, ROLES.ADMIN, ROLES.EMPLOYEE]} />
+            }
+          >
+            <Route path="attendance" element={<AttendancePage />} />
+            <Route path="leave-requests" element={<LeaveRequestsPage />} />
+          </Route>
+
+          <Route element={<RoleRoute roles={[ROLES.EMPLOYEE]} />}>
+            <Route path="leave-requests/new" element={<LeaveFormPage />} />
+          </Route>
+        </Route>
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
-  )
+  );
 }
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
-  )
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>
+  );
 }
 
-export default App
+export default App;

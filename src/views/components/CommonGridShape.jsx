@@ -8,7 +8,7 @@ function CommonGridShape() {
         <img src="/images/shape/grid-01.svg" alt="grid" />
       </div>
     </>
-  )
+  );
 }
 
-export default CommonGridShape
+export default CommonGridShape;

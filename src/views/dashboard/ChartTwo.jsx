@@ -1,11 +1,16 @@
-import Chart from 'react-apexcharts'
-import { useChartTwo } from '../../controllers/chartController.js'
-import ChartActionsMenu from './ChartActionsMenu.jsx'
+import Chart from "react-apexcharts";
+import { useMemo } from "react";
 
 function TrendIcon({ trend }) {
-  if (trend === 'down') {
+  if (trend === "down") {
     return (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <path
           fillRule="evenodd"
           clipRule="evenodd"
@@ -13,11 +18,17 @@ function TrendIcon({ trend }) {
           fill="#D92D20"
         />
       </svg>
-    )
+    );
   }
 
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <path
         fillRule="evenodd"
         clipRule="evenodd"
@@ -25,55 +36,126 @@ function TrendIcon({ trend }) {
         fill="#039855"
       />
     </svg>
-  )
+  );
 }
 
-function ChartTwo() {
-  const { menuOpen, toggleMenu, closeMenu, options, series, type, height, meta } =
-    useChartTwo()
+function ChartTwo({ chart, compact = false }) {
+  const options = useMemo(() => {
+    if (!chart?.options) return null;
+
+    return {
+      ...chart.options,
+      plotOptions: {
+        ...chart.options.plotOptions,
+        radialBar: {
+          ...chart.options.plotOptions?.radialBar,
+          dataLabels: {
+            name: { show: false },
+            value: { show: false },
+          },
+        },
+      },
+    };
+  }, [chart]);
+
+  if (!options || !chart?.meta) return null;
+
+  const { meta } = chart;
+  const activeRate = Number(chart.options.series?.[0] ?? 0);
+  const displayRate = Number.isInteger(activeRate)
+    ? String(activeRate)
+    : activeRate.toFixed(1);
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-gray-100 dark:border-gray-800 dark:bg-white/[0.03]">
-      <div className="shadow-default rounded-2xl bg-white px-5 pb-11 pt-5 dark:bg-gray-900 sm:px-6 sm:pt-6">
-        <div className="flex justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
-              Monthly Target
-            </h3>
-            <p className="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
-              Target you’ve set for each month
-            </p>
-          </div>
-          <ChartActionsMenu
-            menuOpen={menuOpen}
-            toggleMenu={toggleMenu}
-            closeMenu={closeMenu}
-          />
+    <div
+      className={
+        compact
+          ? "flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-gray-100"
+          : "rounded-2xl border border-gray-200 bg-gray-100"
+      }
+    >
+      <div
+        className={
+          compact
+            ? "shadow-default flex min-h-0 flex-1 flex-col rounded-2xl bg-white px-4 pb-3 pt-4 sm:px-5"
+            : "shadow-default rounded-2xl bg-white px-5 pb-6 pt-5 sm:px-6 sm:pt-6"
+        }
+      >
+        <div className="shrink-0">
+          <h3
+            className={
+              compact
+                ? "text-base font-semibold text-gray-800"
+                : "text-lg font-semibold text-gray-800"
+            }
+          >
+            {chart.title || "Active Workforce"}
+          </h3>
+          <p className="mt-1 text-theme-sm text-gray-500">
+            {chart.description ||
+              "Share of employees currently marked active"}
+          </p>
         </div>
 
-        <div className="relative max-h-[195px]">
-          <Chart options={options} series={series} type={type} height={height} />
-          <span className="absolute left-1/2 top-[85%] -translate-x-1/2 -translate-y-[85%] rounded-full bg-success-50 px-3 py-1 text-xs font-medium text-success-600 dark:bg-success-500/15 dark:text-success-500">
+        <div
+          className={
+            compact
+              ? "mt-3 flex min-h-0 flex-1 flex-col items-center justify-center"
+              : "mt-6 flex flex-col items-center"
+          }
+        >
+          <div
+            className={
+              compact
+                ? "mx-auto h-[110px] w-full max-w-[220px] overflow-hidden"
+                : "mx-auto h-[160px] w-full max-w-[280px] overflow-hidden"
+            }
+          >
+            <Chart
+              options={options}
+              series={options.series}
+              type="radialBar"
+              height={compact ? 220 : options.chart.height}
+            />
+          </div>
+
+          <p
+            className={
+              compact
+                ? "mt-0 text-2xl font-semibold text-gray-800"
+                : "mt-1 text-3xl font-semibold text-gray-800"
+            }
+          >
+            {displayRate}%
+          </p>
+
+          <span
+            className={
+              compact
+                ? "mt-2 rounded-full bg-success-50 px-3 py-1 text-xs font-medium text-success-600"
+                : "mt-3 rounded-full bg-success-50 px-3 py-1 text-xs font-medium text-success-600"
+            }
+          >
             {meta.badge}
           </span>
         </div>
-
-        <p className="mx-auto mt-1.5 w-full max-w-[380px] text-center text-sm text-gray-500 sm:text-base">
-          {meta.message}
-        </p>
       </div>
 
-      <div className="flex items-center justify-center gap-5 px-6 py-3.5 sm:gap-8 sm:py-5">
+      <div
+        className={
+          compact
+            ? "flex shrink-0 items-center justify-center gap-4 px-4 py-2.5 sm:gap-6"
+            : "flex items-center justify-center gap-5 px-6 py-3.5 sm:gap-8 sm:py-5"
+        }
+      >
         {meta.stats.map((stat, index) => (
           <div key={stat.id} className="contents">
-            {index > 0 ? (
-              <div className="h-7 w-px bg-gray-200 dark:bg-gray-800" />
-            ) : null}
+            {index > 0 ? <div className="h-7 w-px bg-gray-200" /> : null}
             <div>
-              <p className="mb-1 text-center text-theme-xs text-gray-500 dark:text-gray-400 sm:text-sm">
+              <p className="mb-1 text-center text-theme-xs text-gray-500 sm:text-sm">
                 {stat.label}
               </p>
-              <p className="flex items-center justify-center gap-1 text-base font-semibold text-gray-800 dark:text-white/90 sm:text-lg">
+              <p className="flex items-center justify-center gap-1 text-base font-semibold text-gray-800 sm:text-lg">
                 {stat.value}
                 <TrendIcon trend={stat.trend} />
               </p>
@@ -82,7 +164,7 @@ function ChartTwo() {
         ))}
       </div>
     </div>
-  )
+  );
 }
 
-export default ChartTwo
+export default ChartTwo;
