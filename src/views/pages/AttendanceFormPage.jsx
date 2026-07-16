@@ -1,6 +1,9 @@
 import { useParams } from "react-router-dom";
 import { useAttendanceForm } from "../../controllers/attendanceController.js";
-import { ATTENDANCE_STATUSES } from "../../models/attendanceModel.js";
+import {
+  ATTENDANCE_STATUSES,
+  formatWorkingHoursLabel,
+} from "../../models/attendanceModel.js";
 import {
   FORM_GRID_CLASS,
   FORM_STACK_CLASS,
@@ -163,13 +166,18 @@ function AttendanceFormPage() {
                   <label className={LABEL_CLASS}>Working Hours</label>
                   <input
                     type="text"
-                    value={form.workingHours}
-                    onChange={(event) =>
-                      updateField("workingHours", event.target.value)
+                    value={
+                      form.workingHours === ""
+                        ? ""
+                        : formatWorkingHoursLabel(form.workingHours)
                     }
-                    className={INPUT_CLASS}
+                    readOnly
+                    className={`${INPUT_CLASS} bg-gray-50 text-gray-700`}
                     placeholder="Auto from check-in/out"
                   />
+                  <p className="mt-1.5 text-theme-xs text-gray-500">
+                    Calculated automatically from check-in and check-out.
+                  </p>
                 </div>
               </div>
 

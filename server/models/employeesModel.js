@@ -24,15 +24,52 @@ function mapEmployeeRow(row) {
   }
 }
 
-export async function findAllEmployees() {
+export async function findAllEmployees({ excludeLoginRoles = [] } = {}) {
+  const roles = (excludeLoginRoles || [])
+    .map((role) => String(role).toLowerCase())
+    .filter(Boolean)
+
+  if (roles.length === 0) {
+    const result = await query(
+      `SELECT ${EMPLOYEE_SELECT}
+      FROM employees e
+      INNER JOIN departments d ON d.id = e.department_id
+      ORDER BY e.id ASC`,
+    )
+    return result.rows.map(mapEmployeeRow)
+  }
+
   const result = await query(
     `SELECT ${EMPLOYEE_SELECT}
     FROM employees e
     INNER JOIN departments d ON d.id = e.department_id
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM users u
+      WHERE u.employee_id = e.id
+        AND u.role = ANY($1::text[])
+    )
     ORDER BY e.id ASC`,
+    [roles],
   )
 
   return result.rows.map(mapEmployeeRow)
+}
+
+/** True when the employee is linked to an hr/admin login (not attendance-eligible). */
+export async function employeeHasExcludedLoginRole(
+  employeeId,
+  roles = ['hr', 'admin'],
+) {
+  const result = await query(
+    `SELECT 1
+     FROM users
+     WHERE employee_id = $1
+       AND role = ANY($2::text[])
+     LIMIT 1`,
+    [employeeId, roles],
+  )
+  return result.rows.length > 0
 }
 
 export async function findEmployeeById(id) {

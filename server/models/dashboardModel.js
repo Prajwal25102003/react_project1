@@ -40,7 +40,7 @@ export async function getDashboardStats(period = 'month') {
         SELECT COUNT(*)::int
         FROM attendance
         WHERE attendance_date = CURRENT_DATE
-          AND status IN ('Present', 'Late', 'Half Day')
+          AND status IN ('Present', 'Half Day')
       ) AS "presentToday",
       (
         SELECT COUNT(*)::int
@@ -155,7 +155,7 @@ export async function getEmployeeDashboardStats(employeeId) {
         FROM attendance
         WHERE employee_id = $1
           AND date_trunc('month', attendance_date) = date_trunc('month', CURRENT_DATE)
-          AND status IN ('Present', 'Late', 'Half Day')
+          AND status IN ('Present', 'Half Day')
       ) AS "daysPresentMonth",
       (
         SELECT COUNT(*)::int
@@ -175,7 +175,7 @@ export async function getEmployeeDashboardStats(employeeId) {
         FROM attendance
         WHERE employee_id = $1
           AND date_trunc('month', attendance_date) = date_trunc('month', CURRENT_DATE)
-          AND status IN ('Present', 'Late', 'Half Day')
+          AND status IN ('Present', 'Half Day')
       ) AS "avgHoursMonth",
       (
         SELECT COALESCE(SUM(leave_days), 0)::int
@@ -220,7 +220,6 @@ export async function findEmployeeActivityRows(employeeId, limit = 10) {
         ('att-' || id) AS id,
         CASE status
           WHEN 'Absent' THEN 'Marked absent'
-          WHEN 'Late' THEN 'Checked in late'
           WHEN 'Half Day' THEN 'Half day recorded'
           ELSE 'Attendance marked'
         END AS title,
@@ -229,7 +228,6 @@ export async function findEmployeeActivityRows(employeeId, limit = 10) {
         (attendance_date::timestamp + TIME '12:00') AS "activityTime",
         CASE
           WHEN status = 'Absent' THEN 'Absent'
-          WHEN status = 'Late' THEN 'Late'
           WHEN status = 'Half Day' THEN 'Half Day'
           ELSE 'Present'
         END AS status

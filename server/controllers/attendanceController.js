@@ -7,13 +7,13 @@ import {
   generateNextAttendanceId,
   updateAttendance,
 } from '../models/attendanceModel.js'
-import { employeeExists } from '../models/employeesModel.js'
+import { employeeExists, employeeHasExcludedLoginRole } from '../models/employeesModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 import { calculateWorkingHours } from '../utils/workingHours.js'
 
-const ATTENDANCE_STATUSES = new Set(['Present', 'Absent', 'Late', 'Half Day'])
+const ATTENDANCE_STATUSES = new Set(['Present', 'Absent', 'Half Day'])
 
 const ATTENDANCE_UNIQUE_MATCHERS = [
   {
@@ -47,7 +47,7 @@ function parseAttendancePayload(body) {
   }
   if (!status) errors.push('Attendance status is required')
   else if (!ATTENDANCE_STATUSES.has(status)) {
-    errors.push('Status must be Present, Absent, Late, or Half Day')
+    errors.push('Status must be Present, Absent, or Half Day')
   }
 
   const clockPattern = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i
@@ -139,6 +139,12 @@ export async function createAttendanceHandler(req, res) {
       return res.status(400).json({ message: 'Employee not found' })
     }
 
+    if (await employeeHasExcludedLoginRole(record.employeeId)) {
+      return res.status(400).json({
+        message: 'Attendance cannot be marked for HR or Admin accounts',
+      })
+    }
+
     const id = await generateNextAttendanceId()
     const created = await createAttendance({ ...record, id })
 
@@ -168,6 +174,12 @@ export async function updateAttendanceHandler(req, res) {
 
     if (!(await employeeExists(record.employeeId))) {
       return res.status(400).json({ message: 'Employee not found' })
+    }
+
+    if (await employeeHasExcludedLoginRole(record.employeeId)) {
+      return res.status(400).json({
+        message: 'Attendance cannot be marked for HR or Admin accounts',
+      })
     }
 
     const updated = await updateAttendance(req.params.id, record)
