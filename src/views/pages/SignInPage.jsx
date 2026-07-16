@@ -1,68 +1,85 @@
-import { Link } from 'react-router-dom'
-import { useSignInForm } from '../../controllers/authController.js'
-import AuthLayout from '../components/AuthLayout.jsx'
-import CheckboxField from '../components/forms/CheckboxField.jsx'
-import PasswordField from '../components/forms/PasswordField.jsx'
+import { useSignInForm } from "../../controllers/authController.js";
+import {
+  FIELD_ERROR_CLASS,
+  FORM_STACK_CLASS,
+  INPUT_CLASS,
+  INPUT_ERROR_CLASS,
+  LABEL_CLASS,
+} from "../../models/formLayoutModel.js";
+import AuthLayout from "../components/AuthLayout.jsx";
+import PasswordField from "../components/forms/PasswordField.jsx";
+
+function FieldError({ message }) {
+  if (!message) return null;
+  return <p className={FIELD_ERROR_CLASS}>{message}</p>;
+}
 
 function SignInPage() {
-  const { password, rememberMe } = useSignInForm()
+  const {
+    password,
+    form,
+    fieldErrors,
+    error,
+    submitting,
+    updateField,
+    handleSubmit,
+  } = useSignInForm();
 
   return (
     <AuthLayout
       title="Sign In"
-      description="Enter your email and password to sign in!"
-      footer={
-        <p className="mt-5 text-center text-sm text-gray-700 dark:text-gray-400 sm:text-start">
-          Don&apos;t have an account?{' '}
-          <Link to="/signup" className="text-brand-500 hover:text-brand-600">
-            Sign Up
-          </Link>
-        </p>
-      }
+      description="Enter your work email and password to access EMP."
     >
-      <form>
-        <div className="space-y-5">
+      <form onSubmit={handleSubmit} noValidate>
+        <div className={FORM_STACK_CLASS}>
+          {error ? (
+            <p className="text-theme-sm text-error-600">{error}</p>
+          ) : null}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+            <label className={LABEL_CLASS} htmlFor="signin-email">
               Email<span className="text-error-500">*</span>
             </label>
             <input
+              id="signin-email"
               type="email"
-              placeholder="info@gmail.com"
-              className="h-11 w-full rounded-lg border border-gray-300 px-4 text-sm shadow-theme-xs dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              value={form.email}
+              onChange={(event) => updateField("email", event.target.value)}
+              placeholder="abc@company.com"
+              className={
+                fieldErrors.email ? INPUT_ERROR_CLASS : INPUT_CLASS
+              }
+              autoComplete="email"
             />
+            <FieldError message={fieldErrors.email} />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+            <label className={LABEL_CLASS} htmlFor="signin-password">
               Password<span className="text-error-500">*</span>
             </label>
             <PasswordField
-              showPassword={password.value}
-              onToggle={password.toggle}
-              className="h-11 w-full rounded-lg border border-gray-300 py-2.5 pr-11 pl-4 text-sm shadow-theme-xs dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+              id="signin-password"
+              value={form.password}
+              onChange={(event) => updateField("password", event.target.value)}
+              showPassword={password.showPassword}
+              onToggle={password.onToggle}
+              className={`${
+                fieldErrors.password ? INPUT_ERROR_CLASS : INPUT_CLASS
+              } pr-11`}
+              autoComplete="current-password"
             />
-          </div>
-          <div className="flex items-center justify-between">
-            <CheckboxField
-              id="remember-me"
-              label="Keep me logged in"
-              checked={rememberMe.value}
-              onChange={rememberMe.toggle}
-            />
-            <a href="#" className="text-sm text-brand-500 hover:text-brand-600">
-              Forgot password?
-            </a>
+            <FieldError message={fieldErrors.password} />
           </div>
           <button
-            type="button"
-            className="flex w-full items-center justify-center rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+            type="submit"
+            disabled={submitting}
+            className="flex w-full items-center justify-center rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60"
           >
-            Sign In
+            {submitting ? "Signing in…" : "Sign In"}
           </button>
         </div>
       </form>
     </AuthLayout>
-  )
+  );
 }
 
-export default SignInPage
+export default SignInPage;

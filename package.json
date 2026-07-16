@@ -4,21 +4,25 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "client": "vite",
+    "server": "nodemon server/index.js",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:users": "node server/scripts/seedUsers.js",
+    "seed:indian": "node server/scripts/reseedIndianData.js"
   },
   "dependencies": {
-    "@fullcalendar/core": "^6.1.21",
-    "@fullcalendar/daygrid": "^6.1.21",
-    "@fullcalendar/interaction": "^6.1.21",
-    "@fullcalendar/list": "^6.1.21",
-    "@fullcalendar/react": "^6.1.21",
-    "@fullcalendar/timegrid": "^6.1.21",
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/vite": "^4.3.2",
     "apexcharts": "^5.16.0",
-    "jsvectormap": "^1.7.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.2.0",
+    "pg": "^8.22.0",
     "react": "^19.2.7",
     "react-apexcharts": "^2.1.1",
     "react-dom": "^19.2.7",
@@ -27,6 +31,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^9.2.4",
+    "nodemon": "^3.1.14",
     "vite": "^8.1.1"
   }
 }

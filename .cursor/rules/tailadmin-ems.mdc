@@ -1,0 +1,142 @@
+---
+description: Full TailAdmin design memory for EMS — use patterns when adding features; never ship demo pages
+alwaysApply: true
+---
+
+# TailAdmin Design Memory (EMS)
+
+## Policy (exact)
+
+- **In code:** Employee Management System only. **No TailAdmin demo pages** in `src/` or routes.
+- **In memory (this rule):** Remember **all** TailAdmin design patterns below.
+- **When a related EMS component/feature is added:** follow the matching TailAdmin design from this rule (and the external template if detail is needed). Do not invent a new look.
+
+This app is an **Employee Management System**. UI must follow **TailAdmin** design. Demo pages/data must **not** live in the codebase.
+
+**External template (look up details when implementing a pattern):**  
+`D:/templates/tailadmin-free-tailwind-dashboard-template-main`
+
+**Live EMS embodiments:** `AppShell`, `Sidebar`, `Header`, `DashboardPage`, list pages, `PageCard`, `Breadcrumb`, `ModalShell`, auth pages, `formLayoutModel.js`, form field components.
+
+## Hard rules
+
+1. **Do not** re-add TailAdmin demo routes/pages (Alerts, Badges, Buttons, Avatars, Form Elements demo, Basic Tables demo, Charts demo, Calendar demo, Blank promo, Map, eCommerce orders, UI Elements menu, TailAdmin promo).
+2. **Do** implement the matching TailAdmin **layout/components** when an EMS feature needs that UI (e.g. leave approve → ModalShell; create employee → form grid + PageCard; payroll alerts → alert banner classes).
+3. **Always** MVC: client `views → controllers → services → API` (models for validation/constants); server `routes → controllers → models`.
+4. Prefer existing components over new one-off styles.
+
+---
+
+## 1. App shell
+
+- Root: `flex h-screen overflow-hidden`
+- Content: `mx-auto max-w-(--breakpoint-2xl) p-4 md:p-6`
+- Sidebar: ~290px / collapsed 90px, `border-r`, active item `bg-brand-50 text-brand-500`
+- Header: sticky, search `h-11 shadow-theme-xs`, dropdowns `rounded-2xl shadow-theme-lg`
+- Reference: `AppShell.jsx`, `Sidebar.jsx`, `Header.jsx`, `utils/tw.js`
+
+## 2. Dashboard (12-column)
+
+```
+grid grid-cols-12 gap-4 md:gap-6
+  xl:col-span-7 → primary metric pair + bar chart
+  xl:col-span-5 → radial target card
+  col-span-12   → secondary KPI strip / area statistics chart
+  xl:col-span-5 → list with progress bars (demographics-style)
+  xl:col-span-7 → recent table (Filter / See all buttons)
+```
+
+- Metric card: `rounded-2xl border p-5 md:p-6`, icon `h-12 w-12 rounded-xl bg-gray-100`, trend pill success/error
+- Chart shells: `rounded-2xl border …` + `ChartActionsMenu`
+- Radial card: gray outer wrap, white inner, badge, message, footer stats with `h-7 w-px` dividers
+- Area chart: tab pill group `bg-gray-100 p-0.5`, active tab `bg-white shadow-theme-xs`
+- Reference: `DashboardPage.jsx`, `MetricCards`, `ChartOne/Two/Three`, `DepartmentOverview`, `RecentActivitiesTable`
+
+## 3. Page chrome
+
+- `Breadcrumb`: H2 + Home › pageName
+- `PageCard`: `rounded-2xl border`, header `px-6 py-5`, optional subtitle, body `border-t`
+- Empty module shell (when content not ready yet): `Breadcrumb` + `min-h-[…] rounded-2xl border bg-white px-5 py-7` (no TailAdmin marketing copy)
+
+## 4. Tables
+
+- Outer: `overflow-hidden rounded-xl border …` + `overflow-x-auto`
+- Head: `text-theme-xs font-medium text-gray-500`
+- Body: `divide-y`; primary `text-theme-sm font-medium text-gray-800`; muted `text-gray-500`
+- Status pill: `inline-flex rounded-full px-2 py-0.5 text-theme-xs font-medium`
+  - success: `bg-success-50 text-success-700 dark:bg-success-500/15 dark:text-success-500`
+  - error: `bg-error-50 text-error-700 …`
+  - warning: `bg-warning-50 text-warning-700 …`
+  - info: `bg-blue-light-50 text-blue-light-700 …`
+- Row avatar: `h-10 w-10 rounded-full`
+- Reference: Employees / Departments / Attendance / Leave Requests pages
+
+## 5. Forms
+
+Token file: `src/models/formLayoutModel.js`  
+Fields: `PasswordField`, `CheckboxField`, `ToggleSwitch`
+
+When building EMS create/edit forms:
+
+- `Breadcrumb` + one or more `PageCard` sections
+- `FORM_STACK_CLASS` / `FORM_GRID_CLASS` (`sm:grid-cols-2`)
+- Labels: `LABEL_CLASS` + required `text-error-500` asterisk
+- Controls: `INPUT_CLASS`, `SELECT_CLASS`, `TEXTAREA_CLASS`
+- Primary submit: `rounded-lg bg-brand-500 text-white hover:bg-brand-600 shadow-theme-xs`
+- Secondary: `border border-gray-300 bg-white … shadow-theme-xs`
+- State in controllers; no fetch in views
+
+## 6. Auth
+
+- `AuthLayout`: split form | brand panel `bg-brand-950` + `CommonGridShape`
+- Keep brand text EMS-specific (not TailAdmin marketing)
+- Reference: `SignInPage`, `SignUpPage`
+
+## 7. Modals
+
+- `ModalShell`: backdrop blur, panel `max-w-[700px] rounded-3xl`, close circle button
+- Form fields inside use form tokens / 2-col grid as in Profile modals
+- Footer: brand primary + outline cancel
+
+## 8. Alerts / badges / buttons / avatars (apply when EMS needs them)
+
+Do **not** ship demo galleries. When the feature needs the UI, use:
+
+- **Alert banners:** `rounded-xl border border-{tone}-500 bg-{tone}-50 p-4` (+ dark `/15` variants) for success / error / warning / info
+- **Soft badges:** `rounded-full bg-brand-50 px-2.5 py-0.5 text-sm text-brand-500` (and success/error/warning/info equivalents)
+- **Primary button:** `rounded-lg bg-brand-500 … hover:bg-brand-600`
+- **Outline button:** `rounded-lg border border-gray-300 bg-white … shadow-theme-xs`
+- **Avatars:** `rounded-full` sized `h-6`–`h-16` as context requires
+
+Pull visual detail from the HTML template under `D:/templates/tailadmin-free-...` if needed, then implement once for EMS data.
+
+## 9. Charts pages
+
+If a dedicated chart view is needed later: wrap Apex chart in `PageCard` / bordered card, reuse `chartModel` option shapes, EMS series from API — no sample “Sales/Revenue” demo routes.
+
+## 10. Design tokens (`index.css`)
+
+- Brand: `#465fff` (`brand-500`)
+- Font: Outfit
+- Type: `text-theme-xs/sm`, `text-title-sm`
+- Shadows: `shadow-theme-xs/sm/md/lg`
+- Cards: `rounded-2xl border-gray-200 dark:border-gray-800 dark:bg-white/[0.03]`
+- App is **light theme only** — do not add a dark-mode toggle or theme controller.
+
+---
+
+## Feature → pattern map (when added later)
+
+| EMS need | Use TailAdmin pattern |
+|----------|------------------------|
+| CRUD forms | §5 Forms + PageCard |
+| Confirm / approve leave | §7 ModalShell |
+| Toast / page alert | §8 Alert banners |
+| Status labels | §4 Status pills / §8 badges |
+| Payroll / admin KPIs | §2 Dashboard widgets (add `payroll` table only when Payroll feature is built) |
+| Role login screens | §6 Auth |
+| System Health gauges | §2 ChartTwo radial / metric cards |
+| Security event table | §4 Tables |
+| Empty new module | §3 empty card shell |
+
+Keep sidebar nav EMS-only until Admin / Payroll / roles are intentionally added.

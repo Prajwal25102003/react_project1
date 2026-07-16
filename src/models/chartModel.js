@@ -1,14 +1,17 @@
+const EMPTY_MONTHLY = Array(12).fill(0);
+
+/** Apex option shells for EMS dashboard charts (series filled by dashboardModel). */
 export const chartOneOptions = {
   series: [
     {
-      name: 'Sales',
-      data: [168, 385, 201, 298, 187, 195, 291, 110, 215, 390, 280, 112],
+      name: "New Hires",
+      data: [...EMPTY_MONTHLY],
     },
   ],
-  colors: ['#465fff'],
+  colors: ["#465fff"],
   chart: {
-    fontFamily: 'Outfit, sans-serif',
-    type: 'bar',
+    fontFamily: "Outfit, sans-serif",
+    type: "bar",
     height: 180,
     toolbar: {
       show: false,
@@ -17,9 +20,9 @@ export const chartOneOptions = {
   plotOptions: {
     bar: {
       horizontal: false,
-      columnWidth: '39%',
+      columnWidth: "39%",
       borderRadius: 5,
-      borderRadiusApplication: 'end',
+      borderRadiusApplication: "end",
     },
   },
   dataLabels: {
@@ -28,22 +31,22 @@ export const chartOneOptions = {
   stroke: {
     show: true,
     width: 4,
-    colors: ['transparent'],
+    colors: ["transparent"],
   },
   xaxis: {
     categories: [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
     ],
     axisBorder: {
       show: false,
@@ -54,9 +57,9 @@ export const chartOneOptions = {
   },
   legend: {
     show: true,
-    position: 'top',
-    horizontalAlign: 'left',
-    fontFamily: 'Outfit',
+    position: "top",
+    horizontalAlign: "left",
+    fontFamily: "Outfit",
     markers: {
       radius: 99,
     },
@@ -80,18 +83,18 @@ export const chartOneOptions = {
     },
     y: {
       formatter(val) {
-        return val
+        return val;
       },
     },
   },
-}
+};
 
 export const chartTwoOptions = {
-  series: [75.55],
-  colors: ['#465FFF'],
+  series: [0],
+  colors: ["#465FFF"],
   chart: {
-    fontFamily: 'Outfit, sans-serif',
-    type: 'radialBar',
+    fontFamily: "Outfit, sans-serif",
+    type: "radialBar",
     height: 330,
     sparkline: {
       enabled: true,
@@ -102,11 +105,11 @@ export const chartTwoOptions = {
       startAngle: -90,
       endAngle: 90,
       hollow: {
-        size: '80%',
+        size: "80%",
       },
       track: {
-        background: '#E4E7EC',
-        strokeWidth: '100%',
+        background: "#E4E7EC",
+        strokeWidth: "100%",
         margin: 5,
       },
       dataLabels: {
@@ -114,65 +117,54 @@ export const chartTwoOptions = {
           show: false,
         },
         value: {
-          fontSize: '36px',
-          fontWeight: '600',
-          offsetY: 60,
-          color: '#1D2939',
+          fontSize: "36px",
+          fontWeight: "600",
+          offsetY: 20,
+          color: "#1D2939",
           formatter(val) {
-            return `${val}%`
+            return `${val}%`;
           },
         },
       },
     },
   },
   fill: {
-    type: 'solid',
-    colors: ['#465FFF'],
+    type: "solid",
+    colors: ["#465FFF"],
   },
   stroke: {
-    lineCap: 'round',
+    lineCap: "round",
   },
-  labels: ['Progress'],
-}
-
-export const chartTwoMeta = {
-  badge: '+10%',
-  message:
-    "You earn $3287 today, it's higher than last month. Keep up your good work!",
-  stats: [
-    { id: 'target', label: 'Target', value: '$20K', trend: 'down' },
-    { id: 'revenue', label: 'Revenue', value: '$20K', trend: 'up' },
-    { id: 'today', label: 'Today', value: '$20K', trend: 'up' },
-  ],
-}
+  labels: ["Progress"],
+};
 
 export const chartThreeTabs = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'sales', label: 'Sales' },
-  { id: 'revenue', label: 'Revenue' },
-]
+  { id: "overview", label: "Overview" },
+  { id: "hires", label: "Hires" },
+  { id: "leave", label: "Leave" },
+];
 
 export const chartThreeOptions = {
   series: [
     {
-      name: 'Sales',
-      data: [180, 190, 170, 160, 175, 165, 170, 205, 230, 210, 240, 235],
+      name: "New Hires",
+      data: [...EMPTY_MONTHLY],
     },
     {
-      name: 'Revenue',
-      data: [40, 30, 50, 40, 55, 40, 70, 100, 110, 120, 150, 140],
+      name: "Leave Requests",
+      data: [...EMPTY_MONTHLY],
     },
   ],
   legend: {
     show: false,
-    position: 'top',
-    horizontalAlign: 'left',
+    position: "top",
+    horizontalAlign: "left",
   },
-  colors: ['#465FFF', '#9CB9FF'],
+  colors: ["#465FFF", "#9CB9FF"],
   chart: {
-    fontFamily: 'Outfit, sans-serif',
+    fontFamily: "Outfit, sans-serif",
     height: 310,
-    type: 'area',
+    type: "area",
     toolbar: {
       show: false,
     },
@@ -185,15 +177,15 @@ export const chartThreeOptions = {
     },
   },
   stroke: {
-    curve: 'straight',
-    width: ['2', '2'],
+    curve: "straight",
+    width: ["2", "2"],
   },
   markers: {
     size: 0,
   },
   labels: {
     show: false,
-    position: 'top',
+    position: "top",
   },
   grid: {
     xaxis: {
@@ -212,24 +204,24 @@ export const chartThreeOptions = {
   },
   tooltip: {
     x: {
-      format: 'dd MMM yyyy',
+      format: "dd MMM yyyy",
     },
   },
   xaxis: {
-    type: 'category',
+    type: "category",
     categories: [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
     ],
     axisBorder: {
       show: false,
@@ -242,8 +234,8 @@ export const chartThreeOptions = {
   yaxis: {
     title: {
       style: {
-        fontSize: '0px',
+        fontSize: "0px",
       },
     },
   },
-}
+};
