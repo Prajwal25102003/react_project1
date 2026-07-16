@@ -27,7 +27,6 @@ const ACTIVITY_STATUS = {
   Cancelled: STATUS_TONE.warning,
   Present: STATUS_TONE.success,
   Absent: STATUS_TONE.error,
-  Late: STATUS_TONE.warning,
   'Half Day': STATUS_TONE.warning,
   Info: STATUS_TONE.info,
 };

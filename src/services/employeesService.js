@@ -1,8 +1,16 @@
 import { fetchFormData, fetchJson } from "./apiService.js";
 import { mapEmployee } from "../models/employeesModel.js";
 
-export async function fetchEmployees() {
-  const data = await fetchJson("/api/employees", "Failed to load employees");
+export async function fetchEmployees({ excludeLoginRoles = [] } = {}) {
+  const params = new URLSearchParams();
+  if (excludeLoginRoles.length > 0) {
+    params.set("excludeLoginRoles", excludeLoginRoles.join(","));
+  }
+  const query = params.toString();
+  const data = await fetchJson(
+    query ? `/api/employees?${query}` : "/api/employees",
+    "Failed to load employees",
+  );
   return (data.employees || []).map(mapEmployee);
 }
 

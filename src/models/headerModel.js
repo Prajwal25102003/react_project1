@@ -12,7 +12,6 @@ const NOTIFICATION_STATUS = {
   Cancelled: STATUS_TONE.warning,
   Present: STATUS_TONE.success,
   Absent: STATUS_TONE.error,
-  Late: STATUS_TONE.warning,
   'Half Day': STATUS_TONE.warning,
   Info: STATUS_TONE.info,
 };
@@ -93,7 +92,7 @@ export function notificationDotTone(status) {
     return "error";
   }
 
-  if (status === "Pending" || status === "Cancelled" || status === "Late") {
+  if (status === "Pending" || status === "Cancelled") {
     return "warning";
   }
 

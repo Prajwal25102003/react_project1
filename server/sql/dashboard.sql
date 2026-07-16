@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS recent_activities (
       'Cancelled',
       'Present',
       'Absent',
-      'Late',
       'Half Day'
     )
   )
@@ -58,11 +57,11 @@ INSERT INTO recent_activities (id, title, description, category, activity_time, 
   ),
   (
     'ACT-06',
-    'Attendance marked late',
-    'Siddharth Menon checked in late on 14 Jul.',
+    'Attendance marked',
+    'Siddharth Menon marked Present on 14 Jul.',
     'Attendance',
     NOW() - INTERVAL '2 days',
-    'Late'
+    'Present'
   )
 ON CONFLICT (id) DO UPDATE SET
   title = EXCLUDED.title,

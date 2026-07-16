@@ -150,9 +150,14 @@ function resolveEmployeeUniqueMessage(error) {
   return uniqueConstraintMessage(error, EMPLOYEE_UNIQUE_MATCHERS)
 }
 
-export async function getEmployees(_req, res) {
+export async function getEmployees(req, res) {
   try {
-    const employees = await findAllEmployees()
+    const excludeLoginRoles = String(req.query.excludeLoginRoles || '')
+      .split(',')
+      .map((role) => role.trim().toLowerCase())
+      .filter(Boolean)
+
+    const employees = await findAllEmployees({ excludeLoginRoles })
     res.json({ employees })
   } catch (error) {
     res.status(500).json({

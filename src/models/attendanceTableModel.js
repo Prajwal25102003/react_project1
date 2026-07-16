@@ -70,7 +70,7 @@ export const ATTENDANCE_COLUMNS = [
   {
     id: "workingHours",
     header: "Working Hours",
-    accessor: "workingHours",
+    accessor: "workingHoursLabel",
     type: "text",
     sortable: true,
     nowrap: true,

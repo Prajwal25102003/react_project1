@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
-import { fetchEmployees } from "../services/employeesService.js";
+import { fetchEmployeeById, fetchEmployees } from "../services/employeesService.js";
 import {
   createAttendance,
   deleteAttendance,
@@ -13,6 +13,7 @@ import {
 } from "../services/attendanceService.js";
 import {
   EMPTY_ATTENDANCE_FORM,
+  calculateWorkingHours,
   toAttendanceFormValues,
   toAttendancePayload,
   validateAttendanceForm,
@@ -102,15 +103,30 @@ export function useAttendanceForm(attendanceId) {
         setLoading(true);
         setError("");
         setFieldErrors({});
-        const employeeRows = await fetchEmployees();
+        const employeeRows = await fetchEmployees({
+          excludeLoginRoles: ["hr", "admin"],
+        });
         if (cancelled) return;
-        setEmployees(employeeRows);
 
         if (isEdit) {
           const record = await fetchAttendanceById(attendanceId);
           if (cancelled) return;
+          const options = [...employeeRows];
+          if (
+            record.employeeId &&
+            !options.some((employee) => employee.id === record.employeeId)
+          ) {
+            try {
+              const current = await fetchEmployeeById(record.employeeId);
+              options.unshift(current);
+            } catch {
+              /* keep filtered list if lookup fails */
+            }
+          }
+          setEmployees(options);
           setForm(toAttendanceFormValues(record));
         } else {
+          setEmployees(employeeRows);
           setForm((current) => ({
             ...EMPTY_ATTENDANCE_FORM,
             employeeId: employeeRows[0]?.id || current.employeeId,
@@ -137,6 +153,17 @@ export function useAttendanceForm(attendanceId) {
         next.checkIn = "—";
         next.checkOut = "—";
         next.workingHours = "0";
+        return next;
+      }
+      if (field === "checkIn" || field === "checkOut" || field === "status") {
+        if (next.status === "Absent") {
+          next.workingHours = "0";
+        } else {
+          next.workingHours = calculateWorkingHours(
+            next.checkIn,
+            next.checkOut,
+          );
+        }
       }
       return next;
     });

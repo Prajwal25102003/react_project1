@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS attendance (
   check_in VARCHAR(20),
   check_out VARCHAR(20),
   working_hours NUMERIC(5, 2) NOT NULL DEFAULT 0,
-  status VARCHAR(20) NOT NULL CHECK (status IN ('Present', 'Absent', 'Late', 'Half Day')),
+  status VARCHAR(20) NOT NULL CHECK (status IN ('Present', 'Absent', 'Half Day')),
   UNIQUE (employee_id, attendance_date)
 );
 
@@ -16,12 +16,12 @@ INSERT INTO attendance (
   check_in, check_out, working_hours, status
 ) VALUES
   ('ATT-5001', 'EMP-1001', '2026-07-14', '09:02 AM', '06:05 PM', 9.05, 'Present'),
-  ('ATT-5002', 'EMP-1002', '2026-07-14', '09:28 AM', '06:10 PM', 8.70, 'Late'),
+  ('ATT-5002', 'EMP-1002', '2026-07-14', '09:28 AM', '06:10 PM', 8.70, 'Present'),
   ('ATT-5003', 'EMP-1003', '2026-07-14', '09:00 AM', '01:00 PM', 4.00, 'Half Day'),
   ('ATT-5004', 'EMP-1005', '2026-07-14', '08:55 AM', '05:58 PM', 9.05, 'Present'),
   ('ATT-5005', 'EMP-1006', '2026-07-14', '—', '—', 0.00, 'Absent'),
   ('ATT-5006', 'EMP-1007', '2026-07-14', '09:05 AM', '06:15 PM', 9.17, 'Present'),
-  ('ATT-5007', 'EMP-1008', '2026-07-13', '09:40 AM', '06:20 PM', 8.67, 'Late'),
+  ('ATT-5007', 'EMP-1008', '2026-07-13', '09:40 AM', '06:20 PM', 8.67, 'Present'),
   ('ATT-5008', 'EMP-1001', '2026-07-13', '08:58 AM', '06:02 PM', 9.07, 'Present')
 ON CONFLICT (id) DO UPDATE SET
   employee_id = EXCLUDED.employee_id,
