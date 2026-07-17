@@ -11,25 +11,45 @@ const ATTENDANCE_SELECT = `
   a.status
 `
 
-export async function findAllAttendance() {
+/** Default window for list endpoints (days back from today, inclusive). */
+export const DEFAULT_ATTENDANCE_DAYS = 90
+const MAX_ATTENDANCE_DAYS = 365
+
+export function normalizeAttendanceDays(value) {
+  const days = Number(value)
+  if (!Number.isFinite(days) || days <= 0) return DEFAULT_ATTENDANCE_DAYS
+  return Math.min(Math.floor(days), MAX_ATTENDANCE_DAYS)
+}
+
+export async function findAllAttendance({
+  days = DEFAULT_ATTENDANCE_DAYS,
+} = {}) {
+  const windowDays = normalizeAttendanceDays(days)
   const result = await query(
     `SELECT ${ATTENDANCE_SELECT}
     FROM attendance a
     INNER JOIN employees e ON e.id = a.employee_id
+    WHERE a.attendance_date >= CURRENT_DATE - $1::integer
     ORDER BY a.attendance_date DESC, a.id ASC`,
+    [windowDays],
   )
 
   return result.rows
 }
 
-export async function findAttendanceByEmployeeId(employeeId) {
+export async function findAttendanceByEmployeeId(
+  employeeId,
+  { days = DEFAULT_ATTENDANCE_DAYS } = {},
+) {
+  const windowDays = normalizeAttendanceDays(days)
   const result = await query(
     `SELECT ${ATTENDANCE_SELECT}
     FROM attendance a
     INNER JOIN employees e ON e.id = a.employee_id
     WHERE a.employee_id = $1
+      AND a.attendance_date >= CURRENT_DATE - $2::integer
     ORDER BY a.attendance_date DESC, a.id ASC`,
-    [employeeId],
+    [employeeId, windowDays],
   )
 
   return result.rows

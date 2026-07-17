@@ -5,6 +5,7 @@ import {
   findAttendanceByEmployeeId,
   findAttendanceById,
   generateNextAttendanceId,
+  normalizeAttendanceDays,
   updateAttendance,
 } from '../models/attendanceModel.js'
 import { employeeExists, employeeHasExcludedLoginRole } from '../models/employeesModel.js'
@@ -87,18 +88,22 @@ function mapAttendanceRow(row) {
 
 export async function getAttendance(req, res) {
   try {
+    const days = normalizeAttendanceDays(req.query.days)
+
     if (req.user?.role === 'employee') {
       if (!req.user.employeeId) {
         return res.status(403).json({
           message: 'Your account is not linked to an employee record',
         })
       }
-      const rows = await findAttendanceByEmployeeId(req.user.employeeId)
-      return res.json({ records: rows.map(mapAttendanceRow) })
+      const rows = await findAttendanceByEmployeeId(req.user.employeeId, {
+        days,
+      })
+      return res.json({ records: rows.map(mapAttendanceRow), days })
     }
 
-    const rows = await findAllAttendance()
-    res.json({ records: rows.map(mapAttendanceRow) })
+    const rows = await findAllAttendance({ days })
+    res.json({ records: rows.map(mapAttendanceRow), days })
   } catch (error) {
     res.status(500).json({ message: formatDbError(error) })
   }

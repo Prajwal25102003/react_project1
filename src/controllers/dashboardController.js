@@ -7,6 +7,8 @@ import {
 } from "../models/dashboardModel.js";
 import { DASHBOARD_REFRESH_EVENT } from "../utils/dashboardRefresh.js";
 
+const DASHBOARD_STALE_MS = 60_000;
+
 const EMPTY = {
   variant: "org",
   primaryMetrics: [],
@@ -26,6 +28,7 @@ export function useDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const hasLoadedRef = useRef(false);
+  const lastFetchedAtRef = useRef(0);
   const seenUserKey = user?.id || user?.email || user?.employeeId || "";
 
   const loadDashboard = useCallback(
@@ -42,6 +45,7 @@ export function useDashboard() {
         );
         setData({ ...dashboard, activities });
         hasLoadedRef.current = true;
+        lastFetchedAtRef.current = Date.now();
       } catch (err) {
         setError(err.message || "Failed to load dashboard");
         if (isInitialLoad && !silent) setData(EMPTY);
@@ -71,6 +75,7 @@ export function useDashboard() {
   useEffect(() => {
     function handleWindowFocus() {
       if (!hasLoadedRef.current) return;
+      if (Date.now() - lastFetchedAtRef.current < DASHBOARD_STALE_MS) return;
       loadDashboard({ silent: true });
     }
 

@@ -180,50 +180,56 @@ export async function findEmployeeActivityRows(employeeId, limit = 10) {
     `
     SELECT *
     FROM (
-      SELECT
-        ('att-' || id) AS id,
-        CASE status
-          WHEN 'Absent' THEN 'Marked absent'
-          WHEN 'Half Day' THEN 'Half day recorded'
-          ELSE 'Attendance marked'
-        END AS title,
-        (status || ' on ' || TO_CHAR(attendance_date, 'YYYY-MM-DD')) AS description,
-        'Attendance' AS category,
-        (attendance_date::timestamp + TIME '12:00') AS "activityTime",
-        CASE
-          WHEN status = 'Absent' THEN 'Absent'
-          WHEN status = 'Half Day' THEN 'Half Day'
-          ELSE 'Present'
-        END AS status
-      FROM attendance
-      WHERE employee_id = $1
-
+      (
+        SELECT
+          ('att-' || id) AS id,
+          CASE status
+            WHEN 'Absent' THEN 'Marked absent'
+            WHEN 'Half Day' THEN 'Half day recorded'
+            ELSE 'Attendance marked'
+          END AS title,
+          (status || ' on ' || TO_CHAR(attendance_date, 'YYYY-MM-DD')) AS description,
+          'Attendance' AS category,
+          (attendance_date::timestamp + TIME '12:00') AS "activityTime",
+          CASE
+            WHEN status = 'Absent' THEN 'Absent'
+            WHEN status = 'Half Day' THEN 'Half Day'
+            ELSE 'Present'
+          END AS status
+        FROM attendance
+        WHERE employee_id = $1
+        ORDER BY attendance_date DESC, id DESC
+        LIMIT $2
+      )
       UNION ALL
-
-      SELECT
-        ('leave-' || id) AS id,
-        CASE status
-          WHEN 'Pending' THEN 'Leave request submitted'
-          WHEN 'Approved' THEN 'Leave approved'
-          WHEN 'Cancelled' THEN 'Leave request cancelled'
-          ELSE 'Leave rejected'
-        END AS title,
-        (leave_type || ' · ' || TO_CHAR(start_date, 'YYYY-MM-DD') ||
-          CASE WHEN end_date <> start_date
-            THEN ' to ' || TO_CHAR(end_date, 'YYYY-MM-DD')
-            ELSE ''
-          END) AS description,
-        'Leave' AS category,
-        COALESCE(updated_at, created_at, start_date::timestamptz) AS "activityTime",
-        CASE
-          WHEN status = 'Pending' THEN 'Pending'
-          WHEN status = 'Approved' THEN 'Approved'
-          WHEN status = 'Rejected' THEN 'Rejected'
-          WHEN status = 'Cancelled' THEN 'Cancelled'
-          ELSE 'Pending'
-        END AS status
-      FROM leave_requests
-      WHERE employee_id = $1
+      (
+        SELECT
+          ('leave-' || id) AS id,
+          CASE status
+            WHEN 'Pending' THEN 'Leave request submitted'
+            WHEN 'Approved' THEN 'Leave approved'
+            WHEN 'Cancelled' THEN 'Leave request cancelled'
+            ELSE 'Leave rejected'
+          END AS title,
+          (leave_type || ' · ' || TO_CHAR(start_date, 'YYYY-MM-DD') ||
+            CASE WHEN end_date <> start_date
+              THEN ' to ' || TO_CHAR(end_date, 'YYYY-MM-DD')
+              ELSE ''
+            END) AS description,
+          'Leave' AS category,
+          COALESCE(updated_at, created_at, start_date::timestamptz) AS "activityTime",
+          CASE
+            WHEN status = 'Pending' THEN 'Pending'
+            WHEN status = 'Approved' THEN 'Approved'
+            WHEN status = 'Rejected' THEN 'Rejected'
+            WHEN status = 'Cancelled' THEN 'Cancelled'
+            ELSE 'Pending'
+          END AS status
+        FROM leave_requests
+        WHERE employee_id = $1
+        ORDER BY COALESCE(updated_at, created_at, start_date::timestamptz) DESC, id DESC
+        LIMIT $2
+      )
     ) activities
     ORDER BY "activityTime" DESC, id DESC
     LIMIT $2

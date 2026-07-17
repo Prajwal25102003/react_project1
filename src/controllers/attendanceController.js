@@ -103,14 +103,15 @@ export function useAttendanceForm(attendanceId) {
         setLoading(true);
         setError("");
         setFieldErrors({});
-        const employeeRows = await fetchEmployees({
-          excludeLoginRoles: ["hr", "admin"],
-        });
-        if (cancelled) return;
-
         if (isEdit) {
-          const record = await fetchAttendanceById(attendanceId);
+          const [employeeRows, record] = await Promise.all([
+            fetchEmployees({
+              excludeLoginRoles: ["hr", "admin"],
+            }),
+            fetchAttendanceById(attendanceId),
+          ]);
           if (cancelled) return;
+
           const options = [...employeeRows];
           if (
             record.employeeId &&
@@ -126,6 +127,11 @@ export function useAttendanceForm(attendanceId) {
           setEmployees(options);
           setForm(toAttendanceFormValues(record));
         } else {
+          const employeeRows = await fetchEmployees({
+            excludeLoginRoles: ["hr", "admin"],
+          });
+          if (cancelled) return;
+
           setEmployees(employeeRows);
           setForm((current) => ({
             ...EMPTY_ATTENDANCE_FORM,
