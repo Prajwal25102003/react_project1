@@ -19,6 +19,10 @@ import pool from '../config/db.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import { loginRoleForDepartmentName } from '../utils/loginRole.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
+import {
+  isValidIndianPhone,
+  normalizeIndianPhone,
+} from '../utils/indianPhone.js'
 
 const GENDERS = new Set(['Male', 'Female', 'Other'])
 const STATUSES = new Set(['Active', 'Inactive'])
@@ -85,6 +89,13 @@ function parseEmployeePayload(body) {
     errors.push('Email is invalid')
   }
   if (!phone) errors.push('Phone is required')
+  else if (!isValidIndianPhone(phone)) {
+    errors.push(
+      'Phone must be a valid 10-digit Indian mobile number (e.g. 9876543210)',
+    )
+  }
+
+  const normalizedPhone = normalizeIndianPhone(phone) || phone
   if (!gender) errors.push('Gender is required')
   else if (!GENDERS.has(gender)) errors.push('Gender must be Male, Female, or Other')
   if (!departmentId) errors.push('Department is required')
@@ -108,7 +119,7 @@ function parseEmployeePayload(body) {
     employee: {
       name,
       email,
-      phone,
+      phone: normalizedPhone,
       gender,
       departmentId,
       designation,

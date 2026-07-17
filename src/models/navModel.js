@@ -5,7 +5,7 @@ const NAV_ITEMS = {
     id: "dashboard",
     label: "Dashboard",
     icon: "dashboard",
-    path: "/",
+    path: "/dashboard",
   },
   employees: {
     id: "employees",

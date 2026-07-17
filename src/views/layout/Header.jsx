@@ -91,7 +91,7 @@ function Header({
           </button>
 
           <Link
-            to="/"
+            to="/dashboard"
             className="flex items-center gap-2 lg:hidden"
             aria-label="EMP home"
           >

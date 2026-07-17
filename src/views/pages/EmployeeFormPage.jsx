@@ -126,6 +126,9 @@ function EmployeeFormPage() {
                   </label>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    autoComplete="tel"
+                    maxLength={10}
                     value={form.phone}
                     onChange={(event) =>
                       updateField("phone", event.target.value)
@@ -133,9 +136,13 @@ function EmployeeFormPage() {
                     className={
                       fieldErrors.phone ? INPUT_ERROR_CLASS : INPUT_CLASS
                     }
-                    placeholder="+1 (555) 010-0000"
+                    placeholder="9876543210"
                   />
                   <FieldError message={fieldErrors.phone} />
+                  <p className="mt-1.5 text-theme-xs text-gray-500">
+                    Exactly 10 digits. Extra digits are not accepted. +91 is
+                    added when saved.
+                  </p>
                 </div>
 
                 <div>

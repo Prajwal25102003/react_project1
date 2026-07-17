@@ -47,9 +47,21 @@ export const HR_ADMIN_ROLES = [ROLES.HR, ROLES.ADMIN];
 const TOKEN_KEY = "ems_auth_token";
 const USER_KEY = "ems_auth_user";
 
+function clearLegacyLocalSession() {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+// Drop old persistent logins so opening the site shows Sign In.
+clearLegacyLocalSession();
+
 export function getStoredToken() {
   try {
-    return localStorage.getItem(TOKEN_KEY) || "";
+    return sessionStorage.getItem(TOKEN_KEY) || "";
   } catch {
     return "";
   }
@@ -57,21 +69,28 @@ export function getStoredToken() {
 
 export function getStoredUser() {
   try {
-    const raw = localStorage.getItem(USER_KEY);
+    const raw = sessionStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
+/** Persist login for this browser tab only (new tab → sign in again). */
 export function storeSession(token, user) {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  sessionStorage.setItem(TOKEN_KEY, token);
+  sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+  clearLegacyLocalSession();
 }
 
 export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+  } catch {
+    /* ignore */
+  }
+  clearLegacyLocalSession();
 }
 
 export function roleAllows(role, allowedRoles) {
