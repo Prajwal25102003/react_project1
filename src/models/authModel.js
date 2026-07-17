@@ -1,3 +1,5 @@
+import { EMAIL_PATTERN } from "./validationHelpers.js";
+
 export const ROLES = {
   HR: "hr",
   EMPLOYEE: "employee",
@@ -105,8 +107,6 @@ export const EMPTY_SIGN_IN_FORM = {
   email: "",
   password: "",
 };
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function firstFieldMessage(fieldErrors) {
   const firstKey = Object.keys(fieldErrors)[0];

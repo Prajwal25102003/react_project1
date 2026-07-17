@@ -4,12 +4,6 @@ import {
 import { STATUS_TONE, getStatusClass } from "./statusStylesModel.js";
 import { createSeenStateHelpers } from "../utils/seenState.js";
 
-const EMPLOYEE_PRIMARY_METRIC_IDS = new Set([
-  "days-present",
-  "leave-approved",
-  "pending-leave",
-]);
-
 export const NEW_EMPLOYEE_PERIODS = [
   { value: "month", label: "This month" },
   { value: "quarter", label: "This quarter" },
@@ -30,12 +24,6 @@ const ACTIVITY_STATUS = {
   'Half Day': STATUS_TONE.warning,
   Info: STATUS_TONE.info,
 };
-
-export function getSecondaryMetrics(metrics = [], variant = "org") {
-  const primaryIds =
-    variant === "employee" ? EMPLOYEE_PRIMARY_METRIC_IDS : ORG_PRIMARY_METRIC_IDS;
-  return metrics.filter((metric) => !primaryIds.has(metric.id));
-}
 
 function mapActivities(activities) {
   return (activities || []).map((activity) => ({
@@ -92,7 +80,6 @@ function mapEmployeeDashboard(data) {
     activities: mapActivities(data.activities),
     departments: [],
     leaveOverview: [],
-    chartOne: null,
     chartTwo: {
       title: "Attendance Rate",
       description: "Present vs marked days this month",
@@ -105,7 +92,6 @@ function mapEmployeeDashboard(data) {
         stats: [],
       },
     },
-    chartThree: null,
   };
 }
 

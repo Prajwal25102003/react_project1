@@ -112,10 +112,10 @@ function EmployeeFormPage() {
                     className={
                       fieldErrors.email ? INPUT_ERROR_CLASS : INPUT_CLASS
                     }
-                    placeholder="name@company.com"
+                    placeholder="name@gmail.com"
                   />
                   <p className="mt-1.5 text-theme-xs text-gray-500">
-                    Directory contact email.
+                    Primary contact email.
                   </p>
                   <FieldError message={fieldErrors.email} />
                 </div>
@@ -136,13 +136,9 @@ function EmployeeFormPage() {
                     className={
                       fieldErrors.phone ? INPUT_ERROR_CLASS : INPUT_CLASS
                     }
-                    placeholder="9876543210"
+                    placeholder="Enter 10-digit mobile number"
                   />
                   <FieldError message={fieldErrors.phone} />
-                  <p className="mt-1.5 text-theme-xs text-gray-500">
-                    Exactly 10 digits. Extra digits are not accepted. +91 is
-                    added when saved.
-                  </p>
                 </div>
 
                 <div>

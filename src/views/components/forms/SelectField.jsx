@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
 import {
-  SELECT_ERROR_CLASS,
   SELECT_TRIGGER_CLASS,
   SELECT_TRIGGER_ERROR_CLASS,
 } from "../../../models/formLayoutModel.js";

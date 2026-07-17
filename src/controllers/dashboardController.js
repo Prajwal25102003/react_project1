@@ -15,9 +15,7 @@ const EMPTY = {
   activities: [],
   departments: [],
   leaveOverview: [],
-  chartOne: null,
   chartTwo: null,
-  chartThree: null,
   newEmployeesPeriod: "month",
 };
 

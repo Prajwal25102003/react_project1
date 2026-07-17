@@ -23,6 +23,7 @@ import {
   isValidIndianPhone,
   normalizeIndianPhone,
 } from '../utils/indianPhone.js'
+import { isValidEmail } from '../utils/email.js'
 
 const GENDERS = new Set(['Male', 'Female', 'Other'])
 const STATUSES = new Set(['Active', 'Inactive'])
@@ -59,7 +60,7 @@ function parseLoginEmail(body, { required }) {
     return { errors, loginEmail: null }
   }
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)) {
+  if (!isValidEmail(loginEmail)) {
     errors.push('Gmail is invalid')
   }
 
@@ -85,7 +86,7 @@ function parseEmployeePayload(body) {
 
   if (!name) errors.push('Name is required')
   if (!email) errors.push('Email is required')
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  else if (!isValidEmail(email)) {
     errors.push('Email is invalid')
   }
   if (!phone) errors.push('Phone is required')

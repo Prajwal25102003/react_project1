@@ -16,7 +16,6 @@ import {
 import {
   EMPTY_EMPLOYEE_FORM,
   defaultJoiningDate,
-  sanitizeIndianPhoneInput,
   toEmployeeFormValues,
   toEmployeePayload,
   validateEmployeeForm,
@@ -27,6 +26,7 @@ import {
   EMPLOYEE_SEARCH_KEYS,
 } from "../models/employeesTableModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
+import { sanitizeIndianPhoneInput } from "../utils/indianPhone.js";
 
 export function useEmployees() {
   const { rows, loading, error, reload } = useListData(
