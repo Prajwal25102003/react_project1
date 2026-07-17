@@ -7,7 +7,6 @@ import {
 import {
   createEmployee,
   deleteEmployeeById,
-  departmentExists,
   findAllEmployees,
   findEmployeeById,
   generateNextEmployeeId,
@@ -216,12 +215,12 @@ export async function createEmployeeHandler(req, res) {
       return res.status(400).json({ message: allErrors.join('; ') })
     }
 
-    if (!(await departmentExists(employee.departmentId))) {
+    const department = await findDepartmentById(employee.departmentId)
+    if (!department) {
       return res.status(400).json({ message: 'Department not found' })
     }
 
-    const department = await findDepartmentById(employee.departmentId)
-    const loginRole = loginRoleForDepartmentName(department?.name)
+    const loginRole = loginRoleForDepartmentName(department.name)
 
     const id = await generateNextEmployeeId()
     const passwordHash = await hashPassword(password)
@@ -301,12 +300,12 @@ export async function updateEmployeeHandler(req, res) {
       return res.status(400).json({ message: allErrors.join('; ') })
     }
 
-    if (!(await departmentExists(employee.departmentId))) {
+    const department = await findDepartmentById(employee.departmentId)
+    if (!department) {
       return res.status(400).json({ message: 'Department not found' })
     }
 
-    const department = await findDepartmentById(employee.departmentId)
-    const loginRole = loginRoleForDepartmentName(department?.name)
+    const loginRole = loginRoleForDepartmentName(department.name)
 
     const updated = await updateEmployee(req.params.id, employee)
     if (!updated) {

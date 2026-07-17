@@ -12,6 +12,9 @@ import {
 } from "../utils/notificationsRefresh.js";
 import { useAuth } from "./authContext.jsx";
 
+const NOTIFICATIONS_POLL_MS = 60_000;
+const NOTIFICATIONS_STALE_MS = 60_000;
+
 export function useHeader() {
   const { user: authUser, logout } = useAuth();
   const navigate = useNavigate();
@@ -24,6 +27,7 @@ export function useHeader() {
 
   const notificationsRef = useRef(null);
   const userRef = useRef(null);
+  const lastFetchedAtRef = useRef(0);
   const seenUserKey =
     authUser?.id || authUser?.email || authUser?.employeeId || "";
 
@@ -37,6 +41,7 @@ export function useHeader() {
       if (!silent) setNotificationsLoading(true);
       const items = await fetchNotifications();
       setNotifications(withNotificationSeenState(items, seenUserKey));
+      lastFetchedAtRef.current = Date.now();
     } catch {
       setNotifications([]);
     } finally {
@@ -67,10 +72,12 @@ export function useHeader() {
 
     const intervalId = window.setInterval(() => {
       loadNotifications({ silent: true });
-    }, 30000);
+    }, NOTIFICATIONS_POLL_MS);
 
     function handleWindowFocus() {
-      loadNotifications({ silent: true });
+      if (Date.now() - lastFetchedAtRef.current >= NOTIFICATIONS_STALE_MS) {
+        loadNotifications({ silent: true });
+      }
     }
 
     window.addEventListener("focus", handleWindowFocus);

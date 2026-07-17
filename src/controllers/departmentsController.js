@@ -100,16 +100,20 @@ export function useDepartmentForm(departmentId) {
         setError("");
         setFieldErrors({});
 
-        const employeeRows = await fetchEmployees();
-        if (cancelled) return;
-
-        setEmployees(employeeRows);
-
         if (isEdit) {
-          const department = await fetchDepartmentById(departmentId);
+          const [employeeRows, department] = await Promise.all([
+            fetchEmployees(),
+            fetchDepartmentById(departmentId),
+          ]);
           if (cancelled) return;
+
+          setEmployees(employeeRows);
           setForm(toDepartmentFormValues(department));
         } else {
+          const employeeRows = await fetchEmployees();
+          if (cancelled) return;
+
+          setEmployees(employeeRows);
           setForm({ ...EMPTY_DEPARTMENT_FORM });
         }
       } catch (err) {

@@ -15,8 +15,24 @@ const EMPLOYEE_SELECT = `
   e.avatar
 `
 
+/** List DTO omits salary until Payroll needs it on the table. */
+const EMPLOYEE_LIST_SELECT = `
+  e.id,
+  e.name,
+  e.email,
+  e.phone,
+  e.gender,
+  e.department_id AS "departmentId",
+  d.name AS department,
+  e.designation,
+  TO_CHAR(e.joining_date, 'YYYY-MM-DD') AS "joiningDate",
+  e.status,
+  e.avatar
+`
+
 function mapEmployeeRow(row) {
   if (!row) return null
+  if (row.salary === undefined) return { ...row }
 
   return {
     ...row,
@@ -31,7 +47,7 @@ export async function findAllEmployees({ excludeLoginRoles = [] } = {}) {
 
   if (roles.length === 0) {
     const result = await query(
-      `SELECT ${EMPLOYEE_SELECT}
+      `SELECT ${EMPLOYEE_LIST_SELECT}
       FROM employees e
       INNER JOIN departments d ON d.id = e.department_id
       ORDER BY e.id ASC`,
@@ -40,7 +56,7 @@ export async function findAllEmployees({ excludeLoginRoles = [] } = {}) {
   }
 
   const result = await query(
-    `SELECT ${EMPLOYEE_SELECT}
+    `SELECT ${EMPLOYEE_LIST_SELECT}
     FROM employees e
     INNER JOIN departments d ON d.id = e.department_id
     WHERE NOT EXISTS (
@@ -205,10 +221,3 @@ export async function employeeExists(employeeId) {
   return result.rowCount > 0
 }
 
-export async function departmentExists(departmentId) {
-  const result = await query(
-    `SELECT 1 FROM departments WHERE id = $1 LIMIT 1`,
-    [departmentId],
-  )
-  return result.rowCount > 0
-}
