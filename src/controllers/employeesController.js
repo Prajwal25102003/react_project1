@@ -16,6 +16,7 @@ import {
 import {
   EMPTY_EMPLOYEE_FORM,
   defaultJoiningDate,
+  sanitizeIndianPhoneInput,
   toEmployeeFormValues,
   toEmployeePayload,
   validateEmployeeForm,
@@ -179,7 +180,9 @@ export function useEmployeeForm(employeeId) {
   }, [employeeId, isEdit]);
 
   function updateField(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
+    const nextValue =
+      field === "phone" ? sanitizeIndianPhoneInput(value) : value;
+    setForm((current) => ({ ...current, [field]: nextValue }));
     setFieldErrors((current) => {
       if (!current[field]) return current;
       const next = { ...current };

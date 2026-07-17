@@ -1,5 +1,5 @@
 import { AuthProvider } from "./controllers/authContext.jsx";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import {
   GuestRoute,
   ProtectedRoute,
@@ -23,6 +23,8 @@ import SignInPage from "./views/pages/SignInPage.jsx";
 function AppRoutes() {
   return (
     <Routes>
+      <Route path="/" element={<Navigate to="/signin" replace />} />
+
       <Route element={<GuestRoute />}>
         <Route path="/signin" element={<SignInPage />} />
       </Route>
@@ -31,7 +33,7 @@ function AppRoutes() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
+          <Route path="dashboard" element={<DashboardPage />} />
           <Route path="profile" element={<ProfilePage />} />
 
           <Route element={<RoleRoute roles={HR_ADMIN_ROLES} />}>

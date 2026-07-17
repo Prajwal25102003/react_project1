@@ -59,7 +59,7 @@ export function useSignInForm() {
     setSubmitting(true);
     try {
       await login(form.email.trim(), form.password);
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err.message || "Failed to sign in");
     } finally {

@@ -86,7 +86,7 @@ function Sidebar({ groups, sidebarToggle, onClose }) {
               : "justify-between",
           )}
         >
-          <NavLink to="/" onClick={onClose} className="flex items-center gap-2">
+          <NavLink to="/dashboard" onClick={onClose} className="flex items-center gap-2">
             <img
               src="/images/logo/logo-icon.svg"
               alt="Employee Management System"
