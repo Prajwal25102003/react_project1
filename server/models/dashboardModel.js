@@ -86,42 +86,6 @@ export async function findRecentActivities() {
   return result.rows
 }
 
-export async function getMonthlyHires() {
-  const result = await query(
-    `SELECT
-      EXTRACT(MONTH FROM joining_date)::int AS month,
-      COUNT(*)::int AS count
-    FROM employees
-    WHERE EXTRACT(YEAR FROM joining_date) = EXTRACT(YEAR FROM CURRENT_DATE)
-    GROUP BY month
-    ORDER BY month`,
-  )
-
-  const counts = Array.from({ length: 12 }, () => 0)
-  for (const row of result.rows) {
-    counts[row.month - 1] = row.count
-  }
-  return counts
-}
-
-export async function getMonthlyLeaveRequests() {
-  const result = await query(
-    `SELECT
-      EXTRACT(MONTH FROM start_date)::int AS month,
-      COUNT(*)::int AS count
-    FROM leave_requests
-    WHERE EXTRACT(YEAR FROM start_date) = EXTRACT(YEAR FROM CURRENT_DATE)
-    GROUP BY month
-    ORDER BY month`,
-  )
-
-  const counts = Array.from({ length: 12 }, () => 0)
-  for (const row of result.rows) {
-    counts[row.month - 1] = row.count
-  }
-  return counts
-}
-
 export async function getDepartmentBreakdown() {
   const result = await query(
     `SELECT

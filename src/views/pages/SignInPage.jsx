@@ -1,18 +1,13 @@
 import { useSignInForm } from "../../controllers/authController.js";
 import {
-  FIELD_ERROR_CLASS,
   FORM_STACK_CLASS,
   INPUT_CLASS,
   INPUT_ERROR_CLASS,
   LABEL_CLASS,
 } from "../../models/formLayoutModel.js";
 import AuthLayout from "../components/AuthLayout.jsx";
+import { FieldError, RequiredMark } from "../components/forms/FormHelpers.jsx";
 import PasswordField from "../components/forms/PasswordField.jsx";
-
-function FieldError({ message }) {
-  if (!message) return null;
-  return <p className={FIELD_ERROR_CLASS}>{message}</p>;
-}
 
 function SignInPage() {
   const {
@@ -37,7 +32,8 @@ function SignInPage() {
           ) : null}
           <div>
             <label className={LABEL_CLASS} htmlFor="signin-email">
-              Email<span className="text-error-500">*</span>
+              Email
+              <RequiredMark />
             </label>
             <input
               id="signin-email"
@@ -54,7 +50,8 @@ function SignInPage() {
           </div>
           <div>
             <label className={LABEL_CLASS} htmlFor="signin-password">
-              Password<span className="text-error-500">*</span>
+              Password
+              <RequiredMark />
             </label>
             <PasswordField
               id="signin-password"
