@@ -6,7 +6,7 @@ import {
   toIndianPhoneInputValue,
 } from "../utils/indianPhone.js";
 
-export const EMPLOYEE_GENDERS = ["Male", "Female", "Other"];
+export const EMPLOYEE_GENDERS = ["Male", "Female"];
 export const EMPLOYEE_STATUSES = ["Active", "Inactive"];
 export const MIN_EMPLOYEE_PASSWORD_LENGTH = 8;
 
@@ -43,6 +43,10 @@ const EMPLOYEE_STATUS = {
 export function mapEmployee(employee) {
   return {
     ...employee,
+    casualLeaveBalance: Number(employee?.casualLeaveBalance ?? 0),
+    sickLeaveBalance: Number(employee?.sickLeaveBalance ?? 0),
+    lopDays: Number(employee?.lopDays ?? 0),
+    pendingLeaveCount: Number(employee?.pendingLeaveCount ?? 0),
     statusClass: getStatusClass(EMPLOYEE_STATUS, employee.status, "Inactive"),
   };
 }

@@ -12,7 +12,7 @@ const ATTENDANCE_SELECT = `
 `
 
 /** Default window for list endpoints (days back from today, inclusive). */
-export const DEFAULT_ATTENDANCE_DAYS = 90
+export const DEFAULT_ATTENDANCE_DAYS = 220
 const MAX_ATTENDANCE_DAYS = 365
 
 export function normalizeAttendanceDays(value) {
@@ -135,5 +135,64 @@ export async function deleteAttendanceById(id) {
     [id],
   )
   return result.rowCount > 0
+}
+
+/**
+ * Insert or update attendance by (employee_id, attendance_date).
+ * Returns { action: 'inserted' | 'updated', id }
+ */
+export async function upsertAttendanceByEmployeeDate(record, client = null) {
+  const runner = client || { query }
+
+  const existing = await runner.query(
+    `SELECT id
+     FROM attendance
+     WHERE employee_id = $1
+       AND attendance_date = $2::date
+     LIMIT 1`,
+    [record.employeeId, record.date],
+  )
+
+  if (existing.rows[0]?.id) {
+    const id = existing.rows[0].id
+    await runner.query(
+      `UPDATE attendance SET
+        check_in = $2,
+        check_out = $3,
+        working_hours = $4,
+        status = $5
+      WHERE id = $1`,
+      [id, record.checkIn, record.checkOut, record.workingHours, record.status],
+    )
+    return { action: 'updated', id }
+  }
+
+  const idResult = await runner.query(
+    `SELECT COALESCE(
+      MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)),
+      5000
+    ) AS max_num
+    FROM attendance
+    WHERE id ~ '^ATT-[0-9]+$'`,
+  )
+  const nextNum = Number(idResult.rows[0].max_num) + 1
+  const id = `ATT-${nextNum}`
+
+  await runner.query(
+    `INSERT INTO attendance (
+      id, employee_id, attendance_date, check_in, check_out, working_hours, status
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      id,
+      record.employeeId,
+      record.date,
+      record.checkIn,
+      record.checkOut,
+      record.workingHours,
+      record.status,
+    ],
+  )
+
+  return { action: 'inserted', id }
 }
 

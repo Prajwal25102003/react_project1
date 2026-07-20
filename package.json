@@ -10,6 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "seed:users": "node server/scripts/seedUsers.js",
+    "seed:employees": "node server/scripts/seedEmployees.js",
+    "seed:attendance": "node server/scripts/seedAttendance.js",
     "seed:indian": "node server/scripts/reseedIndianData.js"
   },
   "dependencies": {
@@ -27,7 +29,8 @@
     "react-apexcharts": "^2.1.1",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.9.1",
-    "tailwindcss": "^4.3.2"
+    "tailwindcss": "^4.3.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.3",

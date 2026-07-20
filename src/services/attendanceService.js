@@ -38,3 +38,15 @@ export async function deleteAttendance(id) {
     { method: "DELETE" },
   );
 }
+
+export async function importAttendanceRecords(records) {
+  const data = await fetchJson(
+    "/api/attendance/import",
+    "Failed to import attendance",
+    {
+      method: "POST",
+      body: { records },
+    },
+  );
+  return data.stats || {};
+}

@@ -1,6 +1,9 @@
 /**
- * Ensures users table exists and upserts demo accounts.
+ * Ensures users table exists and upserts login accounts.
  * Password for all users: 12345678
+ *
+ * - One user per employee (employee email + department-based role)
+ * - Demo accounts: hr@company.com, admin@company.com, arjuntejas@company.com
  *
  * Usage:
  *   node server/scripts/seedUsers.js
@@ -11,6 +14,7 @@ import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import pool, { connectDatabase, query } from '../config/db.js'
+import { loginRoleForDepartmentName } from '../utils/loginRole.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../.env') })
@@ -18,33 +22,50 @@ dotenv.config({ path: path.join(__dirname, '../.env') })
 const DEMO_PASSWORD = '12345678'
 const forceReset = process.argv.includes('--force')
 
-async function resolveDemoUsers() {
-  const employees = await query(
-    `SELECT id, name, email FROM employees ORDER BY id ASC`,
+async function resolveEmployeeUsers() {
+  const result = await query(
+    `SELECT e.id, e.name, e.email, d.name AS department_name
+     FROM employees e
+     LEFT JOIN departments d ON d.id = e.department_id
+     ORDER BY e.id ASC`,
   )
-  const byId = Object.fromEntries(employees.rows.map((row) => [row.id, row]))
-  const hrEmployee = byId['EMP-1002'] || employees.rows[0]
+
+  return result.rows.map((row) => ({
+    email: row.email,
+    role: loginRoleForDepartmentName(row.department_name),
+    name: row.name,
+    employeeId: row.id,
+  }))
+}
+
+async function resolveDemoUsers(employees) {
+  const byId = Object.fromEntries(employees.map((row) => [row.employeeId, row]))
+  const hrEmployee =
+    employees.find((row) => row.role === 'hr') || employees[0] || null
   const selfEmployee =
-    employees.rows.find((row) => row.id !== hrEmployee?.id) || employees.rows[0]
+    byId['EMP-1001'] ||
+    employees.find((row) => row.employeeId !== hrEmployee?.employeeId) ||
+    employees[0] ||
+    null
 
   return [
     {
       email: 'hr@company.com',
       role: 'hr',
       name: hrEmployee?.name || 'Siddharth Menon',
-      employeeId: hrEmployee?.id || null,
+      employeeId: hrEmployee?.employeeId || null,
     },
     {
       email: 'arjuntejas@company.com',
       role: 'employee',
       name: selfEmployee?.name || 'Employee User',
-      employeeId: selfEmployee?.id || null,
+      employeeId: selfEmployee?.employeeId || null,
     },
     {
       email: 'admin@company.com',
       role: 'admin',
-      name: 'Rahul Aman',
-      employeeId: null,
+      name: byId['EMP-1999']?.name || 'Rahul Aman',
+      employeeId: byId['EMP-1999']?.employeeId || null,
     },
   ]
 }
@@ -74,30 +95,38 @@ async function ensureUsersTable() {
   `)
 }
 
+async function upsertUser(user, passwordHash) {
+  await query(
+    `INSERT INTO users (email, password_hash, role, employee_id, name)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (email) DO UPDATE SET
+       password_hash = EXCLUDED.password_hash,
+       role = EXCLUDED.role,
+       employee_id = EXCLUDED.employee_id,
+       name = EXCLUDED.name`,
+    [user.email, passwordHash, user.role, user.employeeId, user.name],
+  )
+}
+
 async function seed() {
   await connectDatabase()
   await ensureUsersTable()
 
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10)
-  const demoUsers = await resolveDemoUsers()
+  const employeeUsers = await resolveEmployeeUsers()
+  const demoUsers = await resolveDemoUsers(employeeUsers)
+
+  for (const user of employeeUsers) {
+    // Demo admin@company.com owns EMP-1999; skip the department-based login for that employee.
+    if (user.employeeId === 'EMP-1999') continue
+    await upsertUser(user, passwordHash)
+  }
+  console.log(
+    `Seeded ${employeeUsers.filter((u) => u.employeeId !== 'EMP-1999').length} employee login(s)`,
+  )
 
   for (const user of demoUsers) {
-    await query(
-      `INSERT INTO users (email, password_hash, role, employee_id, name)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (email) DO UPDATE SET
-         password_hash = EXCLUDED.password_hash,
-         role = EXCLUDED.role,
-         employee_id = EXCLUDED.employee_id,
-         name = EXCLUDED.name`,
-      [
-        user.email,
-        passwordHash,
-        user.role,
-        user.employeeId,
-        user.name,
-      ],
-    )
+    await upsertUser(user, passwordHash)
     console.log(`Seeded ${user.role}: ${user.email}`)
   }
 
@@ -105,8 +134,7 @@ async function seed() {
     `UPDATE users SET password_hash = $1 RETURNING email`,
     [passwordHash],
   )
-  console.log(`Updated password for ${reset.rowCount} user(s)`)
-  console.log(`Password for all users: ${DEMO_PASSWORD}`)
+  console.log(`Password set to ${DEMO_PASSWORD} for ${reset.rowCount} user(s)`)
 }
 
 seed()

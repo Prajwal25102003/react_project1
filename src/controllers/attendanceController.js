@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useDataTable } from "./dataTableController.js";
@@ -9,6 +9,7 @@ import {
   deleteAttendance,
   fetchAttendanceById,
   fetchAttendanceRecords,
+  importAttendanceRecords,
   updateAttendance,
 } from "../services/attendanceService.js";
 import {
@@ -19,9 +20,14 @@ import {
   validateAttendanceForm,
 } from "../models/attendanceModel.js";
 import {
+  parseAttendanceImportFile,
+  summarizeImportResult,
+} from "../models/attendanceImportModel.js";
+import {
   ATTENDANCE_COLUMN_FILTERS,
   ATTENDANCE_COLUMNS,
   ATTENDANCE_SEARCH_KEYS,
+  getAttendanceDefaultVisibleIds,
 } from "../models/attendanceTableModel.js";
 import { ROLES } from "../models/authModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
@@ -36,10 +42,15 @@ export function useAttendance() {
   const table = useDataTable(rows, {
     columns: ATTENDANCE_COLUMNS,
     searchKeys: ATTENDANCE_SEARCH_KEYS,
+    initialVisibleColumnIds: getAttendanceDefaultVisibleIds(isEmployee),
   });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importStats, setImportStats] = useState(null);
+  const fileInputRef = useRef(null);
 
   function openDeleteModal(record) {
     setDeleteError("");
@@ -68,6 +79,52 @@ export function useAttendance() {
     }
   }
 
+  function openImportPicker() {
+    setImportError("");
+    fileInputRef.current?.click();
+  }
+
+  function clearImportStats() {
+    setImportStats(null);
+    setImportError("");
+  }
+
+  async function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || isEmployee) return;
+
+    try {
+      setImporting(true);
+      setImportError("");
+      setImportStats(null);
+
+      const buffer = await file.arrayBuffer();
+      const parsed = parseAttendanceImportFile(buffer);
+      if (!parsed.ok) {
+        setImportError(parsed.errors[0] || "Failed to parse Excel file");
+        return;
+      }
+
+      const stats = summarizeImportResult(
+        await importAttendanceRecords(parsed.rows),
+      );
+      if (parsed.errors.length) {
+        stats.errors = [...parsed.errors.slice(0, 10), ...(stats.errors || [])].slice(
+          0,
+          20,
+        );
+      }
+      setImportStats(stats);
+      reload();
+      requestEmsRefresh();
+    } catch (err) {
+      setImportError(err.message || "Failed to import attendance");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return {
     records: table.rows,
     loading,
@@ -82,6 +139,13 @@ export function useAttendance() {
     openDeleteModal,
     closeDeleteModal,
     confirmDelete,
+    importing,
+    importError,
+    importStats,
+    fileInputRef,
+    openImportPicker,
+    handleImportFile,
+    clearImportStats,
   };
 }
 

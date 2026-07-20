@@ -7,6 +7,7 @@ import {
   generateNextAttendanceId,
   normalizeAttendanceDays,
   updateAttendance,
+  upsertAttendanceByEmployeeDate,
 } from '../models/attendanceModel.js'
 import { employeeExists, employeeHasExcludedLoginRole } from '../models/employeesModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
@@ -226,6 +227,91 @@ export async function deleteAttendanceHandler(req, res) {
     })
 
     res.json({ message: 'Attendance record deleted' })
+  } catch (error) {
+    res.status(500).json({ message: formatDbError(error) })
+  }
+}
+
+export async function importAttendanceHandler(req, res) {
+  try {
+    const records = Array.isArray(req.body?.records) ? req.body.records : null
+    if (!records || records.length === 0) {
+      return res.status(400).json({ message: 'No attendance records to import' })
+    }
+    if (records.length > 5000) {
+      return res.status(400).json({
+        message: 'Import is limited to 5000 rows at a time',
+      })
+    }
+
+    let imported = 0
+    let updated = 0
+    let skipped = 0
+    let failed = 0
+    let present = 0
+    let absent = 0
+    let halfDay = 0
+    const errors = []
+
+    for (let i = 0; i < records.length; i += 1) {
+      const { errors: rowErrors, record } = parseAttendancePayload(records[i])
+      if (rowErrors.length > 0) {
+        failed += 1
+        errors.push(`Row ${i + 1}: ${rowErrors.join('; ')}`)
+        continue
+      }
+
+      if (!(await employeeExists(record.employeeId))) {
+        skipped += 1
+        errors.push(`Row ${i + 1}: employee ${record.employeeId} not found`)
+        continue
+      }
+
+      if (await employeeHasExcludedLoginRole(record.employeeId)) {
+        skipped += 1
+        errors.push(
+          `Row ${i + 1}: attendance cannot be marked for HR/Admin (${record.employeeId})`,
+        )
+        continue
+      }
+
+      try {
+        const result = await upsertAttendanceByEmployeeDate(record)
+        if (result.action === 'inserted') imported += 1
+        else updated += 1
+
+        if (record.status === 'Present') present += 1
+        else if (record.status === 'Absent') absent += 1
+        else if (record.status === 'Half Day') halfDay += 1
+      } catch (error) {
+        failed += 1
+        errors.push(`Row ${i + 1}: ${formatDbError(error)}`)
+      }
+    }
+
+    const saved = imported + updated
+    if (saved > 0) {
+      await createRecentActivity({
+        title: 'Attendance imported',
+        description: `${saved} attendance rows imported from Excel (${imported} new, ${updated} updated).`,
+        category: 'Attendance',
+        status: 'Updated',
+      })
+    }
+
+    res.json({
+      stats: {
+        total: records.length,
+        imported,
+        updated,
+        skipped,
+        failed,
+        present,
+        absent,
+        halfDay,
+        errors: errors.slice(0, 20),
+      },
+    })
   } catch (error) {
     res.status(500).json({ message: formatDbError(error) })
   }

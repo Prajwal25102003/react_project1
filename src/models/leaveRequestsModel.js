@@ -1,10 +1,23 @@
 import { STATUS_TONE, getStatusClass } from "./statusStylesModel.js";
+import {
+  isFemaleEmployee,
+  isMaternityLeave,
+  maternityDatesFromDelivery,
+  MATERNITY_TOTAL_DAYS,
+} from "./maternityLeaveModel.js";
 
-export const LEAVE_TYPES = ["Sick Leave", "Casual Leave", "Maternity Leave"];
+export const LEAVE_TYPES = [
+  "Sick Leave",
+  "Casual Leave",
+  "Maternity Leave",
+  "Medical Leave",
+  "Loss of Pay",
+];
 
 export const EMPTY_LEAVE_FORM = {
   employeeId: "",
   leaveType: "Casual Leave",
+  expectedDeliveryDate: "",
   startDate: "",
   endDate: "",
   leaveDays: "",
@@ -13,16 +26,128 @@ export const EMPTY_LEAVE_FORM = {
 
 const LEAVE_STATUS = {
   Pending: STATUS_TONE.warning,
+  TeamLeadApproved: STATUS_TONE.info,
   Approved: STATUS_TONE.success,
   Rejected: STATUS_TONE.error,
   Cancelled: STATUS_TONE.info,
 };
 
+export const LEAVE_STATUS_LABEL = {
+  Pending: "Pending",
+  TeamLeadApproved: "Awaiting HR",
+  Approved: "Approved",
+  Rejected: "Rejected",
+  Cancelled: "Cancelled",
+};
+
+export function isRequesterHr(request) {
+  return Boolean(request?.requesterIsHr);
+}
+
+export function isRequesterAdmin(request) {
+  return Boolean(request?.requesterIsAdmin);
+}
+
+export function canHrRejectRequest(request) {
+  if (!request) return false;
+  if (isRequesterHr(request) || isRequesterAdmin(request)) return false;
+  if (request.status === "TeamLeadApproved") return true;
+  if (
+    request.status === "Pending" &&
+    request.departmentHeadId &&
+    request.departmentHeadId === request.employeeId
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function mapApprovalHistoryEntry(entry) {
+  const stepLabel =
+    {
+      Submit: "Submitted",
+      TeamLead: "Team Lead",
+      HR: "HR",
+      Admin: "Admin",
+      HigherAuthority: "Higher Authority",
+      Cancel: "Cancelled",
+    }[entry.step] || entry.step;
+
+  return {
+    ...entry,
+    stepLabel,
+  };
+}
+
 export function mapLeaveRequest(request) {
+  const status = request.status || "Pending";
+  const requesterIsHr = Boolean(request.requesterIsHr);
+  const requesterIsAdmin = Boolean(request.requesterIsAdmin);
   return {
     ...request,
-    statusClass: getStatusClass(LEAVE_STATUS, request.status, "Pending"),
+    status,
+    requesterIsHr,
+    requesterIsAdmin,
+    statusLabel:
+      status === "Pending" && requesterIsHr
+        ? "Awaiting Admin"
+        : status === "Pending" && requesterIsAdmin
+          ? "Awaiting Higher Approval"
+          : LEAVE_STATUS_LABEL[status] || status,
+    statusClass: getStatusClass(LEAVE_STATUS, status, "Pending"),
+    casualLeaveBalance: Number(request.casualLeaveBalance ?? 0),
+    sickLeaveBalance: Number(request.sickLeaveBalance ?? 0),
+    lopDays: Number(request.lopDays ?? 0),
+    approvalHistory: (request.approvalHistory || []).map(mapApprovalHistoryEntry),
   };
+}
+
+/** True when the signed-in employee is the requester's department head (not self). */
+export function isTeamLeadForRequest(request, employeeId) {
+  return Boolean(
+    employeeId &&
+      request?.departmentHeadId &&
+      employeeId === request.departmentHeadId &&
+      employeeId !== request.employeeId &&
+      !isRequesterHr(request) &&
+      !isRequesterAdmin(request),
+  );
+}
+
+/** HR final approve, or HR direct-approve when the requester is the department head. */
+export function canHrApproveRequest(request) {
+  if (!request || isRequesterHr(request) || isRequesterAdmin(request)) {
+    return false;
+  }
+  if (request.status === "TeamLeadApproved") return true;
+  if (
+    request.status === "Pending" &&
+    request.departmentHeadId &&
+    request.departmentHeadId === request.employeeId
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Admin-only approve for HR employees' leave requests. */
+export function canAdminApproveRequest(request) {
+  return Boolean(
+    request &&
+      isRequesterHr(request) &&
+      !isRequesterAdmin(request) &&
+      request.status === "Pending",
+  );
+}
+
+export function canAdminRejectRequest(request) {
+  return canAdminApproveRequest(request);
+}
+
+export function canCancelLeaveRequest(request) {
+  return (
+    request?.status === "Pending" || request?.status === "TeamLeadApproved"
+  );
 }
 
 export function calculateLeaveDays(startDate, endDate) {
@@ -35,7 +160,7 @@ export function calculateLeaveDays(startDate, endDate) {
 }
 
 export function toLeavePayload(form) {
-  return {
+  const payload = {
     employeeId: form.employeeId,
     leaveType: form.leaveType,
     startDate: form.startDate,
@@ -43,9 +168,15 @@ export function toLeavePayload(form) {
     leaveDays: Number(form.leaveDays),
     reason: form.reason.trim(),
   };
+  if (isMaternityLeave(form.leaveType)) {
+    payload.expectedDeliveryDate = String(
+      form.expectedDeliveryDate || "",
+    ).trim();
+  }
+  return payload;
 }
 
-export function validateLeaveForm(form) {
+export function validateLeaveForm(form, { gender } = {}) {
   const fieldErrors = {};
   const employeeId = String(form?.employeeId ?? "").trim();
   const leaveType = String(form?.leaveType ?? "").trim();
@@ -53,24 +184,52 @@ export function validateLeaveForm(form) {
   const endDate = String(form?.endDate ?? "").trim();
   const reason = String(form?.reason ?? "").trim();
   const leaveDaysRaw = String(form?.leaveDays ?? "").trim();
+  const expectedDeliveryDate = String(form?.expectedDeliveryDate ?? "").trim();
 
-  if (!employeeId) fieldErrors.employeeId = "Employee is required";
+  if (!employeeId) fieldErrors.employeeId = "Employee ID is required";
   if (!leaveType) fieldErrors.leaveType = "Leave type is required";
   else if (!LEAVE_TYPES.includes(leaveType)) {
     fieldErrors.leaveType = "Select a valid leave type";
   }
-  if (!startDate) fieldErrors.startDate = "Start date is required";
-  if (!endDate) fieldErrors.endDate = "End date is required";
-  if (startDate && endDate && endDate < startDate) {
-    fieldErrors.endDate = "End date cannot be before start date";
-  }
-  if (!leaveDaysRaw) fieldErrors.leaveDays = "Leave days are required";
-  else {
-    const days = Number(leaveDaysRaw);
-    if (Number.isNaN(days) || days < 1) {
-      fieldErrors.leaveDays = "Leave days must be at least 1";
+
+  if (isMaternityLeave(leaveType)) {
+    if (!isFemaleEmployee(gender)) {
+      fieldErrors.leaveType =
+        "Maternity leave is only available for female employees";
+    }
+    if (!expectedDeliveryDate) {
+      fieldErrors.expectedDeliveryDate = "Expected delivery date is required";
+    } else {
+      const maternity = maternityDatesFromDelivery(expectedDeliveryDate);
+      if (!maternity) {
+        fieldErrors.expectedDeliveryDate = "Enter a valid delivery date";
+      } else {
+        if (startDate !== maternity.startDate) {
+          fieldErrors.startDate = `Must be 2 weeks before delivery (${maternity.startDate})`;
+        }
+        if (endDate !== maternity.endDate) {
+          fieldErrors.endDate = `Must be 24 weeks after delivery (${maternity.endDate})`;
+        }
+        if (Number(leaveDaysRaw) !== MATERNITY_TOTAL_DAYS) {
+          fieldErrors.leaveDays = `Maternity leave is ${MATERNITY_TOTAL_DAYS} paid days (26 weeks)`;
+        }
+      }
+    }
+  } else {
+    if (!startDate) fieldErrors.startDate = "Start date is required";
+    if (!endDate) fieldErrors.endDate = "End date is required";
+    if (startDate && endDate && endDate < startDate) {
+      fieldErrors.endDate = "End date cannot be before start date";
+    }
+    if (!leaveDaysRaw) fieldErrors.leaveDays = "Leave days are required";
+    else {
+      const days = Number(leaveDaysRaw);
+      if (Number.isNaN(days) || days < 1) {
+        fieldErrors.leaveDays = "Leave days must be at least 1";
+      }
     }
   }
+
   if (!reason) fieldErrors.reason = "Leave reason is required";
 
   const keys = Object.keys(fieldErrors);

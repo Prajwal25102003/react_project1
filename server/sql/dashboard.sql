@@ -26,7 +26,7 @@ INSERT INTO recent_activities (id, title, description, category, activity_time, 
   (
     'ACT-01',
     'New employee added',
-    'Aditya Kunal joined Engineering as QA Engineer in Bengaluru.',
+    'Aditya Kunal joined Development as QA Engineer in Bengaluru.',
     'Employees',
     NOW() - INTERVAL '2 hours',
     'Completed'

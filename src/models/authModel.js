@@ -23,6 +23,7 @@ export const ROLE_NAV_IDS = {
     "departments",
     "attendance",
     "leave-requests",
+    "holidays",
     // "payroll", // later
   ],
   admin: [
@@ -31,6 +32,7 @@ export const ROLE_NAV_IDS = {
     "departments",
     "attendance",
     "leave-requests",
+    "holidays",
     // "payroll", // later
     // "system-health", // later
     // "security", // later
@@ -40,9 +42,10 @@ export const ROLE_NAV_IDS = {
     "profile",
     "attendance",
     "leave-requests",
+    "holidays",
     // "payroll", // later — My Payroll
   ],
-}
+};
 
 export const HR_ADMIN_ROLES = [ROLES.HR, ROLES.ADMIN];
 

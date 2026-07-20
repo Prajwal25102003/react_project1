@@ -60,6 +60,7 @@ function mapOrgDashboard(data, newEmployeesPeriod) {
   return {
     variant: "org",
     primaryMetrics: metrics,
+    secondaryMetrics: data.secondaryMetrics || [],
     metrics,
     newEmployeesPeriod: data.newEmployeesPeriod || newEmployeesPeriod,
     activities: mapActivities(data.activities),
@@ -74,12 +75,11 @@ function mapEmployeeDashboard(data) {
   return {
     variant: "employee",
     primaryMetrics: data.primaryMetrics || metrics,
+    secondaryMetrics: data.secondaryMetrics || [],
     metrics,
-    secondaryMetrics: [],
     newEmployeesPeriod: "month",
     activities: mapActivities(data.activities),
     departments: [],
-    leaveOverview: [],
     chartTwo: {
       title: "Attendance Rate",
       description: "Present vs marked days this month",

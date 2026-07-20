@@ -71,21 +71,21 @@ function AttendanceFormPage() {
               <div className={FORM_GRID_CLASS}>
                 <div>
                   <label className={LABEL_CLASS}>
-                    Employee <RequiredMark />
+                    Employee ID <RequiredMark />
                   </label>
                   <SelectField
                     value={form.employeeId}
                     onChange={(nextValue) =>
                       updateField("employeeId", nextValue)
                     }
-                    ariaLabel="Employee"
-                    placeholder="Select employee"
+                    ariaLabel="Employee ID"
+                    placeholder="Select employee ID"
                     hasError={Boolean(fieldErrors.employeeId)}
                     options={[
-                      { value: "", label: "Select employee" },
+                      { value: "", label: "Select employee ID" },
                       ...employees.map((employee) => ({
                         value: employee.id,
-                        label: employee.name,
+                        label: employee.id,
                       })),
                     ]}
                   />

@@ -1,5 +1,8 @@
 import StatusPill from "../components/StatusPill.jsx";
 
+/** Visible rows before the rest scroll (invisible scrollbar). */
+const VISIBLE_ACTIVITY_ROWS = 5;
+
 function ActivityCard({ activity }) {
   return (
     <article
@@ -44,19 +47,24 @@ function RecentActivitiesTable({
   title = "Recent Activities",
   compact = false,
 }) {
+  const needsScroll = activities.length > VISIBLE_ACTIVITY_ROWS;
+  // ~5 table rows (title + description) or ~5 stacked cards
+  const scrollMaxClass = compact ? "max-h-[17.5rem]" : "max-h-[20rem]";
+  const cardScrollMaxClass = compact ? "max-h-[22rem]" : "max-h-[24rem]";
+
   return (
     <div
       className={
         compact
           ? "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-2 pt-3 sm:px-5"
-          : "min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 sm:px-6"
+          : "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 sm:px-6"
       }
     >
       <h3
         className={
           compact
             ? "mb-2 shrink-0 text-base font-semibold text-gray-800"
-            : "mb-4 text-lg font-semibold text-gray-800"
+            : "mb-4 shrink-0 text-lg font-semibold text-gray-800"
         }
       >
         {title}
@@ -66,29 +74,27 @@ function RecentActivitiesTable({
         <p className="py-6 text-theme-sm text-gray-500">No recent activity.</p>
       ) : (
         <>
-          {/* Mobile: stacked cards — 4-col table overlaps at phone widths */}
           <div
-            className={
-              compact
-                ? "min-h-0 flex-1 space-y-2 overflow-y-auto md:hidden"
-                : "space-y-2 md:hidden"
-            }
+            className={`space-y-2 md:hidden ${
+              needsScroll
+                ? `no-scrollbar overflow-y-auto ${cardScrollMaxClass}`
+                : ""
+            }`}
           >
             {activities.map((activity) => (
               <ActivityCard key={activity.id} activity={activity} />
             ))}
           </div>
 
-          {/* Desktop / tablet: table */}
           <div
-            className={
-              compact
-                ? "hidden min-h-0 flex-1 overflow-y-auto md:block"
-                : "hidden w-full overflow-x-auto md:block"
-            }
+            className={`hidden md:block ${
+              needsScroll
+                ? `no-scrollbar overflow-y-auto ${scrollMaxClass}`
+                : "w-full overflow-x-auto"
+            }`}
           >
             <table className="min-w-full table-fixed">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-y border-gray-100">
                   <th
                     className={`${compact ? "py-2" : "py-3"} w-[42%] text-left`}

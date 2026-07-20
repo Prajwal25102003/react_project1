@@ -39,7 +39,13 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   end_date DATE NOT NULL,
   leave_days INTEGER NOT NULL,
   reason TEXT NOT NULL,
-  status VARCHAR(20) NOT NULL CHECK (status IN ('Pending', 'Approved', 'Rejected', 'Cancelled')),
+  status VARCHAR(20) NOT NULL CHECK (status IN (
+    'Pending',
+    'TeamLeadApproved',
+    'Approved',
+    'Rejected',
+    'Cancelled'
+  )),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -48,7 +54,7 @@ INSERT INTO leave_requests (
   id, employee_id, leave_type, start_date, end_date, leave_days, reason, status
 ) VALUES
   (
-    'LR-3001', 'EMP-1006', 'Sick Leave', '2026-07-14', '2026-07-15', 2,
+    'LR-3001', 'EMP-1006', 'Sick Leave', '2026-07-14', '2026-07-14', 1,
     'Recovering from viral fever as advised by the family doctor in Kochi.', 'Approved'
   ),
   (
@@ -68,12 +74,12 @@ INSERT INTO leave_requests (
     'Requested leave overlaps with the Hyderabad sales sprint — rejected by manager.', 'Rejected'
   ),
   (
-    'LR-3006', 'EMP-1007', 'Sick Leave', '2026-07-08', '2026-07-09', 2,
+    'LR-3006', 'EMP-1007', 'Medical Leave', '2026-07-08', '2026-07-09', 2,
     'Medical checkup and recovery at Apollo Hospital, Pune.', 'Approved'
   ),
   (
-    'LR-3007', 'EMP-1001', 'Maternity Leave', '2026-09-12', '2026-09-16', 5,
-    'Maternity leave as planned with team coverage.', 'Pending'
+    'LR-3007', 'EMP-1005', 'Maternity Leave', '2026-09-01', '2027-03-01', 182,
+    'Maternity leave: 2 weeks before and 24 weeks after expected delivery.', 'Pending'
   )
 ON CONFLICT (id) DO UPDATE SET
   employee_id = EXCLUDED.employee_id,

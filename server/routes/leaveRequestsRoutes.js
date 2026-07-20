@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   cancelLeaveRequestHandler,
   createLeaveRequestHandler,
+  getLeaveRequestByIdHandler,
   getLeaveRequests,
   updateLeaveRequestStatusHandler,
 } from '../controllers/leaveRequestsController.js'
@@ -10,17 +11,23 @@ import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
 const router = Router()
 
 router.get('/', requireAuth, getLeaveRequests)
-router.post('/', requireAuth, requireRole('employee'), createLeaveRequestHandler)
+router.get('/:id', requireAuth, getLeaveRequestByIdHandler)
+router.post(
+  '/',
+  requireAuth,
+  requireRole('employee', 'hr', 'admin'),
+  createLeaveRequestHandler,
+)
 router.patch(
   '/:id/status',
   requireAuth,
-  requireRole('hr', 'admin'),
+  requireRole('employee', 'hr', 'admin'),
   updateLeaveRequestStatusHandler,
 )
 router.patch(
   '/:id/cancel',
   requireAuth,
-  requireRole('employee'),
+  requireRole('employee', 'hr', 'admin'),
   cancelLeaveRequestHandler,
 )
 

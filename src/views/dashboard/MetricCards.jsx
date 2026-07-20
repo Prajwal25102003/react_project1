@@ -83,6 +83,12 @@ const METRIC_ICONS = {
   "on-leave": ActiveIcon,
   "days-present": EmployeesIcon,
   "leave-approved": ActiveIcon,
+  "casual-leave": ActiveIcon,
+  "sick-leave": ActiveIcon,
+  "lop-days": ActiveIcon,
+  "absent-today": ActiveIcon,
+  "unmarked-today": ActiveIcon,
+  departments: EmployeesIcon,
 };
 
 function MetricCards({ metrics, columns = 2, compact = false }) {

@@ -24,7 +24,7 @@ import {
 } from '../utils/indianPhone.js'
 import { isValidEmail } from '../utils/email.js'
 
-const GENDERS = new Set(['Male', 'Female', 'Other'])
+const GENDERS = new Set(['Male', 'Female'])
 const STATUSES = new Set(['Active', 'Inactive'])
 const MIN_PASSWORD_LENGTH = 8
 
@@ -97,7 +97,7 @@ function parseEmployeePayload(body) {
 
   const normalizedPhone = normalizeIndianPhone(phone) || phone
   if (!gender) errors.push('Gender is required')
-  else if (!GENDERS.has(gender)) errors.push('Gender must be Male, Female, or Other')
+  else if (!GENDERS.has(gender)) errors.push('Gender must be Male or Female')
   if (!departmentId) errors.push('Department is required')
   if (!designation) errors.push('Designation is required')
   if (!joiningDate) errors.push('Joining date is required')

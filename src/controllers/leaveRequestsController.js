@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useDataTable } from "./dataTableController.js";
@@ -6,54 +6,112 @@ import { useListData } from "./listController.js";
 import {
   cancelLeaveRequest,
   createLeaveRequest,
+  fetchLeaveRequestById,
   fetchLeaveRequests,
   updateLeaveRequestStatus,
 } from "../services/leaveRequestsService.js";
+import { fetchAuthProfile } from "../services/authService.js";
 import {
   EMPTY_LEAVE_FORM,
+  LEAVE_TYPES,
   calculateLeaveDays,
+  canAdminApproveRequest,
+  canAdminRejectRequest,
+  canCancelLeaveRequest,
+  canHrApproveRequest,
+  canHrRejectRequest,
+  isTeamLeadForRequest,
   toLeavePayload,
   validateLeaveForm,
 } from "../models/leaveRequestsModel.js";
+import { normalizeLeaveBalances } from "../models/leaveBalancesModel.js";
+import {
+  isMaternityLeave,
+  leaveTypesForGender,
+  maternityDatesFromDelivery,
+  MATERNITY_LEAVE_HELP,
+} from "../models/maternityLeaveModel.js";
 import {
   LEAVE_REQUEST_COLUMN_FILTERS,
   LEAVE_REQUEST_COLUMNS,
   LEAVE_REQUEST_SEARCH_KEYS,
   getLeaveRequestDefaultVisibleIds,
 } from "../models/leaveRequestsTableModel.js";
-import { ROLES } from "../models/authModel.js";
+import { HR_ADMIN_ROLES, ROLES } from "../models/authModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
 
-export function useLeaveRequests() {
+export function useLeaveRequests(mode = "mine") {
   const { user } = useAuth();
   const isEmployee = user?.role === ROLES.EMPLOYEE;
+  const isHrAdmin = HR_ADMIN_ROLES.includes(user?.role);
+  const isAdmin = user?.role === ROLES.ADMIN;
+  const isApprovalsMode = mode === "approvals";
+  const canRequestLeave = Boolean(user?.employeeId);
+
+  const loadLeaveRequests = useCallback(
+    () => fetchLeaveRequests(isApprovalsMode ? "approvals" : "mine"),
+    [isApprovalsMode],
+  );
+
   const { rows, loading, error, reload } = useListData(
-    fetchLeaveRequests,
+    loadLeaveRequests,
     "Failed to load leave requests",
   );
   const table = useDataTable(rows, {
     columns: LEAVE_REQUEST_COLUMNS,
     searchKeys: LEAVE_REQUEST_SEARCH_KEYS,
-    initialVisibleColumnIds: getLeaveRequestDefaultVisibleIds(isEmployee),
+    initialVisibleColumnIds: getLeaveRequestDefaultVisibleIds(!isApprovalsMode),
   });
   const [decisionTarget, setDecisionTarget] = useState(null);
   const [decisionStatus, setDecisionStatus] = useState("");
   const [deciding, setDeciding] = useState(false);
   const [decisionError, setDecisionError] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const [remarksError, setRemarksError] = useState("");
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonError, setCancelReasonError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState("");
+  const [viewTarget, setViewTarget] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
-  function openApproveModal(request) {
+  async function openViewModal(request) {
+    setViewTarget(request);
+    if (!request?.id) return;
+    try {
+      setViewLoading(true);
+      const detailed = await fetchLeaveRequestById(request.id);
+      setViewTarget(detailed);
+    } catch {
+      // Keep list row details if history fetch fails.
+    } finally {
+      setViewLoading(false);
+    }
+  }
+
+  function closeViewModal() {
+    setViewTarget(null);
+    setViewLoading(false);
+  }
+
+  function openDecisionModal(request, nextStatus) {
     setDecisionError("");
-    setDecisionStatus("Approved");
+    setRemarks("");
+    setRemarksError("");
+    setDecisionStatus(nextStatus);
     setDecisionTarget(request);
   }
 
+  function openApproveModal(request) {
+    const nextStatus = isTeamLeadForRequest(request, user?.employeeId)
+      ? "TeamLeadApproved"
+      : "Approved";
+    openDecisionModal(request, nextStatus);
+  }
+
   function openRejectModal(request) {
-    setDecisionError("");
-    setDecisionStatus("Rejected");
-    setDecisionTarget(request);
+    openDecisionModal(request, "Rejected");
   }
 
   function closeDecisionModal() {
@@ -61,17 +119,36 @@ export function useLeaveRequests() {
     setDecisionTarget(null);
     setDecisionStatus("");
     setDecisionError("");
+    setRemarks("");
+    setRemarksError("");
+  }
+
+  function updateRemarks(value) {
+    setRemarks(value);
+    if (remarksError) setRemarksError("");
   }
 
   async function confirmDecision() {
     if (!decisionTarget || !decisionStatus) return;
 
+    const trimmed = remarks.trim();
+    if (decisionStatus === "Rejected" && !trimmed) {
+      setRemarksError("Remarks are required when rejecting");
+      return;
+    }
+
     try {
       setDeciding(true);
       setDecisionError("");
-      await updateLeaveRequestStatus(decisionTarget.id, decisionStatus);
+      setRemarksError("");
+      await updateLeaveRequestStatus(
+        decisionTarget.id,
+        decisionStatus,
+        trimmed,
+      );
       setDecisionTarget(null);
       setDecisionStatus("");
+      setRemarks("");
       reload();
       requestEmsRefresh();
     } catch (err) {
@@ -83,23 +160,40 @@ export function useLeaveRequests() {
 
   function openCancelModal(request) {
     setCancelError("");
+    setCancelReason("");
+    setCancelReasonError("");
     setCancelTarget(request);
   }
 
   function closeCancelModal() {
     if (cancelling) return;
     setCancelTarget(null);
+    setCancelReason("");
+    setCancelReasonError("");
     setCancelError("");
+  }
+
+  function updateCancelReason(value) {
+    setCancelReason(value);
+    if (cancelReasonError) setCancelReasonError("");
   }
 
   async function confirmCancel() {
     if (!cancelTarget) return;
 
+    const reason = cancelReason.trim();
+    if (!reason) {
+      setCancelReasonError("Cancellation reason is required");
+      return;
+    }
+
     try {
       setCancelling(true);
       setCancelError("");
-      await cancelLeaveRequest(cancelTarget.id);
+      setCancelReasonError("");
+      await cancelLeaveRequest(cancelTarget.id, reason);
       setCancelTarget(null);
+      setCancelReason("");
       reload();
       requestEmsRefresh();
     } catch (err) {
@@ -109,7 +203,72 @@ export function useLeaveRequests() {
     }
   }
 
+  function getLeaveActions(request) {
+    const actions = [];
+    const ownRequest = request.employeeId === user?.employeeId;
+    const asTeamLead = isTeamLeadForRequest(request, user?.employeeId);
+
+    if (isApprovalsMode) {
+      if (request.status === "Pending" && asTeamLead) {
+        actions.push({
+          label: "Approve (TL)",
+          onClick: () => openDecisionModal(request, "TeamLeadApproved"),
+        });
+        actions.push({
+          label: "Reject",
+          tone: "danger",
+          onClick: () => openRejectModal(request),
+        });
+      }
+
+      if (isAdmin && canAdminApproveRequest(request)) {
+        actions.push({
+          label: "Approve (Admin)",
+          onClick: () => openDecisionModal(request, "Approved"),
+        });
+      }
+
+      if (isAdmin && canAdminRejectRequest(request)) {
+        actions.push({
+          label: "Reject",
+          tone: "danger",
+          onClick: () => openRejectModal(request),
+        });
+      }
+
+      if (isHrAdmin && canHrApproveRequest(request)) {
+        actions.push({
+          label: "Approve (HR)",
+          onClick: () => openDecisionModal(request, "Approved"),
+        });
+      }
+
+      if (isHrAdmin && canHrRejectRequest(request)) {
+        actions.push({
+          label: "Reject",
+          tone: "danger",
+          onClick: () => openRejectModal(request),
+        });
+      }
+
+      return actions;
+    }
+
+    // Personal leave list: cancel only (no approve actions on own list).
+    if (canCancelLeaveRequest(request) && (ownRequest || isHrAdmin)) {
+      actions.push({
+        label: "Cancel",
+        tone: "danger",
+        onClick: () => openCancelModal(request),
+      });
+    }
+
+    return actions;
+  }
+
   return {
+    mode,
+    isApprovalsMode,
     leaveRequests: table.rows,
     loading,
     error,
@@ -117,20 +276,33 @@ export function useLeaveRequests() {
     table,
     filterDefs: LEAVE_REQUEST_COLUMN_FILTERS,
     isEmployee,
+    isHrAdmin,
+    canRequestLeave,
     decisionTarget,
     decisionStatus,
     deciding,
     decisionError,
+    remarks,
+    remarksError,
     openApproveModal,
     openRejectModal,
     closeDecisionModal,
+    updateRemarks,
     confirmDecision,
     cancelTarget,
+    cancelReason,
+    cancelReasonError,
     cancelling,
     cancelError,
     openCancelModal,
     closeCancelModal,
+    updateCancelReason,
     confirmCancel,
+    viewTarget,
+    viewLoading,
+    openViewModal,
+    closeViewModal,
+    getLeaveActions,
   };
 }
 
@@ -140,9 +312,14 @@ export function useLeaveForm() {
   const [form, setForm] = useState({ ...EMPTY_LEAVE_FORM });
   const [fieldErrors, setFieldErrors] = useState({});
   const [employees, setEmployees] = useState([]);
+  const [gender, setGender] = useState("");
+  const [balances, setBalances] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const availableLeaveTypes = leaveTypesForGender(gender, LEAVE_TYPES);
+  const maternitySelected = isMaternityLeave(form.leaveType);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,23 +329,34 @@ export function useLeaveForm() {
         setLoading(true);
         setError("");
 
-        if (user?.role !== ROLES.EMPLOYEE) {
-          throw new Error("Only employees can request leave");
-        }
         if (!user?.employeeId) {
           throw new Error("Your account is not linked to an employee record");
         }
 
+        const profile = await fetchAuthProfile();
+        const employee = profile?.employee;
         if (!cancelled) {
+          const nextGender = employee?.gender || "";
+          setGender(nextGender);
           setEmployees([
             {
               id: user.employeeId,
-              name: user.name,
+              name: employee?.name || user.name,
+              gender: nextGender,
             },
           ]);
+          setBalances(
+            employee
+              ? normalizeLeaveBalances(employee)
+              : normalizeLeaveBalances({}),
+          );
+          const allowedTypes = leaveTypesForGender(nextGender, LEAVE_TYPES);
           setForm((current) => ({
             ...current,
             employeeId: user.employeeId,
+            leaveType: allowedTypes.includes(current.leaveType)
+              ? current.leaveType
+              : allowedTypes[0] || "Casual Leave",
           }));
         }
       } catch (err) {
@@ -187,7 +375,44 @@ export function useLeaveForm() {
   function updateField(field, value) {
     setForm((current) => {
       const next = { ...current, [field]: value };
-      if (field === "startDate" || field === "endDate") {
+
+      if (field === "leaveType") {
+        if (isMaternityLeave(value)) {
+          const maternity = maternityDatesFromDelivery(
+            next.expectedDeliveryDate,
+          );
+          if (maternity) {
+            next.startDate = maternity.startDate;
+            next.endDate = maternity.endDate;
+            next.leaveDays = maternity.leaveDays;
+          } else {
+            next.startDate = "";
+            next.endDate = "";
+            next.leaveDays = "";
+          }
+        } else {
+          next.expectedDeliveryDate = "";
+          next.leaveDays = calculateLeaveDays(next.startDate, next.endDate);
+        }
+      }
+
+      if (field === "expectedDeliveryDate" && isMaternityLeave(next.leaveType)) {
+        const maternity = maternityDatesFromDelivery(value);
+        if (maternity) {
+          next.startDate = maternity.startDate;
+          next.endDate = maternity.endDate;
+          next.leaveDays = maternity.leaveDays;
+        } else {
+          next.startDate = "";
+          next.endDate = "";
+          next.leaveDays = "";
+        }
+      }
+
+      if (
+        (field === "startDate" || field === "endDate") &&
+        !isMaternityLeave(next.leaveType)
+      ) {
         next.leaveDays = calculateLeaveDays(
           field === "startDate" ? value : next.startDate,
           field === "endDate" ? value : next.endDate,
@@ -196,14 +421,19 @@ export function useLeaveForm() {
       return next;
     });
     setFieldErrors((current) => {
-      if (!current[field] && field !== "startDate" && field !== "endDate") {
-        return current;
-      }
       const next = { ...current };
       delete next[field];
-      if (field === "startDate" || field === "endDate") {
+      if (
+        field === "startDate" ||
+        field === "endDate" ||
+        field === "expectedDeliveryDate" ||
+        field === "leaveType"
+      ) {
         delete next.leaveDays;
         delete next.endDate;
+        delete next.startDate;
+        delete next.expectedDeliveryDate;
+        delete next.leaveType;
       }
       return next;
     });
@@ -211,7 +441,7 @@ export function useLeaveForm() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const validation = validateLeaveForm(form);
+    const validation = validateLeaveForm(form, { gender });
     if (!validation.ok) {
       setFieldErrors(validation.fieldErrors);
       setError(validation.message);
@@ -240,6 +470,11 @@ export function useLeaveForm() {
     form,
     fieldErrors,
     employees,
+    gender,
+    availableLeaveTypes,
+    maternitySelected,
+    maternityHelp: MATERNITY_LEAVE_HELP,
+    balances,
     loading,
     saving,
     error,

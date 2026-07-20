@@ -36,9 +36,15 @@ export function filterByColumns(rows, columnFilters = {}) {
   if (!entries.length) return rows;
 
   return rows.filter((row) =>
-    entries.every(
-      ([key, value]) => String(getCellValue(row, key)) === String(value),
-    ),
+    entries.every(([key, value]) => {
+      const cell = String(getCellValue(row, key));
+      const filter = String(value);
+      // YYYY or YYYY-MM period filters match date prefixes.
+      if (/^\d{4}$/.test(filter) || /^\d{4}-\d{2}$/.test(filter)) {
+        return cell.startsWith(filter);
+      }
+      return cell === filter;
+    }),
   );
 }
 

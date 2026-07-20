@@ -25,7 +25,11 @@ const AttendanceFormPage = lazy(
 const LeaveRequestsPage = lazy(
   () => import("./views/pages/LeaveRequestsPage.jsx"),
 );
+const LeaveApprovalsPage = lazy(
+  () => import("./views/pages/LeaveApprovalsPage.jsx"),
+);
 const LeaveFormPage = lazy(() => import("./views/pages/LeaveFormPage.jsx"));
+const HolidaysPage = lazy(() => import("./views/pages/HolidaysPage.jsx"));
 const ProfilePage = lazy(() => import("./views/pages/ProfilePage.jsx"));
 const NotFoundPage = lazy(() => import("./views/pages/NotFoundPage.jsx"));
 const SignInPage = lazy(() => import("./views/pages/SignInPage.jsx"));
@@ -79,10 +83,9 @@ function AppRoutes() {
             >
               <Route path="attendance" element={<AttendancePage />} />
               <Route path="leave-requests" element={<LeaveRequestsPage />} />
-            </Route>
-
-            <Route element={<RoleRoute roles={[ROLES.EMPLOYEE]} />}>
+              <Route path="leave-approvals" element={<LeaveApprovalsPage />} />
               <Route path="leave-requests/new" element={<LeaveFormPage />} />
+              <Route path="holidays" element={<HolidaysPage />} />
             </Route>
           </Route>
         </Route>

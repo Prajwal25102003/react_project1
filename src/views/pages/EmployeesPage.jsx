@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { useEmployees } from "../../controllers/employeesController.js";
-import { EMPLOYEE_COLUMNS } from "../../models/employeesTableModel.js";
 import DataTable from "../components/DataTable.jsx";
 import ListPageShell from "../components/ListPageShell.jsx";
 import EmployeeDeleteModal from "./EmployeeDeleteModal.jsx";
@@ -38,7 +37,6 @@ function EmployeesPage() {
       >
         <DataTable
           columns={table.visibleColumns}
-          allColumns={EMPLOYEE_COLUMNS}
           rows={employees}
           search={table.search}
           onSearchChange={table.onSearchChange}
@@ -57,10 +55,6 @@ function EmployeesPage() {
           filterDefs={filterDefs}
           onColumnFilterChange={table.setColumnFilter}
           onClearFilters={table.clearColumnFilters}
-          visibleColumnIds={table.visibleColumnIds}
-          onToggleColumn={table.toggleColumnVisibility}
-          columnsOpen={table.columnsOpen}
-          onColumnsOpenChange={table.setColumnsOpen}
           onExportCsv={() => table.exportCsv("employees.csv")}
           getActions={(employee) => [
             {
