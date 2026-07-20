@@ -13,13 +13,13 @@ import {
 } from "../../models/formLayoutModel.js";
 import Breadcrumb from "../components/Breadcrumb.jsx";
 import PageCard from "../components/PageCard.jsx";
+import DateField from "../components/forms/DateField.jsx";
 import { FieldError, RequiredMark } from "../components/forms/FormHelpers.jsx";
 import SelectField from "../components/forms/SelectField.jsx";
 
 function AttendanceFormPage() {
   const { id } = useParams();
   const {
-    isEdit,
     form,
     fieldErrors,
     employees,
@@ -31,19 +31,13 @@ function AttendanceFormPage() {
     handleCancel,
   } = useAttendanceForm(id);
 
-  const pageName = isEdit ? "Edit Attendance" : "Mark Attendance";
-
   return (
     <>
-      <Breadcrumb pageName={pageName} />
+      <Breadcrumb pageName="Edit Attendance" />
       <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden sm:space-y-6">
         <PageCard
-          title={pageName}
-          subtitle={
-            isEdit
-              ? "Update an attendance record."
-              : "Mark attendance for an employee."
-          }
+          title="Edit Attendance"
+          subtitle="Update an attendance record."
           bodyClassName="p-5 sm:p-6"
         >
           {loading ? (
@@ -56,17 +50,15 @@ function AttendanceFormPage() {
               noValidate
               className={FORM_STACK_CLASS}
             >
-              {isEdit ? (
-                <div>
-                  <label className={LABEL_CLASS}>Attendance ID</label>
-                  <input
-                    type="text"
-                    value={id}
-                    disabled
-                    className={INPUT_CLASS}
-                  />
-                </div>
-              ) : null}
+              <div>
+                <label className={LABEL_CLASS}>Attendance ID</label>
+                <input
+                  type="text"
+                  value={id}
+                  disabled
+                  className={INPUT_CLASS}
+                />
+              </div>
 
               <div className={FORM_GRID_CLASS}>
                 <div>
@@ -96,15 +88,12 @@ function AttendanceFormPage() {
                   <label className={LABEL_CLASS}>
                     Date <RequiredMark />
                   </label>
-                  <input
-                    type="date"
+                  <DateField
                     value={form.date}
-                    onChange={(event) =>
-                      updateField("date", event.target.value)
-                    }
-                    className={
-                      fieldErrors.date ? INPUT_ERROR_CLASS : INPUT_CLASS
-                    }
+                    onChange={(nextValue) => updateField("date", nextValue)}
+                    ariaLabel="Date"
+                    hasError={Boolean(fieldErrors.date)}
+                    placeholder="Select date"
                   />
                   <FieldError message={fieldErrors.date} />
                 </div>
@@ -193,11 +182,7 @@ function AttendanceFormPage() {
                   disabled={saving}
                   className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60"
                 >
-                  {saving
-                    ? "Saving…"
-                    : isEdit
-                      ? "Save Changes"
-                      : "Mark Attendance"}
+                  {saving ? "Saving…" : "Save Changes"}
                 </button>
                 <button
                   type="button"

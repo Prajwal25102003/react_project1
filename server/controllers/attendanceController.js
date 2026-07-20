@@ -1,10 +1,8 @@
 import {
-  createAttendance,
   deleteAttendanceById,
   findAllAttendance,
   findAttendanceByEmployeeId,
   findAttendanceById,
-  generateNextAttendanceId,
   normalizeAttendanceDays,
   updateAttendance,
   upsertAttendanceByEmployeeDate,
@@ -130,43 +128,6 @@ export async function getAttendanceById(req, res) {
     }
     res.json({ record: mapAttendanceRow(record) })
   } catch (error) {
-    res.status(500).json({ message: formatDbError(error) })
-  }
-}
-
-export async function createAttendanceHandler(req, res) {
-  try {
-    const { errors, record } = parseAttendancePayload(req.body)
-    if (errors.length > 0) {
-      return res.status(400).json({ message: errors.join('; ') })
-    }
-
-    if (!(await employeeExists(record.employeeId))) {
-      return res.status(400).json({ message: 'Employee not found' })
-    }
-
-    if (await employeeHasExcludedLoginRole(record.employeeId)) {
-      return res.status(400).json({
-        message: 'Attendance cannot be marked for HR or Admin accounts',
-      })
-    }
-
-    const id = await generateNextAttendanceId()
-    const created = await createAttendance({ ...record, id })
-
-    await createRecentActivity({
-      title: 'Attendance marked',
-      description: `${created.employeeName} marked ${created.status} on ${created.date}.`,
-      category: 'Attendance',
-      status: created.status,
-    })
-
-    res.status(201).json({ record: mapAttendanceRow(created) })
-  } catch (error) {
-    const uniqueMessage = uniqueConstraintMessage(error, ATTENDANCE_UNIQUE_MATCHERS)
-    if (uniqueMessage) {
-      return res.status(409).json({ message: uniqueMessage })
-    }
     res.status(500).json({ message: formatDbError(error) })
   }
 }

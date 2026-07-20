@@ -5,7 +5,6 @@ import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
 import { fetchEmployeeById, fetchEmployees } from "../services/employeesService.js";
 import {
-  createAttendance,
   deleteAttendance,
   fetchAttendanceById,
   fetchAttendanceRecords,
@@ -151,7 +150,6 @@ export function useAttendance() {
 
 export function useAttendanceForm(attendanceId) {
   const navigate = useNavigate();
-  const isEdit = Boolean(attendanceId);
   const [form, setForm] = useState({ ...EMPTY_ATTENDANCE_FORM });
   const [fieldErrors, setFieldErrors] = useState({});
   const [employees, setEmployees] = useState([]);
@@ -163,46 +161,37 @@ export function useAttendanceForm(attendanceId) {
     let cancelled = false;
 
     async function load() {
+      if (!attendanceId) {
+        navigate("/attendance", { replace: true });
+        return;
+      }
+
       try {
         setLoading(true);
         setError("");
         setFieldErrors({});
-        if (isEdit) {
-          const [employeeRows, record] = await Promise.all([
-            fetchEmployees({
-              excludeLoginRoles: ["hr", "admin"],
-            }),
-            fetchAttendanceById(attendanceId),
-          ]);
-          if (cancelled) return;
-
-          const options = [...employeeRows];
-          if (
-            record.employeeId &&
-            !options.some((employee) => employee.id === record.employeeId)
-          ) {
-            try {
-              const current = await fetchEmployeeById(record.employeeId);
-              options.unshift(current);
-            } catch {
-              /* keep filtered list if lookup fails */
-            }
-          }
-          setEmployees(options);
-          setForm(toAttendanceFormValues(record));
-        } else {
-          const employeeRows = await fetchEmployees({
+        const [employeeRows, record] = await Promise.all([
+          fetchEmployees({
             excludeLoginRoles: ["hr", "admin"],
-          });
-          if (cancelled) return;
+          }),
+          fetchAttendanceById(attendanceId),
+        ]);
+        if (cancelled) return;
 
-          setEmployees(employeeRows);
-          setForm((current) => ({
-            ...EMPTY_ATTENDANCE_FORM,
-            employeeId: employeeRows[0]?.id || current.employeeId,
-            date: new Date().toISOString().slice(0, 10),
-          }));
+        const options = [...employeeRows];
+        if (
+          record.employeeId &&
+          !options.some((employee) => employee.id === record.employeeId)
+        ) {
+          try {
+            const current = await fetchEmployeeById(record.employeeId);
+            options.unshift(current);
+          } catch {
+            /* keep filtered list if lookup fails */
+          }
         }
+        setEmployees(options);
+        setForm(toAttendanceFormValues(record));
       } catch (err) {
         if (!cancelled) setError(err.message || "Failed to load form");
       } finally {
@@ -214,7 +203,7 @@ export function useAttendanceForm(attendanceId) {
     return () => {
       cancelled = true;
     };
-  }, [attendanceId, isEdit]);
+  }, [attendanceId, navigate]);
 
   function updateField(field, value) {
     setForm((current) => {
@@ -247,6 +236,8 @@ export function useAttendanceForm(attendanceId) {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (!attendanceId) return;
+
     const validation = validateAttendanceForm(form);
     if (!validation.ok) {
       setFieldErrors(validation.fieldErrors);
@@ -258,9 +249,7 @@ export function useAttendanceForm(attendanceId) {
       setSaving(true);
       setError("");
       setFieldErrors({});
-      const payload = toAttendancePayload(form);
-      if (isEdit) await updateAttendance(attendanceId, payload);
-      else await createAttendance(payload);
+      await updateAttendance(attendanceId, toAttendancePayload(form));
       requestEmsRefresh();
       navigate("/attendance");
     } catch (err) {
@@ -275,7 +264,6 @@ export function useAttendanceForm(attendanceId) {
   }
 
   return {
-    isEdit,
     form,
     fieldErrors,
     employees,

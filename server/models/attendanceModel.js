@@ -67,42 +67,6 @@ export async function findAttendanceById(id) {
   return result.rows[0] || null
 }
 
-export async function generateNextAttendanceId() {
-  const result = await query(
-    `SELECT COALESCE(
-      MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)),
-      5000
-    ) AS max_num
-    FROM attendance
-    WHERE id ~ '^ATT-[0-9]+$'`,
-  )
-
-  const nextNum = Number(result.rows[0].max_num) + 1
-  return `ATT-${nextNum}`
-}
-
-export async function createAttendance(record) {
-  const result = await query(
-    `INSERT INTO attendance (
-      id, employee_id, attendance_date, check_in, check_out, working_hours, status
-    ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7
-    )
-    RETURNING id`,
-    [
-      record.id,
-      record.employeeId,
-      record.date,
-      record.checkIn,
-      record.checkOut,
-      record.workingHours,
-      record.status,
-    ],
-  )
-
-  return findAttendanceById(result.rows[0].id)
-}
-
 export async function updateAttendance(id, record) {
   const result = await query(
     `UPDATE attendance SET

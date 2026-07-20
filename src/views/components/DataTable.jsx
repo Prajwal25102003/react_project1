@@ -4,6 +4,7 @@ import {
   PAGE_SIZE_OPTIONS,
 } from "../../models/dataTableModel.js";
 import { INPUT_CLASS } from "../../models/formLayoutModel.js";
+import DateField from "./forms/DateField.jsx";
 import SelectField from "./forms/SelectField.jsx";
 import StatusPill from "./StatusPill.jsx";
 import UserAvatar from "./UserAvatar.jsx";
@@ -283,19 +284,21 @@ function DataTable({
               key={filter.id}
               className={`min-w-0 w-full max-sm:w-full ${
                 filter.type === "date" || filter.type === "month"
-                  ? "sm:w-44"
+                  ? "sm:w-48"
                   : "sm:w-40"
               }`}
             >
               {filter.type === "date" || filter.type === "month" ? (
-                <input
+                <DateField
                   type={filter.type}
                   value={columnFilters[filter.id] || ""}
-                  onChange={(event) =>
-                    onColumnFilterChange?.(filter.id, event.target.value)
+                  onChange={(nextValue) =>
+                    onColumnFilterChange?.(filter.id, nextValue)
                   }
-                  className={INPUT_CLASS}
-                  aria-label={filter.label}
+                  ariaLabel={filter.label}
+                  placeholder={
+                    filter.type === "month" ? "Select month" : "Select date"
+                  }
                   title={
                     filter.type === "month"
                       ? "Filter by month and year"

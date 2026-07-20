@@ -14,14 +14,6 @@ export async function fetchAttendanceById(id) {
   return mapAttendanceRecord(data.record);
 }
 
-export async function createAttendance(payload) {
-  const data = await fetchJson("/api/attendance", "Failed to mark attendance", {
-    method: "POST",
-    body: payload,
-  });
-  return mapAttendanceRecord(data.record);
-}
-
 export async function updateAttendance(id, payload) {
   const data = await fetchJson(
     `/api/attendance/${encodeURIComponent(id)}`,
