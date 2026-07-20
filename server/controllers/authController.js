@@ -5,19 +5,29 @@ import {
   verifyPassword,
 } from '../models/authModel.js'
 import { findEmployeeById } from '../models/employeesModel.js'
+import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
 import { signAuthToken } from '../middleware/authMiddleware.js'
 import { formatDbError } from '../utils/formatDbError.js'
 
 async function toPublicUserWithAvatar(user) {
   const publicUser = toPublicUser(user)
   if (!user?.employeeId) {
-    return { ...publicUser, avatar: null }
+    return {
+      ...publicUser,
+      avatar: null,
+      isDepartmentHead: false,
+    }
   }
 
-  const employee = await findEmployeeById(user.employeeId)
+  const [employee, isDepartmentHead] = await Promise.all([
+    findEmployeeById(user.employeeId),
+    isEmployeeDepartmentHead(user.employeeId),
+  ])
+
   return {
     ...publicUser,
     avatar: employee?.avatar || null,
+    isDepartmentHead,
   }
 }
 

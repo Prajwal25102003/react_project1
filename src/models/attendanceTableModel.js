@@ -13,6 +13,11 @@ export const ATTENDANCE_SEARCH_KEYS = [
 
 export const ATTENDANCE_COLUMN_FILTERS = [
   {
+    id: "date",
+    label: "Date",
+    type: "date",
+  },
+  {
     id: "status",
     label: "Status",
     options: ATTENDANCE_STATUSES.map((value) => ({ value, label: value })),
@@ -91,3 +96,12 @@ export const ATTENDANCE_COLUMNS = [
     nowrap: true,
   },
 ];
+
+/** Personal attendance — hide name; Employee ID is the identifier. */
+export function getAttendanceDefaultVisibleIds(isPersonalList) {
+  return ATTENDANCE_COLUMNS.filter((column) => {
+    if (isPersonalList && column.id === "employeeName") return false;
+    if (isPersonalList && column.id === "actions") return false;
+    return true;
+  }).map((column) => column.id);
+}

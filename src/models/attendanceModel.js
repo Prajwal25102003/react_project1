@@ -131,7 +131,7 @@ export function validateAttendanceForm(form) {
   const checkIn = String(form?.checkIn ?? "").trim();
   const checkOut = String(form?.checkOut ?? "").trim();
 
-  if (!employeeId) fieldErrors.employeeId = "Employee is required";
+  if (!employeeId) fieldErrors.employeeId = "Employee ID is required";
   if (!date) fieldErrors.date = "Date is required";
   if (!status) fieldErrors.status = "Status is required";
   else if (!ATTENDANCE_STATUSES.includes(status)) {

@@ -1,5 +1,4 @@
 import { useLeaveForm } from "../../controllers/leaveRequestsController.js";
-import { LEAVE_TYPES } from "../../models/leaveRequestsModel.js";
 import {
   FORM_GRID_CLASS,
   FORM_STACK_CLASS,
@@ -9,6 +8,7 @@ import {
   TEXTAREA_CLASS,
 } from "../../models/formLayoutModel.js";
 import Breadcrumb from "../components/Breadcrumb.jsx";
+import LeaveBalancePanel from "../components/LeaveBalancePanel.jsx";
 import PageCard from "../components/PageCard.jsx";
 import { FieldError, RequiredMark } from "../components/forms/FormHelpers.jsx";
 import SelectField from "../components/forms/SelectField.jsx";
@@ -18,6 +18,10 @@ function LeaveFormPage() {
     form,
     fieldErrors,
     employees,
+    availableLeaveTypes,
+    maternitySelected,
+    maternityHelp,
+    balances,
     loading,
     saving,
     error,
@@ -32,7 +36,7 @@ function LeaveFormPage() {
       <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden sm:space-y-6">
         <PageCard
           title="Create Leave Request"
-          subtitle="Submit a new leave request for approval."
+          subtitle="Submit a new leave request for approval. Paid quota is 1 casual + 1 sick leave. Maternity is a separate paid entitlement for female employees."
           bodyClassName="p-5 sm:p-6"
         >
           {loading ? (
@@ -45,14 +49,21 @@ function LeaveFormPage() {
               noValidate
               className={FORM_STACK_CLASS}
             >
+              <LeaveBalancePanel
+                balances={balances}
+                leaveType={form.leaveType}
+                leaveDays={form.leaveDays}
+                title="Your Leave Balance"
+              />
+
               <div className={FORM_GRID_CLASS}>
                 <div>
                   <label className={LABEL_CLASS}>
-                    Employee <RequiredMark />
+                    Employee ID <RequiredMark />
                   </label>
                   <input
                     type="text"
-                    value={employees[0]?.name || "You"}
+                    value={employees[0]?.id || form.employeeId || ""}
                     className={INPUT_CLASS}
                     disabled
                     readOnly
@@ -69,13 +80,37 @@ function LeaveFormPage() {
                     onChange={(nextValue) => updateField("leaveType", nextValue)}
                     ariaLabel="Leave type"
                     hasError={Boolean(fieldErrors.leaveType)}
-                    options={LEAVE_TYPES.map((type) => ({
+                    options={availableLeaveTypes.map((type) => ({
                       value: type,
                       label: type,
                     }))}
                   />
                   <FieldError message={fieldErrors.leaveType} />
                 </div>
+
+                {maternitySelected ? (
+                  <div className="sm:col-span-2">
+                    <label className={LABEL_CLASS}>
+                      Expected Delivery Date <RequiredMark />
+                    </label>
+                    <input
+                      type="date"
+                      value={form.expectedDeliveryDate}
+                      onChange={(event) =>
+                        updateField("expectedDeliveryDate", event.target.value)
+                      }
+                      className={
+                        fieldErrors.expectedDeliveryDate
+                          ? INPUT_ERROR_CLASS
+                          : INPUT_CLASS
+                      }
+                    />
+                    <p className="mt-1.5 text-theme-xs text-gray-500">
+                      {maternityHelp}
+                    </p>
+                    <FieldError message={fieldErrors.expectedDeliveryDate} />
+                  </div>
+                ) : null}
 
                 <div>
                   <label className={LABEL_CLASS}>
@@ -90,6 +125,8 @@ function LeaveFormPage() {
                     className={
                       fieldErrors.startDate ? INPUT_ERROR_CLASS : INPUT_CLASS
                     }
+                    disabled={maternitySelected}
+                    readOnly={maternitySelected}
                   />
                   <FieldError message={fieldErrors.startDate} />
                 </div>
@@ -107,6 +144,8 @@ function LeaveFormPage() {
                     className={
                       fieldErrors.endDate ? INPUT_ERROR_CLASS : INPUT_CLASS
                     }
+                    disabled={maternitySelected}
+                    readOnly={maternitySelected}
                   />
                   <FieldError message={fieldErrors.endDate} />
                 </div>
@@ -124,7 +163,13 @@ function LeaveFormPage() {
                     className={
                       fieldErrors.leaveDays ? INPUT_ERROR_CLASS : INPUT_CLASS
                     }
-                    placeholder="Auto-calculated from dates"
+                    placeholder={
+                      maternitySelected
+                        ? "182 days (auto)"
+                        : "Auto-calculated from dates"
+                    }
+                    disabled={maternitySelected}
+                    readOnly={maternitySelected}
                   />
                   <FieldError message={fieldErrors.leaveDays} />
                 </div>

@@ -34,6 +34,8 @@ async function buildOrgDashboard(req, res) {
   const presentToday = (stats.presentToday || 0)
   const onLeave = stats.employeesOnLeave || 0
   const pendingLeave = stats.pendingLeaveRequests || 0
+  const absentToday = stats.absentToday || 0
+  const unmarkedToday = stats.unmarkedToday || 0
 
   const primaryMetrics = [
     {
@@ -68,8 +70,8 @@ async function buildOrgDashboard(req, res) {
       id: 'present-today',
       label: 'Present Today',
       value: String(presentToday),
-      trend: `${stats.unmarkedToday || 0} not marked`,
-      trendUp: (stats.unmarkedToday || 0) === 0,
+      trend: `${unmarkedToday} not marked`,
+      trendUp: unmarkedToday === 0,
     },
     {
       id: 'on-leave',
@@ -80,10 +82,35 @@ async function buildOrgDashboard(req, res) {
     },
   ]
 
+  const secondaryMetrics = [
+    {
+      id: 'absent-today',
+      label: 'Absent Today',
+      value: String(absentToday),
+      trend: absentToday > 0 ? 'marked absent' : 'none',
+      trendUp: absentToday === 0,
+    },
+    {
+      id: 'unmarked-today',
+      label: 'Unmarked Today',
+      value: String(unmarkedToday),
+      trend: unmarkedToday > 0 ? 'needs marking' : 'complete',
+      trendUp: unmarkedToday === 0,
+    },
+    {
+      id: 'departments',
+      label: 'Departments',
+      value: String(stats.departments || 0),
+      trend: 'active teams',
+      trendUp: true,
+    },
+  ]
+
   res.json({
     variant: 'org',
     metrics: primaryMetrics,
     primaryMetrics,
+    secondaryMetrics,
     activities: mapActivityRows(activityRows),
     newEmployeesPeriod,
     departments,
@@ -133,10 +160,35 @@ async function buildEmployeeDashboard(req, res) {
     },
   ]
 
+  const secondaryMetrics = [
+    {
+      id: 'casual-leave',
+      label: 'Casual Left',
+      value: String(stats.casualLeaveBalance ?? 0),
+      trend: 'paid quota',
+      trendUp: (stats.casualLeaveBalance ?? 0) > 0,
+    },
+    {
+      id: 'sick-leave',
+      label: 'Sick Left',
+      value: String(stats.sickLeaveBalance ?? 0),
+      trend: 'paid quota',
+      trendUp: (stats.sickLeaveBalance ?? 0) > 0,
+    },
+    {
+      id: 'lop-days',
+      label: 'LOP Days',
+      value: String(stats.lopDays ?? 0),
+      trend: (stats.lopDays ?? 0) > 0 ? 'loss of pay' : 'none',
+      trendUp: (stats.lopDays ?? 0) === 0,
+    },
+  ]
+
   res.json({
     variant: 'employee',
     metrics: primaryMetrics,
     primaryMetrics,
+    secondaryMetrics,
     activities: mapActivityRows(activityRows).slice(0, 10),
     charts: {
       activeRate: attendanceRate,

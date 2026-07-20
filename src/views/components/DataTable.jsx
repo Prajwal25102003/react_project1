@@ -28,8 +28,27 @@ function TableCell({ column, row, getActions, clamp = false }) {
     );
   }
 
+  if (column.type === "dotName") {
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${row.typeDotClass || "bg-gray-400"}`}
+          aria-hidden="true"
+        />
+        <span className="truncate text-theme-sm font-medium text-gray-800">
+          {display}
+        </span>
+      </div>
+    );
+  }
+
   if (column.type === "status") {
-    return <StatusPill label={row.status} statusClass={row.statusClass} />;
+    return (
+      <StatusPill
+        label={row.statusLabel || row.status}
+        statusClass={row.statusClass}
+      />
+    );
   }
 
   if (column.type === "actions") {
@@ -86,7 +105,7 @@ function TableCell({ column, row, getActions, clamp = false }) {
   );
 }
 
-function MobileCard({ columns, row, getActions }) {
+function MobileCard({ columns, row, getActions, onRowClick }) {
   const statusColumn = columns.find((column) => column.type === "status");
   const actionColumn = columns.find((column) => column.type === "actions");
   const detailColumns = columns.filter(
@@ -100,7 +119,24 @@ function MobileCard({ columns, row, getActions }) {
   const subtitleColumns = primaryColumns.slice(1);
 
   return (
-    <article className="rounded-xl border border-gray-200 bg-white p-4 shadow-theme-xs">
+    <article
+      className={`rounded-xl border border-gray-200 bg-white p-4 shadow-theme-xs ${
+        onRowClick ? "cursor-pointer hover:border-gray-300" : ""
+      }`}
+      onClick={onRowClick ? () => onRowClick(row) : undefined}
+      onKeyDown={
+        onRowClick
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onRowClick(row);
+              }
+            }
+          : undefined
+      }
+      role={onRowClick ? "button" : undefined}
+      tabIndex={onRowClick ? 0 : undefined}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {titleColumn ? (
@@ -118,7 +154,10 @@ function MobileCard({ columns, row, getActions }) {
           ) : null}
         </div>
         {statusColumn ? (
-          <StatusPill label={row.status} statusClass={row.statusClass} />
+          <StatusPill
+            label={row.statusLabel || row.status}
+            statusClass={row.statusClass}
+          />
         ) : null}
       </div>
 
@@ -147,7 +186,10 @@ function MobileCard({ columns, row, getActions }) {
       </dl>
 
       {actionColumn ? (
-        <div className="mt-3 border-t border-gray-100 pt-3">
+        <div
+          className="mt-3 border-t border-gray-100 pt-3"
+          onClick={(event) => event.stopPropagation()}
+        >
           <TableCell column={actionColumn} row={row} getActions={getActions} />
         </div>
       ) : null}
@@ -183,21 +225,46 @@ function DataTable({
   onColumnsOpenChange,
   onExportCsv,
   getActions,
+  onRowClick,
   emptyMessage = "No records found.",
   /** Fit all columns in the viewport on large screens (no horizontal scroll). */
   fitWidth = false,
   /** Use stacked cards below the md breakpoint instead of a crushed table. */
   mobileCards = true,
+  /** Hide search / filters / columns / rows toolbar row. */
+  hideToolbar = false,
+  /** Tighter cell padding for dense layouts. */
+  dense = false,
 }) {
   const hasActiveFilters = Object.values(columnFilters).some(Boolean);
-  const cellPad = fitWidth ? "px-3 py-3 sm:px-4" : "px-5 py-3 sm:px-6";
-  const bodyPad = fitWidth ? "px-3 py-3 sm:px-4" : "px-5 py-4 sm:px-6";
+  const cellPad = dense
+    ? "px-3 py-1.5 sm:px-3"
+    : fitWidth
+      ? "px-3 py-3 sm:px-4"
+      : "px-5 py-3 sm:px-6";
+  const bodyPad = dense
+    ? "px-3 py-1.5 sm:px-3"
+    : fitWidth
+      ? "px-3 py-3 sm:px-4"
+      : "px-5 py-4 sm:px-6";
   const showMobileCards = mobileCards;
+  const showToolbar =
+    !hideToolbar &&
+    Boolean(
+      onSearchChange ||
+        filterDefs.length > 0 ||
+        onExportCsv ||
+        (onToggleColumn && allColumns) ||
+        onPageSizeChange,
+    );
 
   return (
-    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
-      <div className="flex min-w-0 w-full flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 w-full flex-col gap-3 max-sm:flex-col sm:flex-row sm:flex-wrap sm:items-center">
+    <div
+      className={`min-w-0 max-w-full overflow-x-hidden ${showToolbar ? "space-y-4" : "space-y-3"}`}
+    >
+      {showToolbar ? (
+      <div className="flex min-w-0 w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex min-w-0 w-full flex-col gap-3 max-sm:flex-col sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center">
           {onSearchChange ? (
             <div className="min-w-0 w-full sm:max-w-xs">
               <input
@@ -212,22 +279,46 @@ function DataTable({
           ) : null}
 
           {filterDefs.map((filter) => (
-            <div key={filter.id} className="min-w-0 w-full max-sm:w-full sm:w-40">
-              <SelectField
-                value={columnFilters[filter.id] || ""}
-                onChange={(nextValue) =>
-                  onColumnFilterChange?.(filter.id, nextValue)
-                }
-                ariaLabel={filter.label}
-                placeholder={`All ${filter.label}`}
-                options={[
-                  { value: "", label: `All ${filter.label}` },
-                  ...filter.options.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                  })),
-                ]}
-              />
+            <div
+              key={filter.id}
+              className={`min-w-0 w-full max-sm:w-full ${
+                filter.type === "date" || filter.type === "month"
+                  ? "sm:w-44"
+                  : "sm:w-40"
+              }`}
+            >
+              {filter.type === "date" || filter.type === "month" ? (
+                <input
+                  type={filter.type}
+                  value={columnFilters[filter.id] || ""}
+                  onChange={(event) =>
+                    onColumnFilterChange?.(filter.id, event.target.value)
+                  }
+                  className={INPUT_CLASS}
+                  aria-label={filter.label}
+                  title={
+                    filter.type === "month"
+                      ? "Filter by month and year"
+                      : "Filter by date (day, month, year)"
+                  }
+                />
+              ) : (
+                <SelectField
+                  value={columnFilters[filter.id] || ""}
+                  onChange={(nextValue) =>
+                    onColumnFilterChange?.(filter.id, nextValue)
+                  }
+                  ariaLabel={filter.label}
+                  placeholder={`All ${filter.label}`}
+                  options={[
+                    { value: "", label: `All ${filter.label}` },
+                    ...(filter.options || []).map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    })),
+                  ]}
+                />
+              )}
             </div>
           ))}
 
@@ -236,9 +327,7 @@ function DataTable({
               Clear filters
             </button>
           ) : null}
-        </div>
 
-        <div className="flex min-w-0 w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
           {onExportCsv ? (
             <button type="button" onClick={onExportCsv} className={TOOLBAR_BTN}>
               Export CSV
@@ -255,7 +344,7 @@ function DataTable({
                 Columns
               </button>
               {columnsOpen ? (
-                <div className="absolute left-0 z-20 mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-3 shadow-theme-lg sm:left-auto sm:right-0 sm:w-56">
+                <div className="absolute left-0 z-20 mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-3 shadow-theme-lg sm:w-56">
                   <p className="mb-2 text-theme-xs font-medium text-gray-500">
                     Toggle columns
                   </p>
@@ -281,31 +370,32 @@ function DataTable({
               ) : null}
             </div>
           ) : null}
-
-          {onPageSizeChange ? (
-            <div className="flex min-w-0 w-full items-center gap-2 sm:w-auto">
-              <label
-                htmlFor="data-table-page-size"
-                className="shrink-0 text-theme-sm text-gray-500"
-              >
-                Rows
-              </label>
-              <div className="min-w-0 flex-1 sm:flex-none sm:w-20">
-                <SelectField
-                  value={String(pageSize)}
-                  onChange={onPageSizeChange}
-                  ariaLabel="Rows per page"
-                  options={PAGE_SIZE_OPTIONS.map((size) => ({
-                    value: String(size),
-                    label: String(size),
-                  }))}
-                  className="sm:w-20"
-                />
-              </div>
-            </div>
-          ) : null}
         </div>
+
+        {onPageSizeChange ? (
+          <div className="flex shrink-0 items-center justify-end gap-2 sm:ml-auto">
+            <label
+              htmlFor="data-table-page-size"
+              className="shrink-0 text-theme-sm text-gray-500"
+            >
+              Rows
+            </label>
+            <div className="min-w-0 w-20">
+              <SelectField
+                value={String(pageSize)}
+                onChange={onPageSizeChange}
+                ariaLabel="Rows per page"
+                options={PAGE_SIZE_OPTIONS.map((size) => ({
+                  value: String(size),
+                  label: String(size),
+                }))}
+                className="w-20"
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
+      ) : null}
 
       {showMobileCards ? (
         <div className="space-y-3 md:hidden">
@@ -320,6 +410,7 @@ function DataTable({
                 columns={columns}
                 row={row}
                 getActions={getActions}
+                onRowClick={onRowClick}
               />
             ))
           )}
@@ -394,7 +485,15 @@ function DataTable({
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row[rowKey]}>
+                  <tr
+                    key={row[rowKey]}
+                    className={
+                      onRowClick
+                        ? "cursor-pointer hover:bg-gray-50/80"
+                        : undefined
+                    }
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  >
                     {columns.map((column) => {
                       const cellClass = [
                         `${bodyPad} align-top`,
@@ -405,9 +504,18 @@ function DataTable({
                       ]
                         .filter(Boolean)
                         .join(" ");
+                      const stopRowClick = column.type === "actions";
 
                       return (
-                        <td key={column.id} className={cellClass}>
+                        <td
+                          key={column.id}
+                          className={cellClass}
+                          onClick={
+                            stopRowClick
+                              ? (event) => event.stopPropagation()
+                              : undefined
+                          }
+                        >
                           <TableCell
                             column={column}
                             row={row}
@@ -426,8 +534,10 @@ function DataTable({
       </div>
 
       {onPageChange ? (
-        <div className="flex min-w-0 w-full flex-col gap-3 max-sm:items-stretch sm:flex-row sm:items-center sm:justify-between">
-          <p className="min-w-0 text-theme-sm text-gray-500">
+        <div
+          className={`flex min-w-0 w-full flex-col gap-2 max-sm:items-stretch sm:flex-row sm:items-center sm:justify-between ${dense ? "pt-1" : ""}`}
+        >
+          <p className="min-w-0 text-theme-xs text-gray-500 sm:text-theme-sm">
             {total === 0
               ? "0 results"
               : `Showing ${startIndex}–${endIndex} of ${total}`}
@@ -442,7 +552,7 @@ function DataTable({
             >
               Previous
             </button>
-            <span className="text-theme-sm text-gray-500">
+            <span className="text-theme-xs text-gray-500 sm:text-theme-sm">
               Page {page} of {Math.max(totalPages, 1)}
             </span>
             <button

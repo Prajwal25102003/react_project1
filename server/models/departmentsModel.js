@@ -40,6 +40,18 @@ export async function findDepartmentById(id) {
   return result.rows[0] || null
 }
 
+export async function isEmployeeDepartmentHead(employeeId) {
+  if (!employeeId) return false
+  const result = await query(
+    `SELECT 1
+     FROM departments
+     WHERE head_employee_id = $1
+     LIMIT 1`,
+    [employeeId],
+  )
+  return result.rowCount > 0
+}
+
 export async function generateNextDepartmentId() {
   const result = await query(
     `SELECT COALESCE(

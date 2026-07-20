@@ -5,32 +5,47 @@ import DataTable from "../components/DataTable.jsx";
 import ListPageShell from "../components/ListPageShell.jsx";
 import LeaveCancelModal from "./LeaveCancelModal.jsx";
 import LeaveDecisionModal from "./LeaveDecisionModal.jsx";
+import LeaveViewModal from "./LeaveViewModal.jsx";
 
-function LeaveRequestsPage() {
+function LeaveRequestsPage({ mode = "mine" }) {
   const {
+    isApprovalsMode,
     leaveRequests,
     loading,
     error,
     table,
     filterDefs,
-    isEmployee,
+    canRequestLeave,
     decisionTarget,
     decisionStatus,
     deciding,
     decisionError,
-    openApproveModal,
-    openRejectModal,
+    remarks,
+    remarksError,
     closeDecisionModal,
+    updateRemarks,
     confirmDecision,
     cancelTarget,
+    cancelReason,
+    cancelReasonError,
     cancelling,
     cancelError,
-    openCancelModal,
     closeCancelModal,
+    updateCancelReason,
     confirmCancel,
-  } = useLeaveRequests();
+    viewTarget,
+    openViewModal,
+    closeViewModal,
+    getLeaveActions,
+  } = useLeaveRequests(mode);
 
-  const pageName = isEmployee ? "My Leave Requests" : "Leave Requests";
+  const pageName = isApprovalsMode
+    ? "Employee Leave Requests"
+    : "My Leave Requests";
+
+  const emptyMessage = isApprovalsMode
+    ? "No employee leave requests to review."
+    : "No personal leave requests found.";
 
   return (
     <>
@@ -40,7 +55,7 @@ function LeaveRequestsPage() {
         error={error}
         loadingLabel="Loading leave requests…"
         actions={
-          isEmployee ? (
+          !isApprovalsMode && canRequestLeave ? (
             <Link
               to="/leave-requests/new"
               className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
@@ -58,7 +73,11 @@ function LeaveRequestsPage() {
           mobileCards
           search={table.search}
           onSearchChange={table.onSearchChange}
-          searchPlaceholder="Search leave requests…"
+          searchPlaceholder={
+            isApprovalsMode
+              ? "Search employee leave requests…"
+              : "Search my leave requests…"
+          }
           sort={table.sort}
           onSortChange={table.toggleSort}
           page={table.page}
@@ -77,49 +96,42 @@ function LeaveRequestsPage() {
           onToggleColumn={table.toggleColumnVisibility}
           columnsOpen={table.columnsOpen}
           onColumnsOpenChange={table.setColumnsOpen}
-          onExportCsv={() => table.exportCsv("leave-requests.csv")}
-          getActions={(request) => {
-            if (request.status !== "Pending") return [];
-            if (isEmployee) {
-              return [
-                {
-                  label: "Cancel",
-                  tone: "danger",
-                  onClick: () => openCancelModal(request),
-                },
-              ];
-            }
-            return [
-              {
-                label: "Approve",
-                onClick: () => openApproveModal(request),
-              },
-              {
-                label: "Reject",
-                tone: "danger",
-                onClick: () => openRejectModal(request),
-              },
-            ];
-          }}
-          emptyMessage="No leave requests found."
+          onExportCsv={() =>
+            table.exportCsv(
+              isApprovalsMode
+                ? "employee-leave-requests.csv"
+                : "my-leave-requests.csv",
+            )
+          }
+          onRowClick={openViewModal}
+          getActions={getLeaveActions}
+          emptyMessage={emptyMessage}
         />
       </ListPageShell>
 
-      {!isEmployee ? (
+      <LeaveViewModal request={viewTarget} onClose={closeViewModal} />
+
+      {isApprovalsMode ? (
         <LeaveDecisionModal
           request={decisionTarget}
           status={decisionStatus}
           deciding={deciding}
           error={decisionError}
+          remarks={remarks}
+          remarksError={remarksError}
+          onRemarksChange={updateRemarks}
           onClose={closeDecisionModal}
           onConfirm={confirmDecision}
         />
       ) : (
         <LeaveCancelModal
           request={cancelTarget}
+          reason={cancelReason}
+          reasonError={cancelReasonError}
           cancelling={cancelling}
           error={cancelError}
           onClose={closeCancelModal}
+          onReasonChange={updateCancelReason}
           onConfirm={confirmCancel}
         />
       )}

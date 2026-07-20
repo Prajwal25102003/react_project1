@@ -6,7 +6,10 @@ import { useAuth } from "./authContext.jsx";
 export function useNav() {
   const { user } = useAuth();
   return {
-    groups: getNavGroups(user?.role),
+    groups: getNavGroups(user?.role, {
+      isDepartmentHead: Boolean(user?.isDepartmentHead),
+      employeeId: user?.employeeId || null,
+    }),
   };
 }
 

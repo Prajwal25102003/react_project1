@@ -30,30 +30,30 @@ function PeriodTabs({ value, onChange }) {
   );
 }
 
-function EmployeeDashboard({ primaryMetrics, chartTwo, activities }) {
+function EmployeeDashboard({ primaryMetrics, secondaryMetrics, chartTwo, activities }) {
   return (
-    <div className="flex min-w-0 max-w-full flex-col gap-3 overflow-x-hidden lg:h-[calc(100dvh-7.5rem)] lg:min-h-0 lg:overflow-hidden lg:gap-4">
-      <div className="shrink-0">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
+      <div>
         <h2 className="text-xl font-semibold text-gray-800">My Dashboard</h2>
         <p className="mt-0.5 text-theme-sm text-gray-500">
           Your attendance and leave at a glance
         </p>
       </div>
 
-      <div className="shrink-0">
-        <MetricCards metrics={primaryMetrics} columns={3} compact />
-      </div>
+      <MetricCards metrics={primaryMetrics} columns={3} />
+      {secondaryMetrics?.length ? (
+        <MetricCards metrics={secondaryMetrics} columns={3} />
+      ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-12 gap-3 lg:gap-4">
-        <div className="col-span-12 min-h-0 lg:col-span-5">
-          <ChartTwo chart={chartTwo} compact />
+      <div className="grid grid-cols-12 gap-4 md:gap-6">
+        <div className="col-span-12 min-h-[320px] lg:col-span-5">
+          <ChartTwo chart={chartTwo} />
         </div>
 
-        <div className="col-span-12 min-h-0 lg:col-span-7">
+        <div className="col-span-12 lg:col-span-7">
           <RecentActivitiesTable
             activities={activities}
             title="My Recent Activity"
-            compact
           />
         </div>
       </div>
@@ -63,14 +63,15 @@ function EmployeeDashboard({ primaryMetrics, chartTwo, activities }) {
 
 function OrgDashboard({
   primaryMetrics,
+  secondaryMetrics,
   activities,
   departments,
   newEmployeesPeriod,
   setNewEmployeesPeriod,
 }) {
   return (
-    <div className="flex min-w-0 max-w-full flex-col gap-3 overflow-x-hidden lg:h-[calc(100dvh-7.5rem)] lg:min-h-0 lg:overflow-hidden lg:gap-4">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-gray-800">Dashboard</h2>
           <p className="mt-0.5 text-theme-sm text-gray-500">
@@ -83,17 +84,18 @@ function OrgDashboard({
         />
       </div>
 
-      <div className="shrink-0">
-        <MetricCards metrics={primaryMetrics} columns={3} compact />
-      </div>
+      <MetricCards metrics={primaryMetrics} columns={3} />
+      {secondaryMetrics?.length ? (
+        <MetricCards metrics={secondaryMetrics} columns={3} />
+      ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-12 gap-3 lg:gap-4">
-        <div className="col-span-12 min-h-0 lg:col-span-5">
-          <DepartmentOverview departments={departments} compact />
+      <div className="grid grid-cols-12 gap-4 md:gap-6">
+        <div className="col-span-12 min-h-[360px] lg:col-span-5">
+          <DepartmentOverview departments={departments} />
         </div>
 
-        <div className="col-span-12 min-h-0 lg:col-span-7">
-          <RecentActivitiesTable activities={activities} compact />
+        <div className="col-span-12 lg:col-span-7">
+          <RecentActivitiesTable activities={activities} />
         </div>
       </div>
     </div>
@@ -115,6 +117,7 @@ function DashboardPage() {
     return (
       <EmployeeDashboard
         primaryMetrics={dashboard.primaryMetrics}
+        secondaryMetrics={dashboard.secondaryMetrics}
         chartTwo={dashboard.chartTwo}
         activities={dashboard.activities}
       />
@@ -124,6 +127,7 @@ function DashboardPage() {
   return (
     <OrgDashboard
       primaryMetrics={dashboard.primaryMetrics}
+      secondaryMetrics={dashboard.secondaryMetrics}
       activities={dashboard.activities}
       departments={dashboard.departments}
       newEmployeesPeriod={dashboard.newEmployeesPeriod}

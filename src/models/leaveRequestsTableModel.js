@@ -1,7 +1,7 @@
 import { LEAVE_TYPES } from "./leaveRequestsModel.js";
 
 export const LEAVE_REQUEST_SEARCH_KEYS = [
-  "id",
+  "employeeId",
   "employeeName",
   "leaveType",
   "startDate",
@@ -15,9 +15,18 @@ export const LEAVE_REQUEST_COLUMN_FILTERS = [
   {
     id: "status",
     label: "Status",
-    options: ["Pending", "Approved", "Rejected", "Cancelled"].map((value) => ({
+    options: [
+      "Pending",
+      "TeamLeadApproved",
+      "Approved",
+      "Rejected",
+      "Cancelled",
+    ].map((value) => ({
       value,
-      label: value,
+      label:
+        value === "TeamLeadApproved"
+          ? "Awaiting HR"
+          : value,
     })),
   },
   {
@@ -30,13 +39,13 @@ export const LEAVE_REQUEST_COLUMN_FILTERS = [
 /** Compact columns so the leave table fits without horizontal scroll on desktop. */
 export const LEAVE_REQUEST_COLUMNS = [
   {
-    id: "id",
-    header: "ID",
-    accessor: "id",
+    id: "employeeId",
+    header: "Employee ID",
+    accessor: "employeeId",
     type: "primary",
     sortable: true,
     nowrap: true,
-    cellClassName: "w-[8%]",
+    cellClassName: "w-[10%]",
     mobilePrimary: true,
   },
   {
@@ -81,16 +90,7 @@ export const LEAVE_REQUEST_COLUMNS = [
     type: "text",
     sortable: true,
     nowrap: true,
-    cellClassName: "w-[6%]",
-  },
-  {
-    id: "reason",
-    header: "Reason",
-    accessor: "reason",
-    type: "text",
-    sortable: true,
-    wrap: true,
-    cellClassName: "w-[22%]",
+    cellClassName: "w-[8%]",
   },
   {
     id: "status",
@@ -98,7 +98,7 @@ export const LEAVE_REQUEST_COLUMNS = [
     accessor: "status",
     type: "status",
     sortable: true,
-    cellClassName: "w-[10%]",
+    cellClassName: "w-[12%]",
     mobilePrimary: true,
   },
   {
@@ -108,13 +108,13 @@ export const LEAVE_REQUEST_COLUMNS = [
     sortable: false,
     hideable: false,
     nowrap: true,
-    cellClassName: "w-[13%]",
+    cellClassName: "w-[16%]",
   },
 ];
 
-/** Employees only see their own requests — hide the Employee column by default. */
-export function getLeaveRequestDefaultVisibleIds(isEmployee) {
+/** Personal leave list — hide name; Employee ID is the identifier. */
+export function getLeaveRequestDefaultVisibleIds(isPersonalList) {
   return LEAVE_REQUEST_COLUMNS.filter(
-    (column) => !(isEmployee && column.id === "employeeName"),
+    (column) => !(isPersonalList && column.id === "employeeName"),
   ).map((column) => column.id);
 }

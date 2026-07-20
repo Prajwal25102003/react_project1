@@ -7,6 +7,7 @@ const NOTIFICATION_STATUS = {
   Added: STATUS_TONE.success,
   Updated: STATUS_TONE.info,
   Removed: STATUS_TONE.error,
+  TeamLeadApproved: STATUS_TONE.info,
   Approved: STATUS_TONE.success,
   Rejected: STATUS_TONE.error,
   Cancelled: STATUS_TONE.warning,

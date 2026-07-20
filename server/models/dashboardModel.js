@@ -80,7 +80,7 @@ export async function findRecentActivities() {
       status
     FROM recent_activities
     ORDER BY activity_time DESC
-    LIMIT 10`,
+    LIMIT 15`,
   )
 
   return result.rows
@@ -95,8 +95,7 @@ export async function getDepartmentBreakdown() {
     FROM departments d
     LEFT JOIN employees e ON e.department_id = d.id
     GROUP BY d.id, d.name
-    ORDER BY "employeeCount" DESC
-    LIMIT 5`,
+    ORDER BY "employeeCount" DESC`,
   )
 
   const total = result.rows.reduce((sum, row) => sum + row.employeeCount, 0) || 1
@@ -167,7 +166,22 @@ export async function getEmployeeDashboardStats(employeeId) {
         WHERE employee_id = $1
           AND status = 'Approved'
           AND start_date > CURRENT_DATE
-      ) AS "upcomingLeaveCount"
+      ) AS "upcomingLeaveCount",
+      (
+        SELECT casual_leave_balance::int
+        FROM employees
+        WHERE id = $1
+      ) AS "casualLeaveBalance",
+      (
+        SELECT sick_leave_balance::int
+        FROM employees
+        WHERE id = $1
+      ) AS "sickLeaveBalance",
+      (
+        SELECT lop_days::int
+        FROM employees
+        WHERE id = $1
+      ) AS "lopDays"
     `,
     [employeeId],
   )

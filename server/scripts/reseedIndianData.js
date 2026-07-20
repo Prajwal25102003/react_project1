@@ -9,9 +9,13 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import pool, { connectDatabase, query } from '../config/db.js'
+import { rebuildLeaveBalancesFromApprovedLeaves } from '../models/leaveBalancesModel.js'
+import { seedAttendance } from './seedAttendance.js'
+import { seedEmployees } from './seedEmployees.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const sqlDir = path.join(__dirname, '../sql')
+const migrationsDir = path.join(sqlDir, 'migrations')
 
 async function clearSeedData() {
   await query(`UPDATE departments SET head_employee_id = NULL`)
@@ -23,8 +27,8 @@ async function clearSeedData() {
   await query(`DELETE FROM departments`)
 }
 
-async function runSqlFile(fileName) {
-  const fullPath = path.join(sqlDir, fileName)
+async function runSqlFile(fileName, baseDir = sqlDir) {
+  const fullPath = path.join(baseDir, fileName)
   const sql = fs.readFileSync(fullPath, 'utf8')
   await query(sql)
   console.log(`Applied ${fileName}`)
@@ -49,7 +53,14 @@ async function main() {
   console.log('Clearing existing seed data…')
   await clearSeedData()
   await runSqlFile('employees.sql')
+  await runSqlFile('019_employee_leave_balances.sql', migrationsDir)
+  console.log('Seeding employees…')
+  await seedEmployees()
   await runSqlFile('departments_attendance_leave.sql')
+  console.log('Applying leave balances from approved leave requests…')
+  await rebuildLeaveBalancesFromApprovedLeaves()
+  console.log('Seeding attendance from 2026-01-01…')
+  await seedAttendance()
   await runSqlFile('dashboard.sql')
   await pool.end()
   console.log('Seeding demo users…')
