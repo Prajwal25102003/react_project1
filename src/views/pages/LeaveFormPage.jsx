@@ -10,6 +10,7 @@ import {
 import Breadcrumb from "../components/Breadcrumb.jsx";
 import LeaveBalancePanel from "../components/LeaveBalancePanel.jsx";
 import PageCard from "../components/PageCard.jsx";
+import DateField from "../components/forms/DateField.jsx";
 import { FieldError, RequiredMark } from "../components/forms/FormHelpers.jsx";
 import SelectField from "../components/forms/SelectField.jsx";
 
@@ -93,17 +94,14 @@ function LeaveFormPage() {
                     <label className={LABEL_CLASS}>
                       Expected Delivery Date <RequiredMark />
                     </label>
-                    <input
-                      type="date"
+                    <DateField
                       value={form.expectedDeliveryDate}
-                      onChange={(event) =>
-                        updateField("expectedDeliveryDate", event.target.value)
+                      onChange={(nextValue) =>
+                        updateField("expectedDeliveryDate", nextValue)
                       }
-                      className={
-                        fieldErrors.expectedDeliveryDate
-                          ? INPUT_ERROR_CLASS
-                          : INPUT_CLASS
-                      }
+                      ariaLabel="Expected delivery date"
+                      hasError={Boolean(fieldErrors.expectedDeliveryDate)}
+                      placeholder="Select date"
                     />
                     <p className="mt-1.5 text-theme-xs text-gray-500">
                       {maternityHelp}
@@ -116,17 +114,15 @@ function LeaveFormPage() {
                   <label className={LABEL_CLASS}>
                     Start Date <RequiredMark />
                   </label>
-                  <input
-                    type="date"
+                  <DateField
                     value={form.startDate}
-                    onChange={(event) =>
-                      updateField("startDate", event.target.value)
+                    onChange={(nextValue) =>
+                      updateField("startDate", nextValue)
                     }
-                    className={
-                      fieldErrors.startDate ? INPUT_ERROR_CLASS : INPUT_CLASS
-                    }
+                    ariaLabel="Start date"
+                    hasError={Boolean(fieldErrors.startDate)}
                     disabled={maternitySelected}
-                    readOnly={maternitySelected}
+                    placeholder="Select date"
                   />
                   <FieldError message={fieldErrors.startDate} />
                 </div>
@@ -135,17 +131,13 @@ function LeaveFormPage() {
                   <label className={LABEL_CLASS}>
                     End Date <RequiredMark />
                   </label>
-                  <input
-                    type="date"
+                  <DateField
                     value={form.endDate}
-                    onChange={(event) =>
-                      updateField("endDate", event.target.value)
-                    }
-                    className={
-                      fieldErrors.endDate ? INPUT_ERROR_CLASS : INPUT_CLASS
-                    }
+                    onChange={(nextValue) => updateField("endDate", nextValue)}
+                    ariaLabel="End date"
+                    hasError={Boolean(fieldErrors.endDate)}
                     disabled={maternitySelected}
-                    readOnly={maternitySelected}
+                    placeholder="Select date"
                   />
                   <FieldError message={fieldErrors.endDate} />
                 </div>

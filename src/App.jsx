@@ -69,7 +69,6 @@ function AppRoutes() {
                 path="departments/:id/edit"
                 element={<DepartmentFormPage />}
               />
-              <Route path="attendance/new" element={<AttendanceFormPage />} />
               <Route
                 path="attendance/:id/edit"
                 element={<AttendanceFormPage />}
