@@ -8,9 +8,7 @@ CREATE TABLE IF NOT EXISTS holidays (
   holiday_type VARCHAR(40) NOT NULL
     CHECK (holiday_type IN (
       'National Holiday',
-      'Company Holiday',
       'Optional Holiday',
-      'Company Event',
       'Festival Holiday'
     )),
   description TEXT NOT NULL DEFAULT '',
@@ -36,7 +34,5 @@ VALUES
   ('HOL-1005', 'Ganesh Chaturthi', '2026-09-14', 'Festival Holiday', 'Festival Holiday'),
   ('HOL-1006', 'Gandhi Jayanti', '2026-10-02', 'National Holiday', 'Public Holiday'),
   ('HOL-1007', 'Diwali', '2026-11-08', 'Festival Holiday', 'Festival of Lights'),
-  ('HOL-1008', 'Christmas', '2026-12-25', 'National Holiday', 'Public Holiday'),
-  ('HOL-1009', 'Company Foundation Day', '2026-08-07', 'Company Holiday', 'Company Holiday'),
-  ('HOL-1010', 'Annual Town Hall', '2026-08-25', 'Company Event', 'Company Event')
+  ('HOL-1008', 'Christmas', '2026-12-25', 'National Holiday', 'Public Holiday')
 ON CONFLICT (id) DO NOTHING;
