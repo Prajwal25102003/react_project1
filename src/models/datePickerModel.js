@@ -60,21 +60,40 @@ export function toIsoMonth(year, monthIndex) {
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
 }
 
+export function toIsoYear(year) {
+  return String(year);
+}
+
+/** @returns {number | null} */
+export function parseIsoYear(value) {
+  if (!value || typeof value !== "string") return null;
+  const match = /^(\d{4})$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  return Number.isNaN(year) ? null : year;
+}
+
 export function getTodayIso() {
   const now = new Date();
   return toIsoDate(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
 export function formatDateDisplay(value) {
+  const trimmed = String(value || "").trim();
+  if (/^\d{4}$/.test(trimmed)) return trimmed;
   const parsed = parseIsoDate(value);
   if (!parsed) return "";
-  if (/^\d{4}-\d{2}$/.test(String(value).trim())) {
+  if (/^\d{4}-\d{2}$/.test(trimmed)) {
     return `${DATE_PICKER_MONTHS_SHORT[parsed.monthIndex]} ${parsed.year}`;
   }
   return `${parsed.day} ${DATE_PICKER_MONTHS_SHORT[parsed.monthIndex]} ${parsed.year}`;
 }
 
 export function getViewMonthFromValue(value) {
+  const yearOnly = parseIsoYear(value);
+  if (yearOnly != null) {
+    return { year: yearOnly, monthIndex: 0 };
+  }
   const parsed = parseIsoDate(value);
   if (parsed) {
     return { year: parsed.year, monthIndex: parsed.monthIndex };
@@ -110,3 +129,22 @@ export function getDatePickerCells(year, monthIndex) {
 export function monthLabel(year, monthIndex) {
   return `${DATE_PICKER_MONTHS[monthIndex]} ${year}`;
 }
+
+export function periodFilterPlaceholder(period) {
+  if (period === "month") return "Select month";
+  if (period === "year") return "Select year";
+  return "Select date";
+}
+
+export function periodFilterTitle(period) {
+  if (period === "month") return "Filter by month and year";
+  if (period === "year") return "Filter by year";
+  return "Filter by date (day, month, year)";
+}
+
+/** Shared date / month / year modes for list period filters. */
+export const DATE_PERIOD_FILTER_OPTIONS = [
+  { value: "date", label: "Date" },
+  { value: "month", label: "Month" },
+  { value: "year", label: "Year" },
+];

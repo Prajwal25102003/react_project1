@@ -5,9 +5,9 @@ import Header from "./Header.jsx";
 import Sidebar from "./Sidebar.jsx";
 
 function AppShell() {
-  const { groups } = useNav();
-  const { sidebarToggle, toggleSidebar, closeSidebar } = useSidebar();
   const header = useHeader();
+  const { groups } = useNav(header.notifications);
+  const { sidebarToggle, toggleSidebar, closeSidebar } = useSidebar();
 
   return (
     <div className="flex h-screen overflow-hidden">

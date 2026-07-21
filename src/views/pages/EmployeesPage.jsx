@@ -3,6 +3,7 @@ import { useEmployees } from "../../controllers/employeesController.js";
 import DataTable from "../components/DataTable.jsx";
 import ListPageShell from "../components/ListPageShell.jsx";
 import EmployeeDeleteModal from "./EmployeeDeleteModal.jsx";
+import EmployeeViewModal from "./EmployeeViewModal.jsx";
 
 function EmployeesPage() {
   const {
@@ -11,6 +12,9 @@ function EmployeesPage() {
     error,
     table,
     filterDefs,
+    viewTarget,
+    openViewModal,
+    closeViewModal,
     deleteTarget,
     deleting,
     deleteError,
@@ -38,6 +42,7 @@ function EmployeesPage() {
         <DataTable
           columns={table.visibleColumns}
           rows={employees}
+          fitWidth
           search={table.search}
           onSearchChange={table.onSearchChange}
           searchPlaceholder="Search employees…"
@@ -56,6 +61,7 @@ function EmployeesPage() {
           onColumnFilterChange={table.setColumnFilter}
           onClearFilters={table.clearColumnFilters}
           onExportCsv={() => table.exportCsv("employees.csv")}
+          onRowClick={openViewModal}
           getActions={(employee) => [
             {
               label: "Edit",
@@ -70,6 +76,8 @@ function EmployeesPage() {
           emptyMessage="No employees found."
         />
       </ListPageShell>
+
+      <EmployeeViewModal employee={viewTarget} onClose={closeViewModal} />
 
       <EmployeeDeleteModal
         employee={deleteTarget}

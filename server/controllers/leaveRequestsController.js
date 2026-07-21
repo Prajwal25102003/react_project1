@@ -92,6 +92,8 @@ function actorFromRequest(req) {
   }
 }
 
+const HALF_DAY_SESSIONS = new Set(['first_half', 'second_half'])
+
 function parseLeavePayload(body) {
   const errors = []
   const employeeId = String(body?.employeeId ?? '').trim()
@@ -100,6 +102,8 @@ function parseLeavePayload(body) {
   let endDate = String(body?.endDate ?? '').trim()
   const reason = String(body?.reason ?? '').trim()
   const expectedDeliveryDate = String(body?.expectedDeliveryDate ?? '').trim()
+  const duration = String(body?.duration ?? 'full').trim().toLowerCase()
+  let halfDaySession = String(body?.halfDaySession ?? '').trim().toLowerCase()
 
   if (!employeeId) errors.push('Employee is required')
   if (!leaveType) errors.push('Leave type is required')
@@ -123,6 +127,7 @@ function parseLeavePayload(body) {
         startDate,
         endDate,
         leaveDays,
+        halfDaySession: null,
         reason,
         expectedDeliveryDate,
         status: 'Pending',
@@ -134,14 +139,25 @@ function parseLeavePayload(body) {
   else if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
     errors.push('Start date must be YYYY-MM-DD')
   }
-  if (!endDate) errors.push('End date is required')
-  else if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-    errors.push('End date must be YYYY-MM-DD')
-  }
 
-  leaveDays = countLeaveDays(startDate, endDate)
-  if (leaveDays === null) errors.push('Leave dates are invalid')
-  else if (leaveDays < 1) errors.push('End date cannot be before start date')
+  if (duration === 'half') {
+    endDate = startDate
+    leaveDays = 0.5
+    if (!HALF_DAY_SESSIONS.has(halfDaySession)) {
+      errors.push('Select first half or second half for half-day leave')
+      halfDaySession = ''
+    }
+  } else {
+    halfDaySession = ''
+    if (!endDate) errors.push('End date is required')
+    else if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      errors.push('End date must be YYYY-MM-DD')
+    }
+
+    leaveDays = countLeaveDays(startDate, endDate)
+    if (leaveDays === null) errors.push('Leave dates are invalid')
+    else if (leaveDays < 1) errors.push('End date cannot be before start date')
+  }
 
   return {
     errors,
@@ -151,6 +167,7 @@ function parseLeavePayload(body) {
       startDate,
       endDate,
       leaveDays,
+      halfDaySession: halfDaySession || null,
       reason,
       status: 'Pending',
     },

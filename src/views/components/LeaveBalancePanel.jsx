@@ -1,5 +1,11 @@
 import { previewLeaveDeduction } from "../../models/leaveBalancesModel.js";
 
+function formatBalanceValue(value) {
+  const n = Number(value);
+  if (Number.isNaN(n)) return value ?? "—";
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
+}
+
 function Stat({ label, value, tone = "default" }) {
   const valueClass =
     tone === "warning"
@@ -12,7 +18,7 @@ function Stat({ label, value, tone = "default" }) {
     <div className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-3">
       <p className="truncate text-theme-xs text-gray-500">{label}</p>
       <p className={`mt-1 break-words text-xl font-semibold leading-tight ${valueClass}`}>
-        {value}
+        {formatBalanceValue(value)}
       </p>
     </div>
   );
@@ -48,7 +54,9 @@ function LeaveBalancePanel({
     >
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h4 className="text-sm font-semibold text-gray-800">{title}</h4>
-        <p className="text-theme-xs text-gray-500">Paid quota: 1 casual + 1 sick</p>
+        <p className="text-theme-xs text-gray-500">
+          Paid quota: 1 casual + 1 sick. LOP only after both are used.
+        </p>
       </div>
 
       <div
@@ -85,7 +93,7 @@ function LeaveBalancePanel({
           <p>{preview.summary}</p>
           {preview.willUseLop ? (
             <p className="mt-1">
-              Days beyond paid leave become Loss of Pay (LOP).
+              Days beyond casual and sick leave become Loss of Pay (LOP).
             </p>
           ) : null}
         </div>

@@ -24,7 +24,8 @@ const LEAVE_SELECT = `
   lr.leave_type AS "leaveType",
   TO_CHAR(lr.start_date, 'YYYY-MM-DD') AS "startDate",
   TO_CHAR(lr.end_date, 'YYYY-MM-DD') AS "endDate",
-  lr.leave_days AS "leaveDays",
+  lr.leave_days::float AS "leaveDays",
+  lr.half_day_session AS "halfDaySession",
   lr.reason,
   lr.cancellation_reason AS "cancellationReason",
   lr.rejection_reason AS "rejectionReason",
@@ -193,9 +194,10 @@ export async function createLeaveRequest(leaveRequest, client = null) {
   const runner = client || { query }
   const result = await runner.query(
     `INSERT INTO leave_requests (
-      id, employee_id, leave_type, start_date, end_date, leave_days, reason, status
+      id, employee_id, leave_type, start_date, end_date, leave_days,
+      half_day_session, reason, status
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8
+      $1, $2, $3, $4, $5, $6, $7, $8, $9
     )
     RETURNING id`,
     [
@@ -205,6 +207,7 @@ export async function createLeaveRequest(leaveRequest, client = null) {
       leaveRequest.startDate,
       leaveRequest.endDate,
       leaveRequest.leaveDays,
+      leaveRequest.halfDaySession || null,
       leaveRequest.reason,
       leaveRequest.status,
     ],

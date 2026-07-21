@@ -37,8 +37,23 @@ export function filterByColumns(rows, columnFilters = {}) {
 
   return rows.filter((row) =>
     entries.every(([key, value]) => {
-      const cell = String(getCellValue(row, key));
       const filter = String(value);
+      // Leave ranges: match when the period overlaps [startDate, endDate].
+      if (
+        key === "startDate" &&
+        row?.endDate != null &&
+        row.endDate !== "" &&
+        (/^\d{4}$/.test(filter) ||
+          /^\d{4}-\d{2}$/.test(filter) ||
+          /^\d{4}-\d{2}-\d{2}$/.test(filter))
+      ) {
+        return dateRangeOverlapsPeriod(
+          getCellValue(row, "startDate"),
+          getCellValue(row, "endDate"),
+          filter,
+        );
+      }
+      const cell = String(getCellValue(row, key));
       // YYYY or YYYY-MM period filters match date prefixes.
       if (/^\d{4}$/.test(filter) || /^\d{4}-\d{2}$/.test(filter)) {
         return cell.startsWith(filter);
@@ -46,6 +61,24 @@ export function filterByColumns(rows, columnFilters = {}) {
       return cell === filter;
     }),
   );
+}
+
+/** True when [start, end] overlaps a day (YYYY-MM-DD), month (YYYY-MM), or year (YYYY). */
+export function dateRangeOverlapsPeriod(start, end, period) {
+  const startStr = String(start || "");
+  const endStr = String(end || startStr);
+  if (!startStr) return false;
+
+  if (/^\d{4}$/.test(period)) {
+    return startStr.slice(0, 4) <= period && endStr.slice(0, 4) >= period;
+  }
+  if (/^\d{4}-\d{2}$/.test(period)) {
+    return startStr.slice(0, 7) <= period && endStr.slice(0, 7) >= period;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(period)) {
+    return startStr <= period && endStr >= period;
+  }
+  return false;
 }
 
 function compareValues(a, b) {

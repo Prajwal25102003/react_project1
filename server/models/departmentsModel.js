@@ -5,12 +5,11 @@ const DEPARTMENT_SELECT = `
   d.name,
   d.head_employee_id AS "headEmployeeId",
   h.name AS head,
-  COUNT(e.id)::int AS "employeeCount",
-  d.description
+  COUNT(e.id)::int AS "employeeCount"
 `
 
 const DEPARTMENT_GROUP = `
-  GROUP BY d.id, d.name, d.head_employee_id, h.name, d.description
+  GROUP BY d.id, d.name, d.head_employee_id, h.name
 `
 
 export async function findAllDepartments() {

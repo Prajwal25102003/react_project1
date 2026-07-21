@@ -1,8 +1,13 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getCellValue,
   PAGE_SIZE_OPTIONS,
 } from "../../models/dataTableModel.js";
+import {
+  periodFilterPlaceholder,
+  periodFilterTitle,
+} from "../../models/datePickerModel.js";
 import { INPUT_CLASS } from "../../models/formLayoutModel.js";
 import DateField from "./forms/DateField.jsx";
 import SelectField from "./forms/SelectField.jsx";
@@ -11,6 +16,49 @@ import UserAvatar from "./UserAvatar.jsx";
 
 const TOOLBAR_BTN =
   "inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
+
+function initialPeriodModes(filterDefs) {
+  const modes = {};
+  for (const filter of filterDefs) {
+    if (filter.type !== "period") continue;
+    modes[filter.id] = filter.defaultPeriod || filter.periodOptions?.[0]?.value || "date";
+  }
+  return modes;
+}
+
+function PeriodColumnFilter({
+  filter,
+  period,
+  value,
+  onPeriodChange,
+  onValueChange,
+}) {
+  return (
+    <div className="flex min-w-0 w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+      <div className="min-w-0 w-full sm:w-36">
+        <SelectField
+          value={period}
+          onChange={onPeriodChange}
+          ariaLabel={`${filter.label} period`}
+          options={(filter.periodOptions || []).map((option) => ({
+            value: option.value,
+            label: option.label,
+          }))}
+        />
+      </div>
+      <div className="min-w-0 w-full sm:w-48">
+        <DateField
+          type={period}
+          value={value}
+          onChange={onValueChange}
+          ariaLabel={filter.label}
+          placeholder={periodFilterPlaceholder(period)}
+          title={periodFilterTitle(period)}
+        />
+      </div>
+    </div>
+  );
+}
 
 function TableCell({ column, row, getActions, clamp = false }) {
   const value = getCellValue(row, column.accessor);
@@ -49,6 +97,34 @@ function TableCell({ column, row, getActions, clamp = false }) {
         label={row.statusLabel || row.status}
         statusClass={row.statusClass}
       />
+    );
+  }
+
+  if (column.type === "leaveDays") {
+    const days = Number(row.leaveDays);
+    const isHalf = !Number.isNaN(days) && days === 0.5;
+    const session =
+      row.halfDaySession === "first_half"
+        ? "Morning"
+        : row.halfDaySession === "second_half"
+          ? "Afternoon"
+          : "";
+
+    if (isHalf && session) {
+      return (
+        <div className="inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
+          <span className="text-theme-sm font-medium text-gray-800">0.5</span>
+          <span className="inline-flex shrink-0 rounded-full bg-blue-light-50 px-2 py-0.5 text-theme-xs font-medium text-blue-light-700">
+            {session}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <span className="text-theme-sm text-gray-500">
+        {display || (Number.isNaN(days) ? "—" : String(days))}
+      </span>
     );
   }
 
@@ -237,6 +313,9 @@ function DataTable({
   /** Tighter cell padding for dense layouts. */
   dense = false,
 }) {
+  const [periodModes, setPeriodModes] = useState(() =>
+    initialPeriodModes(filterDefs),
+  );
   const hasActiveFilters = Object.values(columnFilters).some(Boolean);
   const cellPad = dense
     ? "px-3 py-1.5 sm:px-3"
@@ -259,6 +338,16 @@ function DataTable({
         onPageSizeChange,
     );
 
+  function handleClearFilters() {
+    setPeriodModes(initialPeriodModes(filterDefs));
+    onClearFilters?.();
+  }
+
+  function handlePeriodModeChange(filterId, nextPeriod) {
+    setPeriodModes((current) => ({ ...current, [filterId]: nextPeriod }));
+    onColumnFilterChange?.(filterId, "");
+  }
+
   return (
     <div
       className={`min-w-0 max-w-full overflow-x-hidden ${showToolbar ? "space-y-4" : "space-y-3"}`}
@@ -279,7 +368,30 @@ function DataTable({
             </div>
           ) : null}
 
-          {filterDefs.map((filter) => (
+          {filterDefs.map((filter) => {
+            if (filter.type === "period") {
+              const period =
+                periodModes[filter.id] ||
+                filter.defaultPeriod ||
+                filter.periodOptions?.[0]?.value ||
+                "date";
+              return (
+                <PeriodColumnFilter
+                  key={filter.id}
+                  filter={filter}
+                  period={period}
+                  value={columnFilters[filter.id] || ""}
+                  onPeriodChange={(nextPeriod) =>
+                    handlePeriodModeChange(filter.id, nextPeriod)
+                  }
+                  onValueChange={(nextValue) =>
+                    onColumnFilterChange?.(filter.id, nextValue)
+                  }
+                />
+              );
+            }
+
+            return (
             <div
               key={filter.id}
               className={`min-w-0 w-full max-sm:w-full ${
@@ -323,10 +435,11 @@ function DataTable({
                 />
               )}
             </div>
-          ))}
+            );
+          })}
 
           {hasActiveFilters ? (
-            <button type="button" onClick={onClearFilters} className={TOOLBAR_BTN}>
+            <button type="button" onClick={handleClearFilters} className={TOOLBAR_BTN}>
               Clear filters
             </button>
           ) : null}
@@ -353,7 +466,10 @@ function DataTable({
                   </p>
                   <div className="max-h-64 space-y-2 overflow-y-auto">
                     {allColumns
-                      .filter((column) => column.id !== "actions")
+                      .filter(
+                        (column) =>
+                          column.id !== "actions" && column.hideable !== false,
+                      )
                       .map((column) => (
                         <label
                           key={column.id}
