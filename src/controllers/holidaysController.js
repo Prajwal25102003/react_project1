@@ -5,8 +5,10 @@ import { ROLES } from "../models/authModel.js";
 import {
   buildReleaseYearOptions,
   buildYearOptions,
+  buildHolidayActionFlash,
   CALENDAR_STATUS,
   EMPTY_RELEASE_ROW,
+  HOLIDAY_ACTION_FLASH_MS,
   HOLIDAY_RELEASE_MAX_YEAR,
   mapHolidayChangeNotifications,
   releaseRowsToPayload,
@@ -69,8 +71,30 @@ export function useHolidays() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [recentChanges, setRecentChanges] = useState([]);
+  const [actionFlash, setActionFlash] = useState(null);
   const seenUserKey = user?.id || user?.email || user?.employeeId || "";
   const holidayChangesAckedRef = useRef(false);
+  const actionFlashTimerRef = useRef(null);
+
+  const showActionFlash = useCallback((action, holidayName = "") => {
+    if (actionFlashTimerRef.current) {
+      window.clearTimeout(actionFlashTimerRef.current);
+      actionFlashTimerRef.current = null;
+    }
+    setActionFlash(buildHolidayActionFlash(action, holidayName));
+    actionFlashTimerRef.current = window.setTimeout(() => {
+      setActionFlash(null);
+      actionFlashTimerRef.current = null;
+    }, HOLIDAY_ACTION_FLASH_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (actionFlashTimerRef.current) {
+        window.clearTimeout(actionFlashTimerRef.current);
+      }
+    };
+  }, []);
 
   const columns = useMemo(() => getHolidayColumns(canManage), [canManage]);
   const table = useDataTable(holidays, {
@@ -153,9 +177,12 @@ export function useHolidays() {
     loadCalendars();
   }, [loadCalendars]);
 
-  // Show unread holiday changes beside Released; clear sidebar badge once viewed.
+  // Employees/HR: show unread holiday changes beside Released; clear sidebar badge once viewed.
+  // Admin: no chips / no sidebar badge — confirmation stays in the header bell only.
   useEffect(() => {
-    if (!seenUserKey || holidayChangesAckedRef.current) return undefined;
+    if (canManage || !seenUserKey || holidayChangesAckedRef.current) {
+      return undefined;
+    }
 
     let cancelled = false;
 
@@ -188,7 +215,7 @@ export function useHolidays() {
     return () => {
       cancelled = true;
     };
-  }, [seenUserKey]);
+  }, [canManage, seenUserKey]);
 
   const upcoming = useMemo(() => getUpcomingHolidays(holidays), [holidays]);
   const isYearReleased = calendar?.status === CALENDAR_STATUS.RELEASED;
@@ -279,8 +306,10 @@ export function useHolidays() {
       const payload = toHolidayPayload(form);
       if (editing) {
         await updateHoliday(editing.id, payload);
+        showActionFlash("Updated", payload.name);
       } else {
         await createHoliday(payload);
+        showActionFlash("Added", payload.name);
       }
       setFormOpen(false);
       setEditing(null);
@@ -312,6 +341,7 @@ export function useHolidays() {
       setDeleting(true);
       setDeleteError("");
       await deleteHoliday(deleteTarget.id);
+      showActionFlash("Removed", deleteTarget.name);
       setDeleteTarget(null);
       await loadHolidays();
       await loadCalendars();
@@ -451,6 +481,7 @@ export function useHolidays() {
       await releaseHolidayCalendar(releaseYear, releaseRowsToPayload(releaseRows));
       setReleaseOpen(false);
       setYear(releaseYear);
+      showActionFlash("Completed");
       await loadHolidays();
       await loadCalendars();
       requestEmsRefresh();
@@ -470,6 +501,7 @@ export function useHolidays() {
     calendar,
     isYearReleased,
     recentChanges,
+    actionFlash,
     calendarMonth,
     calendarMonthLabel: `${MONTH_NAMES[calendarMonth]} ${year}`,
     shiftCalendar,

@@ -69,6 +69,7 @@ function HolidaysPage() {
     removeReleaseRow,
     submitRelease,
     recentChanges,
+    actionFlash,
   } = useHolidays();
 
   return (
@@ -86,24 +87,23 @@ function HolidaysPage() {
                 ? `Released ${year}`
                 : calendarStatusLabel(calendar?.status)}
             </span>
-            {recentChanges.length > 0 ? (
+            {actionFlash ? (
+              <span
+                className={`inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-theme-xs font-medium ${actionFlash.toneClass}`}
+                role="status"
+              >
+                {actionFlash.message}
+              </span>
+            ) : null}
+            {!actionFlash && recentChanges.length > 0 ? (
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                 {recentChanges.map((change) => (
                   <span
                     key={change.id}
-                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-0.5 text-theme-xs font-medium ${change.toneClass}`}
-                    title={change.description || change.title}
+                    className={`inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-theme-xs font-medium ${change.toneClass}`}
+                    title={change.message}
                   >
-                    <span className="shrink-0 font-semibold">{change.status}</span>
-                    {change.description ? (
-                      <span className="truncate font-normal opacity-90">
-                        {change.description}
-                      </span>
-                    ) : (
-                      <span className="truncate font-normal opacity-90">
-                        {change.title}
-                      </span>
-                    )}
+                    <span className="truncate">{change.message}</span>
                   </span>
                 ))}
               </div>
