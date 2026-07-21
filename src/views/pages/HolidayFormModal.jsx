@@ -30,8 +30,8 @@ function HolidayFormModal({
       title={isEdit ? "Edit Holiday" : "Add Holiday"}
       description={
         isEdit
-          ? "Update holiday details for the company calendar."
-          : "Add a company holiday to the calendar."
+          ? "Update holiday details for the calendar."
+          : "Add a holiday to the calendar."
       }
     >
       <form onSubmit={onSubmit} noValidate className="px-2">

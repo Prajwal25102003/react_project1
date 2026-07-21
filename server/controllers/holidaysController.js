@@ -20,9 +20,7 @@ import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 
 const HOLIDAY_TYPES = new Set([
   'National Holiday',
-  'Company Holiday',
   'Optional Holiday',
-  'Company Event',
   'Festival Holiday',
 ])
 

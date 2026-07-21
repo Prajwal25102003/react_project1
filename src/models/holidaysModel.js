@@ -2,34 +2,26 @@ import { STATUS_TONE, getStatusClass } from "./statusStylesModel.js";
 
 export const HOLIDAY_TYPES = [
   "National Holiday",
-  "Company Holiday",
   "Optional Holiday",
-  "Company Event",
   "Festival Holiday",
 ];
 
 export const HOLIDAY_TYPE_DOT = {
   "National Holiday": "bg-error-500",
-  "Company Holiday": "bg-success-500",
   "Optional Holiday": "bg-warning-500",
-  "Company Event": "bg-blue-light-500",
   "Festival Holiday": "bg-theme-purple-500",
 };
 
 const HOLIDAY_TYPE_STATUS = {
   "National Holiday": STATUS_TONE.error,
-  "Company Holiday": STATUS_TONE.success,
   "Optional Holiday": STATUS_TONE.warning,
-  "Company Event": STATUS_TONE.info,
   "Festival Holiday": "bg-[#f4f3ff] text-[#6941c6]",
 };
 
 /** Soft circle fill for calendar day badges (matches holiday calendar mockup). */
 export const HOLIDAY_TYPE_DAY = {
   "National Holiday": "bg-error-100 text-error-700",
-  "Company Holiday": "bg-success-100 text-success-700",
   "Optional Holiday": "bg-warning-100 text-warning-700",
-  "Company Event": "bg-blue-light-100 text-blue-light-700",
   "Festival Holiday": "bg-[#f4f3ff] text-[#6941c6]",
 };
 
@@ -78,9 +70,7 @@ export function weekdayName(isoDate) {
 }
 
 export function shortHolidayType(type) {
-  const value = String(type || "");
-  if (value === "Company Event") return "Event";
-  return value.replace(/ Holiday$/, "");
+  return String(type || "").replace(/ Holiday$/, "");
 }
 
 export function mapHoliday(holiday) {
@@ -95,7 +85,7 @@ export function mapHoliday(holiday) {
     statusClass: getStatusClass(
       HOLIDAY_TYPE_STATUS,
       holiday.type,
-      "Company Holiday",
+      "National Holiday",
     ),
     typeDotClass: HOLIDAY_TYPE_DOT[holiday.type] || "bg-gray-400",
     typeDayClass:
