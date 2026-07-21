@@ -107,8 +107,108 @@ const HOLIDAY_CHANGE_TONE = {
   Completed: "bg-brand-50 text-brand-500",
 };
 
+export const HOLIDAY_ACTION_FLASH_MS = 3000;
+const HOLIDAY_CHANGE_CHIP_LIMIT = 3;
+
+const SHORT_MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function formatHolidayChipDate(isoDate) {
+  const match = String(isoDate || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const month = SHORT_MONTHS[Number(match[2]) - 1];
+  if (!month) return match[0];
+  return `${month} ${Number(match[3])}`;
+}
+
+function extractQuotedName(text) {
+  const match = String(text || "").match(/"([^"]+)"/);
+  return match?.[1]?.trim() || "";
+}
+
+/** Build a short chip label: Added · Name · Jul 25 */
+export function formatHolidayChangeChip(notification) {
+  const status = String(notification?.status || "Updated");
+  const description = String(notification?.description || "").trim();
+  const title = String(notification?.title || "").trim();
+  const actionLabel = status === "Removed" ? "Deleted" : status;
+
+  if (status === "Completed") {
+    const yearMatch = `${description} ${title}`.match(/\b(20\d{2})\b/);
+    return yearMatch ? `Released · ${yearMatch[1]}` : "Calendar released";
+  }
+
+  // Prefer "Name · YYYY-MM-DD" descriptions; fall back to quoted legacy text.
+  let name = "";
+  let date = "";
+  const simpleParts = description.split("·").map((part) => part.trim());
+  if (simpleParts.length >= 2 && /^\d{4}-\d{2}-\d{2}$/.test(simpleParts[1])) {
+    name = simpleParts[0];
+    date = simpleParts[1];
+  } else {
+    name = extractQuotedName(description) || extractQuotedName(title);
+    date = (description.match(/\d{4}-\d{2}-\d{2}/) || [])[0] || "";
+  }
+
+  const parts = [actionLabel];
+  if (name) parts.push(name);
+  const shortDate = formatHolidayChipDate(date);
+  if (shortDate) parts.push(shortDate);
+  return parts.join(" · ");
+}
+
+/** Short admin confirmation shown beside the Released badge. */
+export function buildHolidayActionFlash(action, holidayName = "") {
+  const name = String(holidayName || "").trim();
+
+  switch (action) {
+    case "Added":
+      return {
+        status: "Added",
+        message: name ? `Added · ${name}` : "Holiday added",
+        toneClass: HOLIDAY_CHANGE_TONE.Added,
+      };
+    case "Updated":
+      return {
+        status: "Updated",
+        message: name ? `Updated · ${name}` : "Holiday updated",
+        toneClass: HOLIDAY_CHANGE_TONE.Updated,
+      };
+    case "Removed":
+      return {
+        status: "Removed",
+        message: name ? `Deleted · ${name}` : "Holiday deleted",
+        toneClass: HOLIDAY_CHANGE_TONE.Removed,
+      };
+    case "Completed":
+      return {
+        status: "Completed",
+        message: "Calendar released",
+        toneClass: HOLIDAY_CHANGE_TONE.Completed,
+      };
+    default:
+      return {
+        status: "Updated",
+        message: "Calendar updated",
+        toneClass: HOLIDAY_CHANGE_TONE.Updated,
+      };
+  }
+}
+
 /**
- * Unread Holidays notifications → chips shown beside the Released badge.
+ * Unread Holidays notifications → short chips beside the Released badge.
  */
 export function mapHolidayChangeNotifications(notifications = []) {
   return (notifications || [])
@@ -118,13 +218,13 @@ export function mapHolidayChangeNotifications(notifications = []) {
         String(item.category || "") === "Holidays" &&
         item.id,
     )
+    .slice(0, HOLIDAY_CHANGE_CHIP_LIMIT)
     .map((item) => {
       const status = String(item.status || "Updated");
       return {
         id: String(item.id),
         status,
-        title: String(item.title || "Holiday change"),
-        description: String(item.description || "").trim(),
+        message: formatHolidayChangeChip(item),
         toneClass: HOLIDAY_CHANGE_TONE[status] || HOLIDAY_CHANGE_TONE.Updated,
       };
     });

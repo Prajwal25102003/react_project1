@@ -136,9 +136,15 @@ export function useHeader() {
   useEffect(() => {
     if (!notificationsOpen || !seenUserKey) return undefined;
 
-    // Holidays stay unread until the Holiday Calendar page is viewed.
+    const isAdmin = authUser?.role === "admin";
+
+    // Non-admin: Holidays stay unread until the Holiday Calendar page is viewed.
+    // Admin: clear with the bell — they only need header confirmation messages.
     const unreadIds = notifications
-      .filter((item) => item.isNew && item.category !== "Holidays")
+      .filter(
+        (item) =>
+          item.isNew && (isAdmin || item.category !== "Holidays"),
+      )
       .map((item) => item.id);
     if (unreadIds.length === 0) return undefined;
 
@@ -147,14 +153,15 @@ export function useHeader() {
         retainOnlyIds: notifications.map((item) => item.id),
       });
       setNotifications((current) =>
-        current.map((item) =>
-          item.category === "Holidays" ? item : { ...item, isNew: false },
-        ),
+        current.map((item) => {
+          if (!isAdmin && item.category === "Holidays") return item;
+          return { ...item, isNew: false };
+        }),
       );
     }, 600);
 
     return () => window.clearTimeout(timer);
-  }, [notificationsOpen, notifications, seenUserKey]);
+  }, [notificationsOpen, notifications, seenUserKey, authUser?.role]);
 
   const hasUnread = notifications.some((item) => item.isNew);
 

@@ -51,6 +51,11 @@ export function navIdsForNotification(
     return [];
   }
 
+  // Admin maintains the calendar — header notifications only, no sidebar badge.
+  if (category === "Holidays" && role === "admin") {
+    return [];
+  }
+
   const mapped = NOTIFICATION_CATEGORY_NAV_IDS[category] || [];
   return mapped.filter((id) => available.has(id));
 }
