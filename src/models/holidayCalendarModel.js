@@ -100,6 +100,36 @@ export function calendarStatusClass(status) {
   return "bg-warning-50 text-warning-700";
 }
 
+const HOLIDAY_CHANGE_TONE = {
+  Added: "bg-success-50 text-success-700",
+  Updated: "bg-blue-light-50 text-blue-light-700",
+  Removed: "bg-error-50 text-error-700",
+  Completed: "bg-brand-50 text-brand-500",
+};
+
+/**
+ * Unread Holidays notifications → chips shown beside the Released badge.
+ */
+export function mapHolidayChangeNotifications(notifications = []) {
+  return (notifications || [])
+    .filter(
+      (item) =>
+        item?.isNew &&
+        String(item.category || "") === "Holidays" &&
+        item.id,
+    )
+    .map((item) => {
+      const status = String(item.status || "Updated");
+      return {
+        id: String(item.id),
+        status,
+        title: String(item.title || "Holiday change"),
+        description: String(item.description || "").trim(),
+        toneClass: HOLIDAY_CHANGE_TONE[status] || HOLIDAY_CHANGE_TONE.Updated,
+      };
+    });
+}
+
 /** Map a holiday onto the selected calendar year (never keep another year's date). */
 export function toReleaseRow(holiday, year) {
   const targetYear = Number(year);

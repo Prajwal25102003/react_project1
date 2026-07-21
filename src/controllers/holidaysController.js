@@ -8,10 +8,15 @@ import {
   CALENDAR_STATUS,
   EMPTY_RELEASE_ROW,
   HOLIDAY_RELEASE_MAX_YEAR,
+  mapHolidayChangeNotifications,
   releaseRowsToPayload,
   toReleaseRow,
   validateReleaseRows,
 } from "../models/holidayCalendarModel.js";
+import {
+  markNotificationsSeen,
+  withNotificationSeenState,
+} from "../models/headerModel.js";
 import {
   EMPTY_HOLIDAY_FORM,
   getUpcomingHolidays,
@@ -33,7 +38,9 @@ import {
   releaseHolidayCalendar,
   updateHoliday,
 } from "../services/holidaysService.js";
+import { fetchNotifications } from "../services/notificationsService.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
+import { requestNotificationsRefresh } from "../utils/notificationsRefresh.js";
 
 const MONTH_NAMES = [
   "January",
@@ -61,6 +68,9 @@ export function useHolidays() {
   const [calendars, setCalendars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [recentChanges, setRecentChanges] = useState([]);
+  const seenUserKey = user?.id || user?.email || user?.employeeId || "";
+  const holidayChangesAckedRef = useRef(false);
 
   const columns = useMemo(() => getHolidayColumns(canManage), [canManage]);
   const table = useDataTable(holidays, {
@@ -142,6 +152,43 @@ export function useHolidays() {
   useEffect(() => {
     loadCalendars();
   }, [loadCalendars]);
+
+  // Show unread holiday changes beside Released; clear sidebar badge once viewed.
+  useEffect(() => {
+    if (!seenUserKey || holidayChangesAckedRef.current) return undefined;
+
+    let cancelled = false;
+
+    async function acknowledgeHolidayChanges() {
+      try {
+        const items = await fetchNotifications();
+        if (cancelled) return;
+
+        const withSeen = withNotificationSeenState(items, seenUserKey);
+        const changes = mapHolidayChangeNotifications(withSeen);
+        setRecentChanges(changes);
+
+        if (changes.length === 0) {
+          holidayChangesAckedRef.current = true;
+          return;
+        }
+
+        const ids = changes.map((item) => item.id);
+        markNotificationsSeen(seenUserKey, ids, {
+          retainOnlyIds: withSeen.map((item) => String(item.id)),
+        });
+        holidayChangesAckedRef.current = true;
+        requestNotificationsRefresh();
+      } catch {
+        if (!cancelled) setRecentChanges([]);
+      }
+    }
+
+    acknowledgeHolidayChanges();
+    return () => {
+      cancelled = true;
+    };
+  }, [seenUserKey]);
 
   const upcoming = useMemo(() => getUpcomingHolidays(holidays), [holidays]);
   const isYearReleased = calendar?.status === CALENDAR_STATUS.RELEASED;
@@ -422,6 +469,7 @@ export function useHolidays() {
     releaseYearOptions,
     calendar,
     isYearReleased,
+    recentChanges,
     calendarMonth,
     calendarMonthLabel: `${MONTH_NAMES[calendarMonth]} ${year}`,
     shiftCalendar,

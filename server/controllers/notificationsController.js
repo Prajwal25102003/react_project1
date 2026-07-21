@@ -6,7 +6,10 @@ import { formatDbError } from '../utils/formatDbError.js'
 import { mapActivityRows } from '../utils/relativeTime.js'
 
 function withAudience(rows, audience) {
-  return (rows || []).map((row) => ({ ...row, audience }))
+  return (rows || []).map((row) => ({
+    ...row,
+    audience: row.audience || audience,
+  }))
 }
 
 /**

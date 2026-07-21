@@ -200,7 +200,7 @@ export async function releaseHolidayCalendarHandler(req, res) {
 
     await createRecentActivity({
       title: 'Holiday calendar released',
-      description: `${year} holiday calendar released with ${saved.length} holidays.`,
+      description: `Admin released the ${year} holiday calendar (${saved.length} holidays).`,
       category: 'Holidays',
       status: 'Completed',
     })
@@ -304,7 +304,7 @@ export async function createHolidayHandler(req, res) {
 
     await createRecentActivity({
       title: 'Holiday added',
-      description: `${created.name} on ${created.date} (${created.type}).`,
+      description: `Admin added "${created.name}" on ${created.date} (${created.type}).`,
       category: 'Holidays',
       status: 'Added',
     })
@@ -351,7 +351,7 @@ export async function updateHolidayHandler(req, res) {
 
     await createRecentActivity({
       title: 'Holiday updated',
-      description: `${updated.name} on ${updated.date} was updated.`,
+      description: `Admin updated "${updated.name}" — now on ${updated.date} (${updated.type}).`,
       category: 'Holidays',
       status: 'Updated',
     })
@@ -384,7 +384,7 @@ export async function deleteHolidayHandler(req, res) {
 
     await createRecentActivity({
       title: 'Holiday removed',
-      description: `${existing.name} on ${existing.date} was removed.`,
+      description: `Admin deleted "${existing.name}" on ${existing.date}.`,
       category: 'Holidays',
       status: 'Removed',
     })

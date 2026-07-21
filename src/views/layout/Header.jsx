@@ -272,7 +272,11 @@ function Header({
                                             notification.status,
                                           ) === "warning"
                                         ? "bg-warning-500"
-                                        : "bg-success-500"
+                                        : notificationDotTone(
+                                              notification.status,
+                                            ) === "info"
+                                          ? "bg-blue-light-500"
+                                          : "bg-success-500"
                                   }`}
                                 />
                               </span>
