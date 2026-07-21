@@ -20,6 +20,10 @@ import {
   validateMaternityLeaveRequest,
 } from '../models/maternityLeaveModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
+import {
+  canApproveAdminLeave,
+  shouldAutoApproveAdminLeave,
+} from '../models/leaveApprovalConfigModel.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import pool from '../config/db.js'
 
@@ -50,20 +54,6 @@ function isHrOrAdmin(role) {
 
 function isAdmin(role) {
   return role === 'admin'
-}
-
-/**
- * Roles that may approve Admin leave. Empty = Admin is top of chain → auto-approve.
- * Add a higher role here later (e.g. 'super_admin') to require manual approval.
- */
-const ADMIN_LEAVE_APPROVER_ROLES = []
-
-function canApproveAdminLeave(role) {
-  return ADMIN_LEAVE_APPROVER_ROLES.includes(role)
-}
-
-function shouldAutoApproveAdminLeave() {
-  return ADMIN_LEAVE_APPROVER_ROLES.length === 0
 }
 
 function isTeamLeadFor(request, employeeId) {
@@ -341,7 +331,7 @@ export async function createLeaveRequestHandler(req, res) {
             ...actor,
             actorRole: 'admin',
             remarks:
-              'Auto-approved because Admin is the highest role. A higher approver can be configured later.',
+              'Auto-approved: Admin is the highest authority. Configure a higher approver role later if needed.',
           },
           client,
         )

@@ -10,21 +10,44 @@ const LEAVE_APPROVAL_STATUSES = new Set(["Pending", "TeamLeadApproved"]);
 
 /**
  * Resolve which nav module(s) should show a badge for one notification.
- * Leave is split: pending/awaiting → approvals; outcomes → my leave requests.
+ * Each module only receives messages that belong to it.
+ *
+ * Leave:
+ * - personal + still open (Pending) → My Leave Requests
+ * - personal + closed (Approved/Rejected/Cancelled) → no sidebar badge
+ * - org/team awaiting decision → Employee Leave Requests (approvals count)
+ * - org-wide leave outcomes → no sidebar module badge
  */
-export function navIdsForNotification(notification, availableNavIds = []) {
+export function navIdsForNotification(
+  notification,
+  availableNavIds = [],
+  { role } = {},
+) {
   const available = new Set(availableNavIds);
   const category = String(notification?.category || "");
+  const status = String(notification?.status || "");
+  const audience = String(notification?.audience || "").toLowerCase();
+  const isOrgAudience = audience === "org";
+  const isPersonalAudience = audience === "self" || audience === "personal";
+  const isStaff = role === "hr" || role === "admin";
 
   if (category === "Leave") {
-    const preferApprovals = LEAVE_APPROVAL_STATUSES.has(
-      String(notification?.status || ""),
-    );
-    if (preferApprovals && available.has("leave-approvals")) {
+    const stillOpen = LEAVE_APPROVAL_STATUSES.has(status);
+
+    // Personal leave: badge My Leave only while the request is still open.
+    const isPersonalLeave =
+      isPersonalAudience ||
+      (!isOrgAudience && (!isStaff || role === "employee"));
+
+    if (isPersonalLeave && available.has("leave-requests")) {
+      return stillOpen ? ["leave-requests"] : [];
+    }
+
+    // Org/team items still awaiting a decision → approvals module.
+    if (stillOpen && available.has("leave-approvals")) {
       return ["leave-approvals"];
     }
-    if (available.has("leave-requests")) return ["leave-requests"];
-    if (available.has("leave-approvals")) return ["leave-approvals"];
+
     return [];
   }
 
@@ -32,16 +55,23 @@ export function navIdsForNotification(notification, availableNavIds = []) {
   return mapped.filter((id) => available.has(id));
 }
 
-/** Count unread notifications per nav item id.
+/**
+ * Count unread notifications per nav item id.
  * Leave approvals are excluded — those badges track open approve/reject work
- * until the request is committed (see countActionableLeaveApprovals).
+ * (see countActionableLeaveApprovals).
  */
-export function countNavBadgesFromNotifications(notifications, availableNavIds) {
+export function countNavBadgesFromNotifications(
+  notifications,
+  availableNavIds,
+  { role } = {},
+) {
   const counts = {};
 
   for (const notification of notifications || []) {
     if (!notification?.isNew) continue;
-    for (const navId of navIdsForNotification(notification, availableNavIds)) {
+    for (const navId of navIdsForNotification(notification, availableNavIds, {
+      role,
+    })) {
       if (navId === "leave-approvals") continue;
       counts[navId] = (counts[navId] || 0) + 1;
     }

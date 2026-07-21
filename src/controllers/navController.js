@@ -30,12 +30,7 @@ export function useNav(notifications = []) {
 
     try {
       const requests = await fetchLeaveRequests("approvals");
-      setLeaveApprovalsBadge(
-        countActionableLeaveApprovals(requests, {
-          employeeId: user?.employeeId || null,
-          role: user?.role,
-        }),
-      );
+      setLeaveApprovalsBadge(countActionableLeaveApprovals(requests));
     } catch {
       setLeaveApprovalsBadge(0);
     }
@@ -65,7 +60,9 @@ export function useNav(notifications = []) {
       (group.items || []).map((item) => item.id),
     );
     const badgeCounts = {
-      ...countNavBadgesFromNotifications(notifications, availableNavIds),
+      ...countNavBadgesFromNotifications(notifications, availableNavIds, {
+        role: user?.role,
+      }),
     };
     if (canApproveLeaves && leaveApprovalsBadge > 0) {
       badgeCounts["leave-approvals"] = leaveApprovalsBadge;

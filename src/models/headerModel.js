@@ -50,6 +50,7 @@ export function mapNotifications(notifications) {
     category: notification.category || "",
     time: notification.time || "",
     status: notification.status || "Info",
+    audience: notification.audience || null,
     statusClass: getStatusClass(
       NOTIFICATION_STATUS,
       notification.status,
