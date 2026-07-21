@@ -9,10 +9,12 @@ import {
   getYearGrid,
   monthLabel,
   parseIsoDate,
+  parseIsoYear,
   shiftMonth,
   shiftYear,
   toIsoDate,
   toIsoMonth,
+  toIsoYear,
   yearGridLabel,
 } from "../../../models/datePickerModel.js";
 import { SELECT_TRIGGER_CLASS, SELECT_TRIGGER_ERROR_CLASS } from "../../../models/formLayoutModel.js";
@@ -99,6 +101,7 @@ function DateField({
   showClear = true,
 }) {
   const isMonth = type === "month";
+  const isYear = type === "year";
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState("day");
   const [view, setView] = useState(() => getViewMonthFromValue(value));
@@ -108,14 +111,15 @@ function DateField({
   const todayYear = new Date().getFullYear();
   const display = formatDateDisplay(value);
   const emptyLabel =
-    placeholder || (isMonth ? "Select month" : "Select date");
+    placeholder ||
+    (isYear ? "Select year" : isMonth ? "Select month" : "Select date");
   const yearOptions = getYearGrid(view.year);
 
   useEffect(() => {
     if (!open) return undefined;
     setView(getViewMonthFromValue(value));
-    setPanel(isMonth ? "month" : "day");
-  }, [open, value, isMonth]);
+    setPanel(isYear ? "year" : isMonth ? "month" : "day");
+  }, [open, value, isMonth, isYear]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -129,6 +133,10 @@ function DateField({
     function handleKeyDown(event) {
       if (event.key !== "Escape") return;
       setPanel((current) => {
+        if (isYear) {
+          setOpen(false);
+          return current;
+        }
         if (current === "year" && !isMonth) return "day";
         if (current === "year" && isMonth) return "month";
         setOpen(false);
@@ -142,7 +150,7 @@ function DateField({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, isMonth]);
+  }, [open, isMonth, isYear]);
 
   function selectDate(iso) {
     onChange?.(iso);
@@ -154,7 +162,16 @@ function DateField({
     setOpen(false);
   }
 
+  function selectYear(year) {
+    onChange?.(toIsoYear(year));
+    setOpen(false);
+  }
+
   function goToday() {
+    if (isYear) {
+      selectYear(todayYear);
+      return;
+    }
     if (isMonth) {
       const now = new Date();
       selectMonth(now.getFullYear(), now.getMonth());
@@ -164,6 +181,10 @@ function DateField({
   }
 
   function pickYear(year) {
+    if (isYear) {
+      selectYear(year);
+      return;
+    }
     setView((current) => ({ ...current, year }));
     setPanel(isMonth ? "month" : "day");
   }
@@ -210,7 +231,7 @@ function DateField({
         >
           <div className="mb-2.5 flex items-center justify-between gap-1">
             <div className="flex items-center gap-0.5">
-              {panel !== "year" && !isMonth ? (
+              {panel !== "year" && !isMonth && !isYear ? (
                 <button
                   type="button"
                   onClick={() =>
@@ -228,7 +249,7 @@ function DateField({
               <button
                 type="button"
                 onClick={() => {
-                  if (panel === "year") {
+                  if (panel === "year" || isYear) {
                     setView((current) =>
                       shiftYear(current.year, current.monthIndex, -12),
                     );
@@ -246,7 +267,7 @@ function DateField({
                 }}
                 className={NAV_BTN}
                 aria-label={
-                  panel === "year"
+                  panel === "year" || isYear
                     ? "Previous years"
                     : isMonth
                       ? "Previous year"
@@ -259,11 +280,14 @@ function DateField({
 
             <button
               type="button"
-              onClick={() =>
-                setPanel((current) => (current === "year" ? (isMonth ? "month" : "day") : "year"))
-              }
+              onClick={() => {
+                if (isYear) return;
+                setPanel((current) =>
+                  current === "year" ? (isMonth ? "month" : "day") : "year",
+                );
+              }}
               className="rounded-md px-1.5 py-0.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 hover:text-brand-500"
-              title="Change year"
+              title={isYear ? undefined : "Change year"}
             >
               {headerTitle}
             </button>
@@ -272,7 +296,7 @@ function DateField({
               <button
                 type="button"
                 onClick={() => {
-                  if (panel === "year") {
+                  if (panel === "year" || isYear) {
                     setView((current) =>
                       shiftYear(current.year, current.monthIndex, 12),
                     );
@@ -290,7 +314,7 @@ function DateField({
                 }}
                 className={NAV_BTN}
                 aria-label={
-                  panel === "year"
+                  panel === "year" || isYear
                     ? "Next years"
                     : isMonth
                       ? "Next year"
@@ -299,7 +323,7 @@ function DateField({
               >
                 <NavChevron direction="next" />
               </button>
-              {panel !== "year" && !isMonth ? (
+              {panel !== "year" && !isMonth && !isYear ? (
                 <button
                   type="button"
                   onClick={() =>
@@ -317,10 +341,12 @@ function DateField({
             </div>
           </div>
 
-          {panel === "year" ? (
+          {panel === "year" || isYear ? (
             <div className="grid grid-cols-3 gap-1.5">
               {yearOptions.map((year) => {
-                const selected = parseIsoDate(value)?.year === year;
+                const selected =
+                  parseIsoYear(value) === year ||
+                  parseIsoDate(value)?.year === year;
                 const isCurrent = year === todayYear;
                 let yearClass = "text-gray-800 hover:bg-gray-50";
                 if (isCurrent && !selected) {
@@ -431,7 +457,7 @@ function DateField({
               onClick={goToday}
               className="rounded-md px-2 py-1 text-theme-xs font-medium text-brand-500 hover:bg-brand-50"
             >
-              Today
+              {isYear ? "This year" : "Today"}
             </button>
             {showClear && value ? (
               <button

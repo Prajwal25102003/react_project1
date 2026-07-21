@@ -141,7 +141,7 @@ export async function getEmployeeDashboardStats(employeeId) {
           AND status IN ('Present', 'Half Day')
       ) AS "avgHoursMonth",
       (
-        SELECT COALESCE(SUM(leave_days), 0)::int
+        SELECT COALESCE(SUM(leave_days), 0)::float
         FROM leave_requests
         WHERE employee_id = $1
           AND status = 'Approved'

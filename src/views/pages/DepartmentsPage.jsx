@@ -40,6 +40,7 @@ function DepartmentsPage() {
           columns={table.visibleColumns}
           allColumns={DEPARTMENT_COLUMNS}
           rows={departments}
+          fitWidth
           search={table.search}
           onSearchChange={table.onSearchChange}
           searchPlaceholder="Search departments…"

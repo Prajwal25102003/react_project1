@@ -378,6 +378,8 @@ export function useLeaveForm() {
 
       if (field === "leaveType") {
         if (isMaternityLeave(value)) {
+          next.duration = "full";
+          next.halfDaySession = "first_half";
           const maternity = maternityDatesFromDelivery(
             next.expectedDeliveryDate,
           );
@@ -392,6 +394,25 @@ export function useLeaveForm() {
           }
         } else {
           next.expectedDeliveryDate = "";
+          if (next.duration === "half") {
+            next.endDate = next.startDate;
+            next.leaveDays = calculateLeaveDays(
+              next.startDate,
+              next.endDate,
+              "half",
+            );
+          } else {
+            next.leaveDays = calculateLeaveDays(next.startDate, next.endDate);
+          }
+        }
+      }
+
+      if (field === "duration" && !isMaternityLeave(next.leaveType)) {
+        if (value === "half") {
+          next.endDate = next.startDate;
+          next.leaveDays = calculateLeaveDays(next.startDate, next.endDate, "half");
+          if (!next.halfDaySession) next.halfDaySession = "first_half";
+        } else {
           next.leaveDays = calculateLeaveDays(next.startDate, next.endDate);
         }
       }
@@ -413,30 +434,31 @@ export function useLeaveForm() {
         (field === "startDate" || field === "endDate") &&
         !isMaternityLeave(next.leaveType)
       ) {
-        next.leaveDays = calculateLeaveDays(
-          field === "startDate" ? value : next.startDate,
-          field === "endDate" ? value : next.endDate,
-        );
+        if (next.duration === "half") {
+          const dateValue = field === "startDate" ? value : next.startDate;
+          next.startDate = dateValue;
+          next.endDate = dateValue;
+          next.leaveDays = calculateLeaveDays(dateValue, dateValue, "half");
+        } else {
+          next.leaveDays = calculateLeaveDays(
+            field === "startDate" ? value : next.startDate,
+            field === "endDate" ? value : next.endDate,
+          );
+        }
       }
       return next;
     });
     setFieldErrors((current) => {
       const next = { ...current };
       delete next[field];
-      if (
-        field === "startDate" ||
-        field === "endDate" ||
-        field === "expectedDeliveryDate" ||
-        field === "leaveType"
-      ) {
-        delete next.leaveDays;
+      if (field === "duration" || field === "startDate") {
         delete next.endDate;
-        delete next.startDate;
-        delete next.expectedDeliveryDate;
-        delete next.leaveType;
+        delete next.leaveDays;
+        delete next.halfDaySession;
       }
       return next;
     });
+    setError("");
   }
 
   async function handleSubmit(event) {
@@ -473,6 +495,7 @@ export function useLeaveForm() {
     gender,
     availableLeaveTypes,
     maternitySelected,
+    halfDaySelected: !maternitySelected && form.duration === "half",
     maternityHelp: MATERNITY_LEAVE_HELP,
     balances,
     loading,

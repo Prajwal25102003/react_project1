@@ -29,6 +29,7 @@ export const EMPLOYEE_COLUMN_FILTERS = [
   },
 ];
 
+/** Compact list columns — full details open in EmployeeViewModal. */
 export const EMPLOYEE_COLUMNS = [
   {
     id: "id",
@@ -37,6 +38,8 @@ export const EMPLOYEE_COLUMNS = [
     type: "primary",
     sortable: true,
     nowrap: true,
+    hideable: false,
+    mobilePrimary: true,
   },
   {
     id: "name",
@@ -44,28 +47,7 @@ export const EMPLOYEE_COLUMNS = [
     accessor: "name",
     type: "avatar",
     sortable: true,
-  },
-  {
-    id: "email",
-    header: "Email",
-    accessor: "email",
-    type: "text",
-    sortable: true,
-  },
-  {
-    id: "phone",
-    header: "Phone Number",
-    accessor: "phone",
-    type: "text",
-    sortable: true,
-    nowrap: true,
-  },
-  {
-    id: "gender",
-    header: "Gender",
-    accessor: "gender",
-    type: "text",
-    sortable: true,
+    mobilePrimary: true,
   },
   {
     id: "department",
@@ -75,58 +57,12 @@ export const EMPLOYEE_COLUMNS = [
     sortable: true,
   },
   {
-    id: "designation",
-    header: "Designation",
-    accessor: "designation",
-    type: "text",
-    sortable: true,
-  },
-  {
-    id: "joiningDate",
-    header: "Joining Date",
-    accessor: "joiningDate",
-    type: "text",
-    sortable: true,
-    nowrap: true,
-  },
-  {
-    id: "pendingLeaveCount",
-    header: "Pending Leaves",
-    accessor: "pendingLeaveCount",
-    type: "text",
-    sortable: true,
-    nowrap: true,
-  },
-  {
-    id: "casualLeaveBalance",
-    header: "Casual Left",
-    accessor: "casualLeaveBalance",
-    type: "text",
-    sortable: true,
-    nowrap: true,
-  },
-  {
-    id: "sickLeaveBalance",
-    header: "Sick Left",
-    accessor: "sickLeaveBalance",
-    type: "text",
-    sortable: true,
-    nowrap: true,
-  },
-  {
-    id: "lopDays",
-    header: "LOP Days",
-    accessor: "lopDays",
-    type: "text",
-    sortable: true,
-    nowrap: true,
-  },
-  {
     id: "status",
     header: "Status",
     accessor: "status",
     type: "status",
     sortable: true,
+    mobilePrimary: true,
   },
   {
     id: "actions",

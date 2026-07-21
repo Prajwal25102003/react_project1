@@ -3,6 +3,7 @@ import LeaveBalancePanel from "../components/LeaveBalancePanel.jsx";
 import StatusPill from "../components/StatusPill.jsx";
 import { LABEL_CLASS } from "../../models/formLayoutModel.js";
 import { normalizeLeaveBalances } from "../../models/leaveBalancesModel.js";
+import { formatLeaveDaysLabel } from "../../models/leaveRequestsModel.js";
 
 function DetailItem({ label, children }) {
   return (
@@ -44,13 +45,34 @@ function LeaveViewModal({ request, onClose }) {
       description={`${request.employeeId || "Employee"}${request.employeeName ? ` · ${request.employeeName}` : ""}`}
       panelClassName="relative mx-auto w-full min-w-0 max-w-[min(720px,calc(100vw-2.5rem))] rounded-3xl bg-white p-5 lg:p-8"
     >
-      <div className="max-h-[min(70vh,640px)] space-y-4 overflow-y-auto px-1 pr-2">
+      <div className="no-scrollbar max-h-[min(70vh,640px)] space-y-4 overflow-y-auto px-1">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           <DetailItem label="Employee ID">{request.employeeId || "—"}</DetailItem>
           <DetailItem label="Leave Type">{request.leaveType || "—"}</DetailItem>
-          <DetailItem label="Days">{request.leaveDays ?? "—"}</DetailItem>
+          <DetailItem label="Days">
+            {Number(request.leaveDays) === 0.5 ? (
+              <span className="inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
+                <span>0.5</span>
+                {request.halfDaySession === "first_half" ||
+                request.halfDaySession === "second_half" ? (
+                  <span className="inline-flex shrink-0 rounded-full bg-blue-light-50 px-2 py-0.5 text-theme-xs font-medium text-blue-light-700">
+                    {request.halfDaySession === "first_half"
+                      ? "Morning"
+                      : "Afternoon"}
+                  </span>
+                ) : null}
+              </span>
+            ) : (
+              request.leaveDaysLabel ||
+              formatLeaveDaysLabel(request.leaveDays, request.halfDaySession)
+            )}
+          </DetailItem>
           <DetailItem label="Start Date">{request.startDate || "—"}</DetailItem>
-          <DetailItem label="End Date">{request.endDate || "—"}</DetailItem>
+          <DetailItem label="End Date">
+            {Number(request.leaveDays) === 0.5
+              ? request.startDate || "—"
+              : request.endDate || "—"}
+          </DetailItem>
           <DetailItem label="Status">
             <StatusPill
               label={request.statusLabel || request.status}

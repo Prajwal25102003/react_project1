@@ -64,8 +64,8 @@ async function resolveDemoUsers(employees) {
     {
       email: 'admin@company.com',
       role: 'admin',
-      name: byId['EMP-1999']?.name || 'Rahul Aman',
-      employeeId: byId['EMP-1999']?.employeeId || null,
+      name: byId['EMP-1']?.name || 'Rahul Aman',
+      employeeId: byId['EMP-1']?.employeeId || null,
     },
   ]
 }
@@ -117,12 +117,12 @@ async function seed() {
   const demoUsers = await resolveDemoUsers(employeeUsers)
 
   for (const user of employeeUsers) {
-    // Demo admin@company.com owns EMP-1999; skip the department-based login for that employee.
-    if (user.employeeId === 'EMP-1999') continue
+    // Demo admin@company.com owns EMP-1; skip the department-based login for that employee.
+    if (user.employeeId === 'EMP-1') continue
     await upsertUser(user, passwordHash)
   }
   console.log(
-    `Seeded ${employeeUsers.filter((u) => u.employeeId !== 'EMP-1999').length} employee login(s)`,
+    `Seeded ${employeeUsers.filter((u) => u.employeeId !== 'EMP-1').length} employee login(s)`,
   )
 
   for (const user of demoUsers) {

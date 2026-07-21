@@ -6,7 +6,6 @@ import {
   INPUT_CLASS,
   INPUT_ERROR_CLASS,
   LABEL_CLASS,
-  TEXTAREA_CLASS,
 } from "../../models/formLayoutModel.js";
 import Breadcrumb from "../components/Breadcrumb.jsx";
 import PageCard from "../components/PageCard.jsx";
@@ -105,26 +104,6 @@ function DepartmentFormPage() {
                   />
                   <FieldError message={fieldErrors.headEmployeeId} />
                 </div>
-              </div>
-
-              <div>
-                <label className={LABEL_CLASS}>
-                  Description <RequiredMark />
-                </label>
-                <textarea
-                  rows={4}
-                  value={form.description}
-                  onChange={(event) =>
-                    updateField("description", event.target.value)
-                  }
-                  className={
-                    fieldErrors.description
-                      ? `${TEXTAREA_CLASS} border-error-500 focus:border-error-500 focus:ring-error-500/10`
-                      : TEXTAREA_CLASS
-                  }
-                  placeholder="Describe the department's role and responsibilities"
-                />
-                <FieldError message={fieldErrors.description} />
               </div>
 
               {error ? (

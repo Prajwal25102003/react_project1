@@ -118,10 +118,10 @@ const ANCHORS = [
     status: 'Active',
   },
   {
-    id: 'EMP-1999',
+    id: 'EMP-1',
     name: 'Rahul Aman',
     email: 'rahulaman@company.in',
-    phone: '+91 98765 41999',
+    phone: '+91 98765 41000',
     gender: 'Male',
     departmentId: 'DEP-01',
     designation: 'System Administrator',

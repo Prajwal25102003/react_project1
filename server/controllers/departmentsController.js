@@ -16,7 +16,6 @@ function parseDepartmentPayload(body) {
   const errors = []
 
   const name = String(body?.name ?? '').trim()
-  const description = String(body?.description ?? '').trim()
   const headEmployeeIdRaw = body?.headEmployeeId
   const headEmployeeId =
     headEmployeeIdRaw === null ||
@@ -26,14 +25,14 @@ function parseDepartmentPayload(body) {
       : String(headEmployeeIdRaw).trim()
 
   if (!name) errors.push('Name is required')
-  if (!description) errors.push('Description is required')
 
   return {
     errors,
     department: {
       name,
       headEmployeeId,
-      description,
+      // DB column remains NOT NULL; description is no longer collected in the UI.
+      description: '',
     },
   }
 }

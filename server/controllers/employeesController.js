@@ -317,7 +317,11 @@ export async function updateEmployeeHandler(req, res) {
     if (existingLogin) {
       const credentialUpdate = {
         name: employee.name,
-        role: loginRole,
+      }
+
+      // Keep admin accounts as admin; only sync employee/hr from department.
+      if (existingLogin.role !== 'admin') {
+        credentialUpdate.role = loginRole
       }
 
       if (manageLogin && loginEmail) {

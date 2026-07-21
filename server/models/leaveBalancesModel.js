@@ -3,9 +3,11 @@ import { query } from '../config/db.js'
 /**
  * Deduction order on approval:
  * - Medical Leave / Sick Leave → sick → casual → LOP
- * - Casual Leave → casual → LOP
+ * - Casual Leave → casual → sick → LOP
  * - Maternity Leave → paid (2 weeks before + 24 weeks after delivery); no sick/casual/LOP change
  * - Loss of Pay / other → LOP
+ * LOP is applied only after both casual and sick paid quotas are exhausted
+ * (except when the leave type is explicitly Loss of Pay).
  */
 export function computeLeaveDeduction(
   { casualLeaveBalance = 0, sickLeaveBalance = 0, lopDays = 0 },
@@ -50,6 +52,10 @@ export function computeLeaveDeduction(
     fromCasual = Math.min(casual, remaining)
     casual -= fromCasual
     remaining -= fromCasual
+
+    fromSick = Math.min(sick, remaining)
+    sick -= fromSick
+    remaining -= fromSick
 
     fromLop = remaining
     lop += remaining

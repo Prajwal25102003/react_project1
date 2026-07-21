@@ -1,3 +1,4 @@
+import { DATE_PERIOD_FILTER_OPTIONS } from "./datePickerModel.js";
 import { LEAVE_TYPES } from "./leaveRequestsModel.js";
 
 export const LEAVE_REQUEST_SEARCH_KEYS = [
@@ -12,6 +13,13 @@ export const LEAVE_REQUEST_SEARCH_KEYS = [
 ];
 
 export const LEAVE_REQUEST_COLUMN_FILTERS = [
+  {
+    id: "startDate",
+    label: "Start date",
+    type: "period",
+    periodOptions: DATE_PERIOD_FILTER_OPTIONS,
+    defaultPeriod: "date",
+  },
   {
     id: "status",
     label: "Status",
@@ -45,6 +53,7 @@ export const LEAVE_REQUEST_COLUMNS = [
     type: "primary",
     sortable: true,
     nowrap: true,
+    hideable: false,
     cellClassName: "w-[10%]",
     mobilePrimary: true,
   },
@@ -86,11 +95,11 @@ export const LEAVE_REQUEST_COLUMNS = [
   {
     id: "leaveDays",
     header: "Days",
-    accessor: "leaveDays",
-    type: "text",
+    accessor: "leaveDaysLabel",
+    type: "leaveDays",
     sortable: true,
     nowrap: true,
-    cellClassName: "w-[8%]",
+    cellClassName: "w-[12%] min-w-[7.5rem]",
   },
   {
     id: "status",
@@ -112,9 +121,10 @@ export const LEAVE_REQUEST_COLUMNS = [
   },
 ];
 
-/** Personal leave list — hide name; Employee ID is the identifier. */
+/** Personal leave list — hide name; Employee ID stays as the identifier. */
 export function getLeaveRequestDefaultVisibleIds(isPersonalList) {
-  return LEAVE_REQUEST_COLUMNS.filter(
-    (column) => !(isPersonalList && column.id === "employeeName"),
-  ).map((column) => column.id);
+  return LEAVE_REQUEST_COLUMNS.filter((column) => {
+    if (isPersonalList && column.id === "employeeName") return false;
+    return true;
+  }).map((column) => column.id);
 }

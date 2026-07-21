@@ -1,7 +1,7 @@
 import { ATTENDANCE_STATUSES } from "./attendanceModel.js";
+import { DATE_PERIOD_FILTER_OPTIONS } from "./datePickerModel.js";
 
 export const ATTENDANCE_SEARCH_KEYS = [
-  "id",
   "employeeId",
   "employeeName",
   "date",
@@ -15,7 +15,9 @@ export const ATTENDANCE_COLUMN_FILTERS = [
   {
     id: "date",
     label: "Date",
-    type: "date",
+    type: "period",
+    periodOptions: DATE_PERIOD_FILTER_OPTIONS,
+    defaultPeriod: "date",
   },
   {
     id: "status",
@@ -26,20 +28,13 @@ export const ATTENDANCE_COLUMN_FILTERS = [
 
 export const ATTENDANCE_COLUMNS = [
   {
-    id: "id",
-    header: "Attendance ID",
-    accessor: "id",
-    type: "primary",
-    sortable: true,
-    nowrap: true,
-  },
-  {
     id: "employeeId",
     header: "Employee ID",
     accessor: "employeeId",
-    type: "text",
+    type: "primary",
     sortable: true,
     nowrap: true,
+    hideable: false,
   },
   {
     id: "employeeName",

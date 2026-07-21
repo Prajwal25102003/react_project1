@@ -6,6 +6,7 @@ import {
   TEXTAREA_CLASS,
 } from "../../models/formLayoutModel.js";
 import { normalizeLeaveBalances } from "../../models/leaveBalancesModel.js";
+import { formatLeaveDaysLabel } from "../../models/leaveRequestsModel.js";
 
 function LeaveDecisionModal({
   request,
@@ -35,13 +36,21 @@ function LeaveDecisionModal({
         ? "Admin Approval"
         : "HR Approval";
 
+  const daysLabel =
+    request.leaveDaysLabel ||
+    formatLeaveDaysLabel(request.leaveDays, request.halfDaySession);
+  const dateRange =
+    Number(request.leaveDays) === 0.5
+      ? `${request.startDate} · ${daysLabel}`
+      : `${request.startDate} to ${request.endDate}`;
+
   const description = isReject
-    ? `Reject ${request.leaveType} for ${request.employeeId} (${request.startDate} to ${request.endDate}). The workflow will stop.`
+    ? `Reject ${request.leaveType} for ${request.employeeId} (${dateRange}). The workflow will stop.`
     : isTeamLeadApprove
-      ? `Approve ${request.leaveType} for ${request.employeeId} (${request.startDate} to ${request.endDate}) as team lead? HR will give the final approval.`
+      ? `Approve ${request.leaveType} for ${request.employeeId} (${dateRange}) as team lead? HR will give the final approval.`
       : isAdminApprove
-        ? `Give final Admin approval for HR leave (${request.leaveType}) for ${request.employeeId} (${request.startDate} to ${request.endDate})? Leave balances will be deducted now.`
-        : `Give final HR approval for ${request.leaveType} for ${request.employeeId} (${request.startDate} to ${request.endDate})? Leave balances will be deducted now.`;
+        ? `Give final Admin approval for HR leave (${request.leaveType}) for ${request.employeeId} (${dateRange})? Leave balances will be deducted now.`
+        : `Give final HR approval for ${request.leaveType} for ${request.employeeId} (${dateRange})? Leave balances will be deducted now.`;
 
   const balances = normalizeLeaveBalances(request);
 

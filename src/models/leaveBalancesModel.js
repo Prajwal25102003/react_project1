@@ -21,9 +21,11 @@ export function normalizeLeaveBalances(source = {}) {
 /**
  * Preview how a leave request will consume quotas on approval.
  * Medical/Sick → sick → casual → LOP
- * Casual → casual → LOP
+ * Casual → casual → sick → LOP
  * Maternity → paid separately (no sick/casual/LOP change)
- * Other → LOP when no paid balance applies
+ * Loss of Pay / other → LOP
+ * LOP only after both casual and sick paid quotas are used up
+ * (except when the leave type is explicitly Loss of Pay).
  */
 export function previewLeaveDeduction(balances, leaveType, leaveDays) {
   const current = normalizeLeaveBalances(balances);
@@ -77,6 +79,9 @@ export function previewLeaveDeduction(balances, leaveType, leaveDays) {
     fromCasual = Math.min(casual, remaining);
     casual -= fromCasual;
     remaining -= fromCasual;
+    fromSick = Math.min(sick, remaining);
+    sick -= fromSick;
+    remaining -= fromSick;
     fromLop = remaining;
     lop += remaining;
     remaining = 0;

@@ -41,6 +41,7 @@ export function useEmployees() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [viewTarget, setViewTarget] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +76,14 @@ export function useEmployees() {
     ],
     [departmentFilterOptions],
   );
+
+  function openViewModal(employee) {
+    setViewTarget(employee);
+  }
+
+  function closeViewModal() {
+    setViewTarget(null);
+  }
 
   function openDeleteModal(employee) {
     setDeleteError("");
@@ -111,6 +120,9 @@ export function useEmployees() {
     reload,
     table,
     filterDefs,
+    viewTarget,
+    openViewModal,
+    closeViewModal,
     deleteTarget,
     deleting,
     deleteError,

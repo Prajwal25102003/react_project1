@@ -3,7 +3,6 @@ export const DEPARTMENT_SEARCH_KEYS = [
   "name",
   "head",
   "employeeCount",
-  "description",
 ];
 
 export const DEPARTMENT_COLUMN_FILTERS = [];
@@ -38,14 +37,6 @@ export const DEPARTMENT_COLUMNS = [
     accessor: "employeeCount",
     type: "text",
     sortable: true,
-  },
-  {
-    id: "description",
-    header: "Department Description",
-    accessor: "description",
-    type: "text",
-    sortable: true,
-    cellClassName: "min-w-[280px]",
   },
   {
     id: "actions",

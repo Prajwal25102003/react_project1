@@ -1,5 +1,9 @@
 import { useLeaveForm } from "../../controllers/leaveRequestsController.js";
 import {
+  HALF_DAY_SESSIONS,
+  LEAVE_DURATIONS,
+} from "../../models/leaveRequestsModel.js";
+import {
   FORM_GRID_CLASS,
   FORM_STACK_CLASS,
   INPUT_CLASS,
@@ -21,6 +25,7 @@ function LeaveFormPage() {
     employees,
     availableLeaveTypes,
     maternitySelected,
+    halfDaySelected,
     maternityHelp,
     balances,
     loading,
@@ -31,13 +36,15 @@ function LeaveFormPage() {
     handleCancel,
   } = useLeaveForm();
 
+  const leaveDaysReadOnly = maternitySelected || halfDaySelected;
+
   return (
     <>
       <Breadcrumb pageName="Request Leave" />
       <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden sm:space-y-6">
         <PageCard
           title="Create Leave Request"
-          subtitle="Submit a new leave request for approval. Paid quota is 1 casual + 1 sick leave. Maternity is a separate paid entitlement for female employees."
+          subtitle="Submit a new leave request for approval. Paid quota is 1 casual + 1 sick leave; LOP applies only after both are finished. Maternity is a separate paid entitlement for female employees. Half-day leave counts as 0.5 day."
           bodyClassName="p-5 sm:p-6"
         >
           {loading ? (
@@ -110,16 +117,53 @@ function LeaveFormPage() {
                   </div>
                 ) : null}
 
+                {!maternitySelected ? (
+                  <div>
+                    <label className={LABEL_CLASS}>
+                      Duration <RequiredMark />
+                    </label>
+                    <SelectField
+                      value={form.duration}
+                      onChange={(nextValue) =>
+                        updateField("duration", nextValue)
+                      }
+                      ariaLabel="Leave duration"
+                      hasError={Boolean(fieldErrors.duration)}
+                      options={LEAVE_DURATIONS}
+                    />
+                    <FieldError message={fieldErrors.duration} />
+                  </div>
+                ) : null}
+
+                {halfDaySelected ? (
+                  <div>
+                    <label className={LABEL_CLASS}>
+                      Half-day session <RequiredMark />
+                    </label>
+                    <SelectField
+                      value={form.halfDaySession}
+                      onChange={(nextValue) =>
+                        updateField("halfDaySession", nextValue)
+                      }
+                      ariaLabel="Half-day session"
+                      hasError={Boolean(fieldErrors.halfDaySession)}
+                      options={HALF_DAY_SESSIONS}
+                    />
+                    <FieldError message={fieldErrors.halfDaySession} />
+                  </div>
+                ) : null}
+
                 <div>
                   <label className={LABEL_CLASS}>
-                    Start Date <RequiredMark />
+                    {halfDaySelected ? "Leave Date" : "Start Date"}{" "}
+                    <RequiredMark />
                   </label>
                   <DateField
                     value={form.startDate}
                     onChange={(nextValue) =>
                       updateField("startDate", nextValue)
                     }
-                    ariaLabel="Start date"
+                    ariaLabel={halfDaySelected ? "Leave date" : "Start date"}
                     hasError={Boolean(fieldErrors.startDate)}
                     disabled={maternitySelected}
                     placeholder="Select date"
@@ -127,20 +171,24 @@ function LeaveFormPage() {
                   <FieldError message={fieldErrors.startDate} />
                 </div>
 
-                <div>
-                  <label className={LABEL_CLASS}>
-                    End Date <RequiredMark />
-                  </label>
-                  <DateField
-                    value={form.endDate}
-                    onChange={(nextValue) => updateField("endDate", nextValue)}
-                    ariaLabel="End date"
-                    hasError={Boolean(fieldErrors.endDate)}
-                    disabled={maternitySelected}
-                    placeholder="Select date"
-                  />
-                  <FieldError message={fieldErrors.endDate} />
-                </div>
+                {!halfDaySelected ? (
+                  <div>
+                    <label className={LABEL_CLASS}>
+                      End Date <RequiredMark />
+                    </label>
+                    <DateField
+                      value={form.endDate}
+                      onChange={(nextValue) =>
+                        updateField("endDate", nextValue)
+                      }
+                      ariaLabel="End date"
+                      hasError={Boolean(fieldErrors.endDate)}
+                      disabled={maternitySelected}
+                      placeholder="Select date"
+                    />
+                    <FieldError message={fieldErrors.endDate} />
+                  </div>
+                ) : null}
 
                 <div>
                   <label className={LABEL_CLASS}>
@@ -158,10 +206,12 @@ function LeaveFormPage() {
                     placeholder={
                       maternitySelected
                         ? "182 days (auto)"
-                        : "Auto-calculated from dates"
+                        : halfDaySelected
+                          ? "0.5"
+                          : "Auto-calculated from dates"
                     }
-                    disabled={maternitySelected}
-                    readOnly={maternitySelected}
+                    disabled={leaveDaysReadOnly}
+                    readOnly={leaveDaysReadOnly}
                   />
                   <FieldError message={fieldErrors.leaveDays} />
                 </div>
@@ -182,7 +232,11 @@ function LeaveFormPage() {
                       ? `${TEXTAREA_CLASS} border-error-500`
                       : TEXTAREA_CLASS
                   }
-                  placeholder="Reason for leave"
+                  placeholder={
+                    halfDaySelected
+                      ? "e.g. medical appointment, personal errand"
+                      : "Reason for leave"
+                  }
                 />
                 <FieldError message={fieldErrors.reason} />
               </div>

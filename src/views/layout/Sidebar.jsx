@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useSidebarNav } from "../../controllers/navController.js";
+import { formatNavBadgeCount } from "../../models/navBadgesModel.js";
 import { cn } from "../../utils/cn.js";
 import { tw } from "../../utils/tw.js";
 import { GroupDotsIcon, NavIcon } from "../icons/NavIcon.jsx";
@@ -29,10 +30,30 @@ function SidebarGroupTitle({ title, sidebarToggle }) {
   );
 }
 
+function NavBadge({ count, sidebarToggle }) {
+  const label = formatNavBadgeCount(count);
+  if (!label) return null;
+
+  return (
+    <span
+      className={cn(
+        "ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-error-50 px-1.5 text-theme-xs font-medium text-error-600",
+        sidebarToggle
+          ? "lg:absolute lg:right-1.5 lg:top-1.5 lg:ml-0 lg:group-hover/sidebar:static lg:group-hover/sidebar:ml-auto"
+          : "",
+      )}
+      aria-label={`${label} new notifications`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function SidebarMenuItem({ item, sidebarToggle, onClose, isItemActive }) {
   const active = isItemActive(item);
   const iconClass = active ? tw.menuItemIconActive : tw.menuItemIconInactive;
   const labelClass = cn(
+    "truncate",
     sidebarToggle
       ? "inline lg:hidden lg:group-hover/sidebar:inline"
       : "inline",
@@ -51,6 +72,7 @@ function SidebarMenuItem({ item, sidebarToggle, onClose, isItemActive }) {
       >
         <NavIcon name={item.icon} className={iconClass} />
         <span className={labelClass}>{item.label}</span>
+        <NavBadge count={item.badge} sidebarToggle={sidebarToggle} />
       </NavLink>
     </li>
   );

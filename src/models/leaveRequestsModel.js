@@ -14,9 +14,21 @@ export const LEAVE_TYPES = [
   "Loss of Pay",
 ];
 
+export const LEAVE_DURATIONS = [
+  { value: "full", label: "Full day" },
+  { value: "half", label: "Half day" },
+];
+
+export const HALF_DAY_SESSIONS = [
+  { value: "first_half", label: "First half (morning)" },
+  { value: "second_half", label: "Second half (afternoon)" },
+];
+
 export const EMPTY_LEAVE_FORM = {
   employeeId: "",
   leaveType: "Casual Leave",
+  duration: "full",
+  halfDaySession: "first_half",
   expectedDeliveryDate: "",
   startDate: "",
   endDate: "",
@@ -39,6 +51,22 @@ export const LEAVE_STATUS_LABEL = {
   Rejected: "Rejected",
   Cancelled: "Cancelled",
 };
+
+export function halfDaySessionLabel(session) {
+  if (session === "first_half") return "Morning";
+  if (session === "second_half") return "Afternoon";
+  return "";
+}
+
+export function formatLeaveDaysLabel(leaveDays, halfDaySession) {
+  const days = Number(leaveDays);
+  if (Number.isNaN(days)) return leaveDays ?? "—";
+  if (days === 0.5) {
+    const session = halfDaySessionLabel(halfDaySession);
+    return session ? `0.5 · ${session}` : "0.5";
+  }
+  return Number.isInteger(days) ? String(days) : String(days);
+}
 
 export function isRequesterHr(request) {
   return Boolean(request?.requesterIsHr);
@@ -83,8 +111,15 @@ export function mapLeaveRequest(request) {
   const status = request.status || "Pending";
   const requesterIsHr = Boolean(request.requesterIsHr);
   const requesterIsAdmin = Boolean(request.requesterIsAdmin);
+  const leaveDays = Number(request.leaveDays);
   return {
     ...request,
+    leaveDays: Number.isNaN(leaveDays) ? request.leaveDays : leaveDays,
+    halfDaySession: request.halfDaySession || null,
+    leaveDaysLabel: formatLeaveDaysLabel(
+      request.leaveDays,
+      request.halfDaySession,
+    ),
     status,
     requesterIsHr,
     requesterIsAdmin,
@@ -144,13 +179,38 @@ export function canAdminRejectRequest(request) {
   return canAdminApproveRequest(request);
 }
 
+/** True when the signed-in user can approve or reject this leave request. */
+export function canActOnLeaveApproval(request, { employeeId, role } = {}) {
+  if (!request) return false;
+  const asTeamLead = isTeamLeadForRequest(request, employeeId);
+  if (request.status === "Pending" && asTeamLead) return true;
+  if (role === "admin" && canAdminApproveRequest(request)) return true;
+  if (
+    (role === "hr" || role === "admin") &&
+    (canHrApproveRequest(request) || canHrRejectRequest(request))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** How many approval-queue rows still need this user's decision. */
+export function countActionableLeaveApprovals(requests, userContext) {
+  return (requests || []).filter((request) =>
+    canActOnLeaveApproval(request, userContext),
+  ).length;
+}
+
 export function canCancelLeaveRequest(request) {
   return (
     request?.status === "Pending" || request?.status === "TeamLeadApproved"
   );
 }
 
-export function calculateLeaveDays(startDate, endDate) {
+export function calculateLeaveDays(startDate, endDate, duration = "full") {
+  if (duration === "half") {
+    return startDate ? "0.5" : "";
+  }
   if (!startDate || !endDate) return "";
   const start = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T00:00:00`);
@@ -160,14 +220,28 @@ export function calculateLeaveDays(startDate, endDate) {
 }
 
 export function toLeavePayload(form) {
+  const duration = isMaternityLeave(form.leaveType)
+    ? "full"
+    : form.duration === "half"
+      ? "half"
+      : "full";
+  const startDate = form.startDate;
+  const endDate = duration === "half" ? form.startDate : form.endDate;
+
   const payload = {
     employeeId: form.employeeId,
     leaveType: form.leaveType,
-    startDate: form.startDate,
-    endDate: form.endDate,
-    leaveDays: Number(form.leaveDays),
+    duration,
+    startDate,
+    endDate,
+    leaveDays: duration === "half" ? 0.5 : Number(form.leaveDays),
     reason: form.reason.trim(),
   };
+
+  if (duration === "half") {
+    payload.halfDaySession = form.halfDaySession;
+  }
+
   if (isMaternityLeave(form.leaveType)) {
     payload.expectedDeliveryDate = String(
       form.expectedDeliveryDate || "",
@@ -185,6 +259,8 @@ export function validateLeaveForm(form, { gender } = {}) {
   const reason = String(form?.reason ?? "").trim();
   const leaveDaysRaw = String(form?.leaveDays ?? "").trim();
   const expectedDeliveryDate = String(form?.expectedDeliveryDate ?? "").trim();
+  const duration = String(form?.duration ?? "full").trim();
+  const halfDaySession = String(form?.halfDaySession ?? "").trim();
 
   if (!employeeId) fieldErrors.employeeId = "Employee ID is required";
   if (!leaveType) fieldErrors.leaveType = "Leave type is required";
@@ -214,6 +290,14 @@ export function validateLeaveForm(form, { gender } = {}) {
           fieldErrors.leaveDays = `Maternity leave is ${MATERNITY_TOTAL_DAYS} paid days (26 weeks)`;
         }
       }
+    }
+  } else if (duration === "half") {
+    if (!startDate) fieldErrors.startDate = "Leave date is required";
+    if (!["first_half", "second_half"].includes(halfDaySession)) {
+      fieldErrors.halfDaySession = "Select first half or second half";
+    }
+    if (Number(leaveDaysRaw) !== 0.5) {
+      fieldErrors.leaveDays = "Half-day leave must be 0.5 days";
     }
   } else {
     if (!startDate) fieldErrors.startDate = "Start date is required";

@@ -56,7 +56,12 @@ export async function findUserByEmployeeId(employeeId) {
   const result = await query(
     `SELECT id, email, password_hash, role, employee_id, name
      FROM users
-     WHERE employee_id = $1 AND role IN ('employee', 'hr')
+     WHERE employee_id = $1
+     ORDER BY CASE role
+       WHEN 'admin' THEN 0
+       WHEN 'hr' THEN 1
+       ELSE 2
+     END
      LIMIT 1`,
     [employeeId],
   )
@@ -83,8 +88,9 @@ export async function createEmployeeUser(
 }
 
 /**
- * Update login email / password / display name for an employee user.
- * Only provided fields are updated.
+ * Update login email / password / display name for an employee-linked user.
+ * Only provided fields are updated. Admin role is never downgraded.
+ * Password hash is unchanged when passwordHash is omitted.
  */
 export async function updateEmployeeUserCredentials(
   employeeId,
@@ -97,13 +103,16 @@ export async function updateEmployeeUserCredentials(
   const nextName = name !== undefined ? name : existing.name
   const nextHash =
     passwordHash !== undefined ? passwordHash : existing.passwordHash
-  const nextRole =
-    role !== undefined ? (role === 'hr' ? 'hr' : 'employee') : existing.role
+
+  let nextRole = existing.role
+  if (role !== undefined && existing.role !== 'admin') {
+    nextRole = role === 'hr' ? 'hr' : 'employee'
+  }
 
   const result = await query(
     `UPDATE users
      SET email = $2, name = $3, password_hash = $4, role = $5
-     WHERE id = $1 AND role IN ('employee', 'hr')
+     WHERE id = $1
      RETURNING id, email, password_hash, role, employee_id, name`,
     [existing.id, nextEmail, nextName, nextHash, nextRole],
   )
