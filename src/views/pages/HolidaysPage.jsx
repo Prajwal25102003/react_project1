@@ -68,13 +68,14 @@ function HolidaysPage() {
     addReleaseRow,
     removeReleaseRow,
     submitRelease,
+    recentChanges,
   } = useHolidays();
 
   return (
     <>
       <div className="flex min-h-0 flex-col gap-2 overflow-hidden lg:h-[calc(100dvh-6.75rem)]">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold text-gray-800">
               Holiday Calendar
             </h2>
@@ -85,6 +86,28 @@ function HolidaysPage() {
                 ? `Released ${year}`
                 : calendarStatusLabel(calendar?.status)}
             </span>
+            {recentChanges.length > 0 ? (
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                {recentChanges.map((change) => (
+                  <span
+                    key={change.id}
+                    className={`inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-0.5 text-theme-xs font-medium ${change.toneClass}`}
+                    title={change.description || change.title}
+                  >
+                    <span className="shrink-0 font-semibold">{change.status}</span>
+                    {change.description ? (
+                      <span className="truncate font-normal opacity-90">
+                        {change.description}
+                      </span>
+                    ) : (
+                      <span className="truncate font-normal opacity-90">
+                        {change.title}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="min-w-[120px]">

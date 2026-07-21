@@ -98,5 +98,9 @@ export function notificationDotTone(status) {
     return "warning";
   }
 
+  if (status === "Updated") {
+    return "info";
+  }
+
   return "success";
 }

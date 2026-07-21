@@ -136,8 +136,9 @@ export function useHeader() {
   useEffect(() => {
     if (!notificationsOpen || !seenUserKey) return undefined;
 
+    // Holidays stay unread until the Holiday Calendar page is viewed.
     const unreadIds = notifications
-      .filter((item) => item.isNew)
+      .filter((item) => item.isNew && item.category !== "Holidays")
       .map((item) => item.id);
     if (unreadIds.length === 0) return undefined;
 
@@ -146,7 +147,9 @@ export function useHeader() {
         retainOnlyIds: notifications.map((item) => item.id),
       });
       setNotifications((current) =>
-        current.map((item) => ({ ...item, isNew: false })),
+        current.map((item) =>
+          item.category === "Holidays" ? item : { ...item, isNew: false },
+        ),
       );
     }, 600);
 
