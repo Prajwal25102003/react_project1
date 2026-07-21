@@ -5,6 +5,41 @@ import {
 import { formatDbError } from '../utils/formatDbError.js'
 import { mapActivityRows } from '../utils/relativeTime.js'
 
+function withAudience(rows, audience) {
+  return (rows || []).map((row) => ({ ...row, audience }))
+}
+
+/**
+ * Merge org + personal feeds for HR/Admin who also have an employee record.
+ * Personal leave items keep audience "self" so sidebar badges stay module-correct.
+ */
+function mergeOrgAndPersonal(orgRows, personalRows) {
+  const seen = new Set()
+  const merged = []
+
+  for (const row of withAudience(personalRows, 'self')) {
+    const id = String(row.id)
+    if (seen.has(id)) continue
+    seen.add(id)
+    merged.push(row)
+  }
+
+  for (const row of withAudience(orgRows, 'org')) {
+    const id = String(row.id)
+    if (seen.has(id)) continue
+    seen.add(id)
+    merged.push(row)
+  }
+
+  merged.sort((a, b) => {
+    const ta = new Date(a.activityTime || 0).getTime()
+    const tb = new Date(b.activityTime || 0).getTime()
+    return tb - ta
+  })
+
+  return merged.slice(0, 15)
+}
+
 export async function getNotifications(req, res) {
   try {
     const role = req.user?.role
@@ -16,14 +51,28 @@ export async function getNotifications(req, res) {
           message: 'Your account is not linked to an employee record',
         })
       }
-      rows = await findNotificationsForEmployee(req.user.employeeId)
+      rows = withAudience(
+        await findNotificationsForEmployee(req.user.employeeId),
+        'self',
+      )
     } else if (role === 'hr' || role === 'admin') {
-      rows = await findNotificationsForOrg()
+      const orgRows = await findNotificationsForOrg(10)
+      if (req.user.employeeId) {
+        const personalRows = await findNotificationsForEmployee(
+          req.user.employeeId,
+          10,
+        )
+        rows = mergeOrgAndPersonal(orgRows, personalRows)
+      } else {
+        rows = withAudience(orgRows, 'org')
+      }
     } else {
       return res.status(403).json({ message: 'Unauthorized' })
     }
 
-    res.json({ notifications: mapActivityRows(rows) })
+    const notifications = mapActivityRows(rows)
+
+    res.json({ notifications })
   } catch (error) {
     res.status(500).json({ message: formatDbError(error) })
   }

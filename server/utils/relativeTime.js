@@ -28,5 +28,6 @@ export function mapActivityRows(rows) {
     category: row.category,
     time: formatRelativeTime(row.activityTime),
     status: row.status,
+    audience: row.audience || null,
   }))
 }
