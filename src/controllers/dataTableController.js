@@ -9,13 +9,23 @@ import {
   rowsToCsv,
 } from "../models/dataTableModel.js";
 
+/** Stable default — a fresh `{}` each render would retrigger the sync effect forever. */
+const EMPTY_COLUMN_FILTERS = Object.freeze({});
+
+function sameColumnFilters(left, right) {
+  const leftKeys = Object.keys(left || {});
+  const rightKeys = Object.keys(right || {});
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => left[key] === right[key]);
+}
+
 export function useDataTable(rows, options = {}) {
   const {
     columns = [],
     searchKeys = [],
     pageSize: initialPageSize = DEFAULT_PAGE_SIZE,
     initialVisibleColumnIds,
-    initialColumnFilters = {},
+    initialColumnFilters = EMPTY_COLUMN_FILTERS,
   } = options;
 
   const [search, setSearch] = useState("");
@@ -29,6 +39,13 @@ export function useDataTable(rows, options = {}) {
     () => initialVisibleColumnIds || defaultVisibleColumnIds(columns),
   );
   const [columnsOpen, setColumnsOpen] = useState(false);
+
+  useEffect(() => {
+    setColumnFilters((current) => {
+      if (sameColumnFilters(current, initialColumnFilters)) return current;
+      return { ...initialColumnFilters };
+    });
+  }, [initialColumnFilters]);
 
   const table = processTableRows(rows, {
     search,

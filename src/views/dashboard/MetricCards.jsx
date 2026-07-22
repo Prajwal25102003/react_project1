@@ -100,7 +100,7 @@ const METRIC_ICONS = {
   "active-employees": ActiveIcon,
   "new-employees": EmployeesIcon,
   "pending-leave": ActiveIcon,
-  "upcoming-holidays": ActiveIcon,
+  "inactive-employees": EmployeesIcon,
   "unread-messages": MessagesIcon,
   "days-present": EmployeesIcon,
   "leave-approved": ActiveIcon,

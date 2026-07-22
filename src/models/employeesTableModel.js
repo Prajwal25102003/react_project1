@@ -23,6 +23,15 @@ export const EMPLOYEE_COLUMN_FILTERS = [
     options: EMPLOYEE_STATUSES.map((value) => ({ value, label: value })),
   },
   {
+    id: "hiredPeriod",
+    label: "Hired",
+    options: [
+      { value: "month", label: "This month" },
+      { value: "quarter", label: "This quarter" },
+      { value: "year", label: "This year" },
+    ],
+  },
+  {
     id: "gender",
     label: "Gender",
     options: EMPLOYEE_GENDERS.map((value) => ({ value, label: value })),

@@ -8,7 +8,51 @@ import {
 
 export const EMPLOYEE_GENDERS = ["Male", "Female"];
 export const EMPLOYEE_STATUSES = ["Active", "Inactive"];
+export const EMPLOYEE_HIRED_PERIODS = ["month", "quarter", "year"];
 export const MIN_EMPLOYEE_PASSWORD_LENGTH = 8;
+
+const HIRED_PERIOD_SET = new Set(EMPLOYEE_HIRED_PERIODS);
+
+/** Match dashboard new-hire buckets (month / quarter / year vs today). */
+export function isJoiningInHiredPeriod(joiningDate, period) {
+  const value = String(period || "").toLowerCase();
+  if (!HIRED_PERIOD_SET.has(value)) return false;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(joiningDate || "").trim());
+  if (!match) return false;
+
+  const joinYear = Number(match[1]);
+  const joinMonthIndex = Number(match[2]) - 1;
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const nowMonthIndex = now.getMonth();
+
+  if (value === "year") return joinYear === nowYear;
+  if (value === "month") {
+    return joinYear === nowYear && joinMonthIndex === nowMonthIndex;
+  }
+
+  const joinQuarter = Math.floor(joinMonthIndex / 3);
+  const nowQuarter = Math.floor(nowMonthIndex / 3);
+  return joinYear === nowYear && joinQuarter === nowQuarter;
+}
+
+export function employeeFiltersFromSearch(searchParams) {
+  const filters = {};
+  const status = String(searchParams?.get?.("status") || "").trim();
+  if (status && EMPLOYEE_STATUSES.includes(status)) {
+    filters.status = status;
+  }
+
+  const hiredPeriod = String(searchParams?.get?.("hiredPeriod") || "")
+    .trim()
+    .toLowerCase();
+  if (HIRED_PERIOD_SET.has(hiredPeriod)) {
+    filters.hiredPeriod = hiredPeriod;
+  }
+
+  return filters;
+}
 
 /** Local calendar date as YYYY-MM-DD (for form defaults). */
 export function defaultJoiningDate() {

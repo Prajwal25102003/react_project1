@@ -1,3 +1,5 @@
+import { isJoiningInHiredPeriod } from "./employeesModel.js";
+
 export const DEFAULT_PAGE_SIZE = 5;
 export const PAGE_SIZE_OPTIONS = [5, 10, 25];
 
@@ -38,6 +40,12 @@ export function filterByColumns(rows, columnFilters = {}) {
   return rows.filter((row) =>
     entries.every(([key, value]) => {
       const filter = String(value);
+
+      // Dashboard "New Hires" buckets — match joiningDate to calendar period.
+      if (key === "hiredPeriod") {
+        return isJoiningInHiredPeriod(getCellValue(row, "joiningDate"), filter);
+      }
+
       // Leave ranges: match when the period overlaps [startDate, endDate].
       if (
         key === "startDate" &&
