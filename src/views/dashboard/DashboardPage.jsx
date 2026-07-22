@@ -1,9 +1,10 @@
 import { useDashboard } from "../../controllers/dashboardController.js";
 import { NEW_EMPLOYEE_PERIODS } from "../../models/dashboardModel.js";
-import MetricCards from "./MetricCards.jsx";
+import MetricCards, { MetricCardsSkeleton } from "./MetricCards.jsx";
 import ChartTwo from "./ChartTwo.jsx";
 import DepartmentOverview from "./DepartmentOverview.jsx";
 import RecentActivitiesTable from "./RecentActivitiesTable.jsx";
+import UnreadMessagesModal from "./UnreadMessagesModal.jsx";
 
 function PeriodTabs({ value, onChange }) {
   return (
@@ -63,11 +64,15 @@ function EmployeeDashboard({ primaryMetrics, secondaryMetrics, chartTwo, activit
 
 function OrgDashboard({
   primaryMetrics,
-  secondaryMetrics,
   activities,
   departments,
   newEmployeesPeriod,
   setNewEmployeesPeriod,
+  onMetricAction,
+  messagesOpen,
+  messagesPreview,
+  onCloseMessages,
+  onAcknowledgeMessage,
 }) {
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
@@ -75,7 +80,7 @@ function OrgDashboard({
         <div>
           <h2 className="text-xl font-semibold text-gray-800">Dashboard</h2>
           <p className="mt-0.5 text-theme-sm text-gray-500">
-            Workforce, attendance, and leave overview
+            Workforce and leave overview
           </p>
         </div>
         <PeriodTabs
@@ -84,10 +89,11 @@ function OrgDashboard({
         />
       </div>
 
-      <MetricCards metrics={primaryMetrics} columns={3} />
-      {secondaryMetrics?.length ? (
-        <MetricCards metrics={secondaryMetrics} columns={3} />
-      ) : null}
+      <MetricCards
+        metrics={primaryMetrics}
+        columns={3}
+        onMetricAction={onMetricAction}
+      />
 
       <div className="grid grid-cols-12 gap-4 md:gap-6">
         <div className="col-span-12 min-h-[360px] lg:col-span-5">
@@ -98,6 +104,29 @@ function OrgDashboard({
           <RecentActivitiesTable activities={activities} />
         </div>
       </div>
+
+      <UnreadMessagesModal
+        open={messagesOpen}
+        messages={messagesPreview}
+        onClose={onCloseMessages}
+        onMessageClick={onAcknowledgeMessage}
+      />
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
+      <div className="space-y-2">
+        <div className="h-7 w-40 animate-pulse rounded bg-gray-100" />
+        <div className="h-4 w-56 animate-pulse rounded bg-gray-100" />
+      </div>
+      <MetricCardsSkeleton columns={3} count={6} />
+      <div className="grid grid-cols-12 gap-4 md:gap-6">
+        <div className="col-span-12 h-[360px] animate-pulse rounded-2xl border border-gray-200 bg-white lg:col-span-5" />
+        <div className="col-span-12 h-[360px] animate-pulse rounded-2xl border border-gray-200 bg-white lg:col-span-7" />
+      </div>
     </div>
   );
 }
@@ -106,7 +135,7 @@ function DashboardPage() {
   const dashboard = useDashboard();
 
   if (dashboard.loading) {
-    return <p className="text-theme-sm text-gray-500">Loading dashboard…</p>;
+    return <DashboardSkeleton />;
   }
 
   if (dashboard.error) {
@@ -127,11 +156,15 @@ function DashboardPage() {
   return (
     <OrgDashboard
       primaryMetrics={dashboard.primaryMetrics}
-      secondaryMetrics={dashboard.secondaryMetrics}
       activities={dashboard.activities}
       departments={dashboard.departments}
       newEmployeesPeriod={dashboard.newEmployeesPeriod}
       setNewEmployeesPeriod={dashboard.setNewEmployeesPeriod}
+      onMetricAction={dashboard.handleMetricAction}
+      messagesOpen={dashboard.messagesOpen}
+      messagesPreview={dashboard.messagesPreview}
+      onCloseMessages={dashboard.closeUnreadMessages}
+      onAcknowledgeMessage={dashboard.acknowledgeUnreadMessage}
     />
   );
 }

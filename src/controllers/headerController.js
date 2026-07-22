@@ -9,6 +9,7 @@ import {
 import { fetchNotifications } from "../services/notificationsService.js";
 import {
   NOTIFICATIONS_REFRESH_EVENT,
+  requestNotificationsRefresh,
 } from "../utils/notificationsRefresh.js";
 import { useAuth } from "./authContext.jsx";
 
@@ -133,35 +134,21 @@ export function useHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    if (!notificationsOpen || !seenUserKey) return undefined;
+  const acknowledgeNotification = useCallback(
+    (notification) => {
+      const id = notification?.id;
+      if (!seenUserKey || !id) return;
 
-    const isAdmin = authUser?.role === "admin";
-
-    // Non-admin: Holidays stay unread until the Holiday Calendar page is viewed.
-    // Admin: clear with the bell — they only need header confirmation messages.
-    const unreadIds = notifications
-      .filter(
-        (item) =>
-          item.isNew && (isAdmin || item.category !== "Holidays"),
-      )
-      .map((item) => item.id);
-    if (unreadIds.length === 0) return undefined;
-
-    const timer = window.setTimeout(() => {
-      markNotificationsSeen(seenUserKey, unreadIds, {
-        retainOnlyIds: notifications.map((item) => item.id),
-      });
+      markNotificationsSeen(seenUserKey, [id]);
       setNotifications((current) =>
-        current.map((item) => {
-          if (!isAdmin && item.category === "Holidays") return item;
-          return { ...item, isNew: false };
-        }),
+        current.map((item) =>
+          String(item.id) === String(id) ? { ...item, isNew: false } : item,
+        ),
       );
-    }, 600);
-
-    return () => window.clearTimeout(timer);
-  }, [notificationsOpen, notifications, seenUserKey, authUser?.role]);
+      requestNotificationsRefresh();
+    },
+    [seenUserKey],
+  );
 
   const hasUnread = notifications.some((item) => item.isNew);
 
@@ -182,6 +169,7 @@ export function useHeader() {
     toggleNotifications,
     closeNotifications,
     toggleUserMenu,
+    acknowledgeNotification,
     handleSignOut,
   };
 }

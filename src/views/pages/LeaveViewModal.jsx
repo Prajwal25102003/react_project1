@@ -24,7 +24,7 @@ function actionTone(action) {
   return "bg-gray-100 text-gray-700";
 }
 
-function LeaveViewModal({ request, onClose }) {
+function LeaveViewModal({ request, onClose, actions = [] }) {
   if (!request) return null;
 
   const history = (request.approvalHistory || []).filter(
@@ -142,6 +142,35 @@ function LeaveViewModal({ request, onClose }) {
           )}
         </div>
       </div>
+
+      {actions.length > 0 ? (
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-gray-100 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50"
+          >
+            Close
+          </button>
+          {actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              onClick={() => {
+                onClose();
+                action.onClick?.();
+              }}
+              className={
+                action.tone === "danger"
+                  ? "rounded-lg border border-error-300 bg-white px-4 py-2.5 text-sm font-medium text-error-600 shadow-theme-xs hover:bg-error-50"
+                  : "rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+              }
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </ModalShell>
   );
 }

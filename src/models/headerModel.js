@@ -69,8 +69,8 @@ const {
 export { getSeenNotificationIds, markNotificationsSeen };
 
 /**
- * Latest N notifications always display. Unseen → isNew; after opening the
- * panel they stay in the limited list without the unread highlight.
+ * Latest N notifications always display. Unseen → isNew; they stay unread
+ * until the user interacts with (clicks) that notification.
  */
 export function withNotificationSeenState(notifications, userKey) {
   const list = notifications || [];

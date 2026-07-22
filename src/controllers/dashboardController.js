@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./authContext.jsx";
 import { fetchDashboard } from "../services/dashboardService.js";
+import { fetchNotifications } from "../services/notificationsService.js";
 import {
   markActivitiesSeen,
   withActivitySeenState,
+  withOrgUnreadMessagesMetric,
 } from "../models/dashboardModel.js";
+import {
+  markNotificationsSeen,
+  withNotificationSeenState,
+} from "../models/headerModel.js";
 import { DASHBOARD_REFRESH_EVENT } from "../utils/dashboardRefresh.js";
+import {
+  NOTIFICATIONS_REFRESH_EVENT,
+  requestNotificationsRefresh,
+} from "../utils/notificationsRefresh.js";
 
 const DASHBOARD_STALE_MS = 60_000;
 
@@ -18,6 +28,7 @@ const EMPTY = {
   departments: [],
   leaveOverview: [],
   chartTwo: null,
+  unreadMessages: [],
   newEmployeesPeriod: "month",
 };
 
@@ -27,23 +38,71 @@ export function useDashboard() {
   const [newEmployeesPeriod, setNewEmployeesPeriod] = useState("month");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const [messagesPreview, setMessagesPreview] = useState([]);
   const hasLoadedRef = useRef(false);
   const lastFetchedAtRef = useRef(0);
+  const periodRef = useRef(newEmployeesPeriod);
   const seenUserKey = user?.id || user?.email || user?.employeeId || "";
 
+  const loadUnreadMessagesMetric = useCallback(async () => {
+    try {
+      const items = withNotificationSeenState(
+        await fetchNotifications(),
+        seenUserKey,
+      );
+      setData((current) => withOrgUnreadMessagesMetric(current, items));
+    } catch {
+      setData((current) => withOrgUnreadMessagesMetric(current, []));
+    }
+  }, [seenUserKey]);
+
   const loadDashboard = useCallback(
-    async ({ silent = false } = {}) => {
+    async ({ silent = false, scope } = {}) => {
       const isInitialLoad = !hasLoadedRef.current;
+      const metricsOnly = scope === "metrics";
 
       try {
         if (isInitialLoad && !silent) setLoading(true);
         setError("");
-        const dashboard = await fetchDashboard(newEmployeesPeriod);
+        const dashboard = await fetchDashboard(newEmployeesPeriod, { scope });
         const activities = withActivitySeenState(
           dashboard.activities,
           seenUserKey,
         );
-        setData({ ...dashboard, activities });
+
+        let nextDashboard = dashboard;
+        if (dashboard.variant === "org") {
+          try {
+            const items = withNotificationSeenState(
+              await fetchNotifications(),
+              seenUserKey,
+            );
+            nextDashboard = withOrgUnreadMessagesMetric(dashboard, items);
+          } catch {
+            nextDashboard = withOrgUnreadMessagesMetric(dashboard, []);
+          }
+        }
+
+        setData((current) => {
+          if (metricsOnly && current.variant === "org") {
+            return {
+              ...current,
+              primaryMetrics: nextDashboard.primaryMetrics,
+              metrics: nextDashboard.metrics,
+              unreadMessages: nextDashboard.unreadMessages,
+              newEmployeesPeriod: nextDashboard.newEmployeesPeriod,
+            };
+          }
+
+          return {
+            ...nextDashboard,
+            activities: metricsOnly ? current.activities : activities,
+            departments: metricsOnly
+              ? current.departments
+              : nextDashboard.departments,
+          };
+        });
         hasLoadedRef.current = true;
         lastFetchedAtRef.current = Date.now();
       } catch (err) {
@@ -57,9 +116,17 @@ export function useDashboard() {
   );
 
   useEffect(() => {
-    hasLoadedRef.current = false;
+    const periodChanged =
+      hasLoadedRef.current && periodRef.current !== newEmployeesPeriod;
+    periodRef.current = newEmployeesPeriod;
+
+    if (periodChanged) {
+      loadDashboard({ silent: true, scope: "metrics" });
+      return;
+    }
+
     loadDashboard();
-  }, [loadDashboard]);
+  }, [loadDashboard, newEmployeesPeriod]);
 
   useEffect(() => {
     function handleRefreshRequest() {
@@ -71,6 +138,24 @@ export function useDashboard() {
       window.removeEventListener(DASHBOARD_REFRESH_EVENT, handleRefreshRequest);
     };
   }, [loadDashboard]);
+
+  useEffect(() => {
+    function handleNotificationsRefresh() {
+      if (!hasLoadedRef.current) return;
+      loadUnreadMessagesMetric();
+    }
+
+    window.addEventListener(
+      NOTIFICATIONS_REFRESH_EVENT,
+      handleNotificationsRefresh,
+    );
+    return () => {
+      window.removeEventListener(
+        NOTIFICATIONS_REFRESH_EVENT,
+        handleNotificationsRefresh,
+      );
+    };
+  }, [loadUnreadMessagesMetric]);
 
   useEffect(() => {
     function handleWindowFocus() {
@@ -109,11 +194,59 @@ export function useDashboard() {
     return () => window.clearTimeout(timer);
   }, [data.activities, seenUserKey]);
 
+  const openUnreadMessages = useCallback(() => {
+    setMessagesPreview(data.unreadMessages || []);
+    setMessagesOpen(true);
+  }, [data.unreadMessages]);
+
+  const closeUnreadMessages = useCallback(() => {
+    setMessagesOpen(false);
+    setMessagesPreview([]);
+  }, []);
+
+  const acknowledgeUnreadMessage = useCallback(
+    (message) => {
+      const id = message?.id;
+      if (!seenUserKey || !id) return;
+
+      markNotificationsSeen(seenUserKey, [id]);
+      setMessagesPreview((current) =>
+        (current || []).filter((item) => String(item.id) !== String(id)),
+      );
+      setData((current) => {
+        const remaining = (current.unreadMessages || []).filter(
+          (item) => String(item.id) !== String(id),
+        );
+        return withOrgUnreadMessagesMetric(
+          current,
+          remaining.map((item) => ({ ...item, isNew: true })),
+        );
+      });
+      requestNotificationsRefresh();
+    },
+    [seenUserKey],
+  );
+
+  const handleMetricAction = useCallback(
+    (metric) => {
+      if (metric?.action === "unread-messages") {
+        openUnreadMessages();
+      }
+    },
+    [openUnreadMessages],
+  );
+
   return {
     ...data,
     newEmployeesPeriod,
     setNewEmployeesPeriod,
     loading,
     error,
+    messagesOpen,
+    messagesPreview,
+    openUnreadMessages,
+    closeUnreadMessages,
+    acknowledgeUnreadMessage,
+    handleMetricAction,
   };
 }

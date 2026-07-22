@@ -32,6 +32,7 @@ function AppShell() {
           notificationsLoading={header.notificationsLoading}
           hasUnread={header.hasUnread}
           notificationsRef={header.notificationsRef}
+          onAcknowledgeNotification={header.acknowledgeNotification}
           user={header.user}
           userOpen={header.userOpen}
           onToggleUserMenu={header.toggleUserMenu}

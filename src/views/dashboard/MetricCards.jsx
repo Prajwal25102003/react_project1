@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 function EmployeesIcon() {
   return (
     <svg
@@ -74,89 +76,163 @@ function TrendDownIcon() {
   );
 }
 
+function MessagesIcon() {
+  return (
+    <svg
+      className="fill-gray-800"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M4 6.5C4 5.11929 5.11929 4 6.5 4H17.5C18.8807 4 20 5.11929 20 6.5V14.5C20 15.8807 18.8807 17 17.5 17H13.4142L9.70711 20.7071C9.07714 21.3371 8 20.8909 8 20V17H6.5C5.11929 17 4 15.8807 4 14.5V6.5ZM6.5 5.5C5.94772 5.5 5.5 5.94772 5.5 6.5V14.5C5.5 15.0523 5.94772 15.5 6.5 15.5H9.5V18.3787L12.4393 15.4393C12.7197 15.1589 13.1022 15 13.5 15H17.5C18.0523 15 18.5 14.5523 18.5 14V6.5C18.5 5.94772 18.0523 5.5 17.5 5.5H6.5ZM8 9C8 8.72386 8.22386 8.5 8.5 8.5H15.5C15.7761 8.5 16 8.72386 16 9C16 9.27614 15.7761 9.5 15.5 9.5H8.5C8.22386 9.5 8 9.27614 8 9ZM8.5 11.5C8.22386 11.5 8 11.7239 8 12C8 12.2761 8.22386 12.5 8.5 12.5H12.5C12.7761 12.5 13 12.2761 13 12C13 11.7239 12.7761 11.5 12.5 11.5H8.5Z"
+      />
+    </svg>
+  );
+}
+
 const METRIC_ICONS = {
   "total-employees": EmployeesIcon,
   "active-employees": ActiveIcon,
   "new-employees": EmployeesIcon,
   "pending-leave": ActiveIcon,
-  "present-today": ActiveIcon,
-  "on-leave": ActiveIcon,
+  "upcoming-holidays": ActiveIcon,
+  "unread-messages": MessagesIcon,
   "days-present": EmployeesIcon,
   "leave-approved": ActiveIcon,
   "casual-leave": ActiveIcon,
   "sick-leave": ActiveIcon,
   "lop-days": ActiveIcon,
-  "absent-today": ActiveIcon,
-  "unmarked-today": ActiveIcon,
-  departments: EmployeesIcon,
 };
 
-function MetricCards({ metrics, columns = 2, compact = false }) {
+function MetricCardBody({ metric, Icon, compact }) {
+  return (
+    <>
+      <div
+        className={
+          compact
+            ? "flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"
+            : "flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100"
+        }
+      >
+        <Icon />
+      </div>
+
+      <div
+        className={
+          compact
+            ? "mt-3 flex items-end justify-between"
+            : "mt-5 flex items-end justify-between"
+        }
+      >
+        <div>
+          <span className="text-sm text-gray-500">{metric.label}</span>
+          <h4
+            className={
+              compact
+                ? "mt-1 text-xl font-bold text-gray-800"
+                : "mt-2 text-title-sm font-bold text-gray-800"
+            }
+          >
+            {metric.value}
+          </h4>
+        </div>
+
+        {metric.trend ? (
+          <span
+            className={`flex items-center gap-1 rounded-full py-0.5 pl-2 pr-2.5 text-sm font-medium ${
+              metric.trendUp
+                ? "bg-success-50 text-success-600 "
+                : "bg-error-50 text-error-600"
+            }`}
+          >
+            {metric.trendUp ? <TrendUpIcon /> : <TrendDownIcon />}
+            {metric.trend}
+          </span>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+function MetricCards({ metrics, columns = 2, compact = false, onMetricAction }) {
   const gridClass =
     columns === 3
       ? "grid grid-cols-1 gap-3 sm:grid-cols-3 md:gap-4"
       : "grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6";
+
+  const cardClass = compact
+    ? "rounded-2xl border border-gray-200 bg-white p-4"
+    : "rounded-2xl border border-gray-200 bg-white p-5 md:p-6";
+
+  const interactiveClass = `${cardClass} block w-full text-left transition hover:border-brand-200 hover:shadow-theme-xs focus-visible:outline-hidden focus-visible:ring-3 focus-visible:ring-brand-500/20`;
 
   return (
     <div className={gridClass}>
       {metrics.map((metric) => {
         const Icon = METRIC_ICONS[metric.id] || EmployeesIcon;
 
+        if (metric.href) {
+          return (
+            <Link
+              key={metric.id}
+              to={metric.href}
+              className={interactiveClass}
+              aria-label={`Open ${metric.label}`}
+            >
+              <MetricCardBody metric={metric} Icon={Icon} compact={compact} />
+            </Link>
+          );
+        }
+
+        if (metric.action && onMetricAction) {
+          return (
+            <button
+              key={metric.id}
+              type="button"
+              className={interactiveClass}
+              aria-label={`Open ${metric.label}`}
+              onClick={() => onMetricAction(metric)}
+            >
+              <MetricCardBody metric={metric} Icon={Icon} compact={compact} />
+            </button>
+          );
+        }
+
         return (
-          <article
-            key={metric.id}
-            className={
-              compact
-                ? "rounded-2xl border border-gray-200 bg-white p-4"
-                : "rounded-2xl border border-gray-200 bg-white p-5 md:p-6"
-            }
-          >
-            <div
-              className={
-                compact
-                  ? "flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"
-                  : "flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100"
-              }
-            >
-              <Icon />
-            </div>
-
-            <div
-              className={
-                compact
-                  ? "mt-3 flex items-end justify-between"
-                  : "mt-5 flex items-end justify-between"
-              }
-            >
-              <div>
-                <span className="text-sm text-gray-500">{metric.label}</span>
-                <h4
-                  className={
-                    compact
-                      ? "mt-1 text-xl font-bold text-gray-800"
-                      : "mt-2 text-title-sm font-bold text-gray-800"
-                  }
-                >
-                  {metric.value}
-                </h4>
-              </div>
-
-              {metric.trend ? (
-                <span
-                  className={`flex items-center gap-1 rounded-full py-0.5 pl-2 pr-2.5 text-sm font-medium ${
-                    metric.trendUp
-                      ? "bg-success-50 text-success-600 "
-                      : "bg-error-50 text-error-600"
-                  }`}
-                >
-                  {metric.trendUp ? <TrendUpIcon /> : <TrendDownIcon />}
-                  {metric.trend}
-                </span>
-              ) : null}
-            </div>
+          <article key={metric.id} className={cardClass}>
+            <MetricCardBody metric={metric} Icon={Icon} compact={compact} />
           </article>
         );
       })}
+    </div>
+  );
+}
+
+export function MetricCardsSkeleton({ columns = 3, count = 5 }) {
+  const gridClass =
+    columns === 3
+      ? "grid grid-cols-1 gap-3 sm:grid-cols-3 md:gap-4"
+      : "grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6";
+
+  return (
+    <div className={gridClass} aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <div
+          key={index}
+          className="animate-pulse rounded-2xl border border-gray-200 bg-white p-5 md:p-6"
+        >
+          <div className="h-12 w-12 rounded-xl bg-gray-100" />
+          <div className="mt-5 space-y-2">
+            <div className="h-4 w-24 rounded bg-gray-100" />
+            <div className="h-7 w-16 rounded bg-gray-100" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -54,6 +54,41 @@ export function withActivitySeenState(activities, userKey) {
   }));
 }
 
+export function getUnreadMessages(notifications) {
+  return (notifications || []).filter((item) => item.isNew);
+}
+
+export function buildUnreadMessagesMetric(notifications) {
+  const unreadCount = getUnreadMessages(notifications).length;
+
+  return {
+    id: "unread-messages",
+    label: "Unread Messages",
+    value: String(unreadCount),
+    trend: unreadCount > 0 ? "new messages" : "all clear",
+    trendUp: unreadCount === 0,
+    action: "unread-messages",
+  };
+}
+
+/** Append / replace the Unread Messages KPI for admin/HR org dashboards. */
+export function withOrgUnreadMessagesMetric(dashboard, notifications) {
+  if (!dashboard || dashboard.variant !== "org") return dashboard;
+
+  const unreadMetric = buildUnreadMessagesMetric(notifications);
+  const withoutUnread = (dashboard.primaryMetrics || []).filter(
+    (metric) => metric.id !== "unread-messages",
+  );
+  const metrics = [...withoutUnread, unreadMetric];
+
+  return {
+    ...dashboard,
+    primaryMetrics: metrics,
+    metrics,
+    unreadMessages: getUnreadMessages(notifications),
+  };
+}
+
 function mapOrgDashboard(data, newEmployeesPeriod) {
   const metrics = data.metrics || data.primaryMetrics || [];
 
