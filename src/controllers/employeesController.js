@@ -15,8 +15,8 @@ import {
 } from "../services/employeesService.js";
 import {
   EMPTY_EMPLOYEE_FORM,
-  EMPLOYEE_STATUSES,
   defaultJoiningDate,
+  employeeFiltersFromSearch,
   toEmployeeFormValues,
   toEmployeePayload,
   validateEmployeeForm,
@@ -29,12 +29,6 @@ import {
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
 import { sanitizeIndianPhoneInput } from "../utils/indianPhone.js";
 
-function statusFilterFromSearch(searchParams) {
-  const status = String(searchParams.get("status") || "").trim();
-  if (!status || !EMPLOYEE_STATUSES.includes(status)) return {};
-  return { status };
-}
-
 export function useEmployees() {
   const { rows, loading, error, reload } = useListData(
     fetchEmployees,
@@ -42,7 +36,7 @@ export function useEmployees() {
   );
   const [searchParams] = useSearchParams();
   const initialColumnFilters = useMemo(
-    () => statusFilterFromSearch(searchParams),
+    () => employeeFiltersFromSearch(searchParams),
     [searchParams],
   );
   const [departmentFilterOptions, setDepartmentFilterOptions] = useState([]);

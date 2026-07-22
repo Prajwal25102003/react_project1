@@ -15,22 +15,18 @@ export async function getDashboardStats(period = 'month') {
     SELECT
       e."totalEmployees",
       e."activeEmployees",
+      e."inactiveEmployees",
       e."newEmployees",
       (
         SELECT COUNT(*)::int
         FROM leave_requests
         WHERE status = 'Pending'
-      ) AS "pendingLeaveRequests",
-      (
-        SELECT COUNT(*)::int
-        FROM holidays
-        WHERE holiday_date >= CURRENT_DATE
-          AND holiday_date < CURRENT_DATE + INTERVAL '90 days'
-      ) AS "upcomingHolidays"
+      ) AS "pendingLeaveRequests"
     FROM (
       SELECT
         COUNT(*)::int AS "totalEmployees",
         COUNT(*) FILTER (WHERE status = 'Active')::int AS "activeEmployees",
+        COUNT(*) FILTER (WHERE status = 'Inactive')::int AS "inactiveEmployees",
         COUNT(*) FILTER (
           WHERE date_trunc($1, joining_date) = date_trunc($1, CURRENT_DATE)
         )::int AS "newEmployees"

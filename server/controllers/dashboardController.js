@@ -15,13 +15,16 @@ const PERIOD_LABELS = {
   year: 'this year',
 }
 
-function buildOrgPrimaryMetrics(stats, periodLabel) {
+function buildOrgPrimaryMetrics(stats, periodLabel, period = 'month') {
   const total = stats.totalEmployees || 0
   const active = stats.activeEmployees || 0
+  const inactive = stats.inactiveEmployees || 0
   const activeRate =
     total > 0 ? Number(((active / total) * 100).toFixed(1)) : 0
+  const inactiveRate =
+    total > 0 ? Number(((inactive / total) * 100).toFixed(1)) : 0
   const pendingLeave = stats.pendingLeaveRequests || 0
-  const upcomingHolidays = stats.upcomingHolidays || 0
+  const hiredPeriod = normalizeNewEmployeesPeriod(period)
 
   return [
     {
@@ -41,12 +44,20 @@ function buildOrgPrimaryMetrics(stats, periodLabel) {
       href: '/employees?status=Active',
     },
     {
+      id: 'inactive-employees',
+      label: 'Inactive Employees',
+      value: String(inactive),
+      trend: `${inactiveRate}% inactive`,
+      trendUp: inactive === 0,
+      href: '/employees?status=Inactive',
+    },
+    {
       id: 'new-employees',
       label: 'New Hires',
       value: String(stats.newEmployees),
       trend: periodLabel,
       trendUp: stats.newEmployees > 0,
-      href: '/employees',
+      href: `/employees?hiredPeriod=${hiredPeriod}`,
     },
     {
       id: 'pending-leave',
@@ -55,14 +66,6 @@ function buildOrgPrimaryMetrics(stats, periodLabel) {
       trend: pendingLeave > 0 ? 'needs review' : 'all clear',
       trendUp: pendingLeave === 0,
       href: '/leave-approvals?status=Pending',
-    },
-    {
-      id: 'upcoming-holidays',
-      label: 'Upcoming Holidays',
-      value: String(upcomingHolidays),
-      trend: 'next 90 days',
-      trendUp: true,
-      href: '/holidays',
     },
   ]
 }
@@ -76,7 +79,11 @@ async function buildOrgDashboard(req, res) {
 
   if (metricsOnly) {
     const stats = await getDashboardStats(newEmployeesPeriod)
-    const primaryMetrics = buildOrgPrimaryMetrics(stats, periodLabel)
+    const primaryMetrics = buildOrgPrimaryMetrics(
+      stats,
+      periodLabel,
+      newEmployeesPeriod,
+    )
     return res.json({
       variant: 'org',
       metrics: primaryMetrics,
@@ -91,7 +98,11 @@ async function buildOrgDashboard(req, res) {
     getDepartmentBreakdown(),
   ])
 
-  const primaryMetrics = buildOrgPrimaryMetrics(stats, periodLabel)
+  const primaryMetrics = buildOrgPrimaryMetrics(
+    stats,
+    periodLabel,
+    newEmployeesPeriod,
+  )
 
   res.json({
     variant: 'org',
