@@ -18,6 +18,7 @@ function Header({
   notificationsLoading,
   hasUnread,
   notificationsRef,
+  onAcknowledgeNotification,
   user,
   userOpen,
   onToggleUserMenu,
@@ -253,8 +254,12 @@ function Header({
                     {!notificationsLoading
                       ? notifications.map((notification) => (
                           <li key={notification.id}>
-                            <div
-                              className={`flex gap-3 rounded-lg border-b border-gray-100 px-4.5 py-3 ${
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onAcknowledgeNotification?.(notification)
+                              }
+                              className={`flex w-full gap-3 rounded-lg border-b border-gray-100 px-4.5 py-3 text-left transition hover:bg-gray-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/20 focus-visible:ring-inset ${
                                 notification.isNew ? "bg-brand-50/60" : ""
                               }`}
                             >
@@ -316,7 +321,7 @@ function Header({
                                   ) : null}
                                 </span>
                               </span>
-                            </div>
+                            </button>
                           </li>
                         ))
                       : null}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
@@ -15,6 +15,7 @@ import {
 } from "../services/employeesService.js";
 import {
   EMPTY_EMPLOYEE_FORM,
+  EMPLOYEE_STATUSES,
   defaultJoiningDate,
   toEmployeeFormValues,
   toEmployeePayload,
@@ -28,15 +29,27 @@ import {
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
 import { sanitizeIndianPhoneInput } from "../utils/indianPhone.js";
 
+function statusFilterFromSearch(searchParams) {
+  const status = String(searchParams.get("status") || "").trim();
+  if (!status || !EMPLOYEE_STATUSES.includes(status)) return {};
+  return { status };
+}
+
 export function useEmployees() {
   const { rows, loading, error, reload } = useListData(
     fetchEmployees,
     "Failed to load employees",
   );
+  const [searchParams] = useSearchParams();
+  const initialColumnFilters = useMemo(
+    () => statusFilterFromSearch(searchParams),
+    [searchParams],
+  );
   const [departmentFilterOptions, setDepartmentFilterOptions] = useState([]);
   const table = useDataTable(rows, {
     columns: EMPLOYEE_COLUMNS,
     searchKeys: EMPLOYEE_SEARCH_KEYS,
+    initialColumnFilters,
   });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
@@ -40,6 +40,20 @@ import {
 import { HR_ADMIN_ROLES, ROLES } from "../models/authModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
 
+const LEAVE_STATUS_FILTERS = new Set([
+  "Pending",
+  "TeamLeadApproved",
+  "Approved",
+  "Rejected",
+  "Cancelled",
+]);
+
+function statusFilterFromSearch(searchParams) {
+  const status = String(searchParams.get("status") || "").trim();
+  if (!status || !LEAVE_STATUS_FILTERS.has(status)) return {};
+  return { status };
+}
+
 export function useLeaveRequests(mode = "mine") {
   const { user } = useAuth();
   const isEmployee = user?.role === ROLES.EMPLOYEE;
@@ -47,6 +61,11 @@ export function useLeaveRequests(mode = "mine") {
   const isAdmin = user?.role === ROLES.ADMIN;
   const isApprovalsMode = mode === "approvals";
   const canRequestLeave = Boolean(user?.employeeId);
+  const [searchParams] = useSearchParams();
+  const initialColumnFilters = useMemo(
+    () => statusFilterFromSearch(searchParams),
+    [searchParams],
+  );
 
   const loadLeaveRequests = useCallback(
     () => fetchLeaveRequests(isApprovalsMode ? "approvals" : "mine"),
@@ -61,6 +80,7 @@ export function useLeaveRequests(mode = "mine") {
     columns: LEAVE_REQUEST_COLUMNS,
     searchKeys: LEAVE_REQUEST_SEARCH_KEYS,
     initialVisibleColumnIds: getLeaveRequestDefaultVisibleIds(!isApprovalsMode),
+    initialColumnFilters,
   });
   const [decisionTarget, setDecisionTarget] = useState(null);
   const [decisionStatus, setDecisionStatus] = useState("");

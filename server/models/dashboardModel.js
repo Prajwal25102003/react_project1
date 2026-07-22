@@ -13,24 +13,9 @@ export async function getDashboardStats(period = 'month') {
   const result = await query(
     `
     SELECT
-      (SELECT COUNT(*)::int FROM employees) AS "totalEmployees",
-      (
-        SELECT COUNT(*)::int
-        FROM employees
-        WHERE date_trunc($1, joining_date) = date_trunc($1, CURRENT_DATE)
-      ) AS "newEmployees",
-      (
-        SELECT COUNT(*)::int
-        FROM employees
-        WHERE status = 'Active'
-      ) AS "activeEmployees",
-      (SELECT COUNT(*)::int FROM departments) AS "departments",
-      (
-        SELECT COUNT(DISTINCT employee_id)::int
-        FROM leave_requests
-        WHERE status = 'Approved'
-          AND CURRENT_DATE BETWEEN start_date AND end_date
-      ) AS "employeesOnLeave",
+      e."totalEmployees",
+      e."activeEmployees",
+      e."newEmployees",
       (
         SELECT COUNT(*)::int
         FROM leave_requests
@@ -38,27 +23,19 @@ export async function getDashboardStats(period = 'month') {
       ) AS "pendingLeaveRequests",
       (
         SELECT COUNT(*)::int
-        FROM attendance
-        WHERE attendance_date = CURRENT_DATE
-          AND status IN ('Present', 'Half Day')
-      ) AS "presentToday",
-      (
-        SELECT COUNT(*)::int
-        FROM attendance
-        WHERE attendance_date = CURRENT_DATE
-          AND status = 'Absent'
-      ) AS "absentToday",
-      (
-        SELECT COUNT(*)::int
-        FROM employees e
-        WHERE e.status = 'Active'
-          AND NOT EXISTS (
-            SELECT 1
-            FROM attendance a
-            WHERE a.employee_id = e.id
-              AND a.attendance_date = CURRENT_DATE
-          )
-      ) AS "unmarkedToday"
+        FROM holidays
+        WHERE holiday_date >= CURRENT_DATE
+          AND holiday_date < CURRENT_DATE + INTERVAL '90 days'
+      ) AS "upcomingHolidays"
+    FROM (
+      SELECT
+        COUNT(*)::int AS "totalEmployees",
+        COUNT(*) FILTER (WHERE status = 'Active')::int AS "activeEmployees",
+        COUNT(*) FILTER (
+          WHERE date_trunc($1, joining_date) = date_trunc($1, CURRENT_DATE)
+        )::int AS "newEmployees"
+      FROM employees
+    ) e
   `,
     [newEmployeesPeriod],
   )

@@ -15,13 +15,16 @@ export function useDataTable(rows, options = {}) {
     searchKeys = [],
     pageSize: initialPageSize = DEFAULT_PAGE_SIZE,
     initialVisibleColumnIds,
+    initialColumnFilters = {},
   } = options;
 
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ id: null, direction: null });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(initialPageSize);
-  const [columnFilters, setColumnFilters] = useState({});
+  const [columnFilters, setColumnFilters] = useState(() => ({
+    ...initialColumnFilters,
+  }));
   const [visibleColumnIds, setVisibleColumnIds] = useState(
     () => initialVisibleColumnIds || defaultVisibleColumnIds(columns),
   );

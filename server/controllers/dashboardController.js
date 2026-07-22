@@ -15,35 +15,22 @@ const PERIOD_LABELS = {
   year: 'this year',
 }
 
-async function buildOrgDashboard(req, res) {
-  const newEmployeesPeriod = normalizeNewEmployeesPeriod(
-    req.query.newEmployeesPeriod,
-  )
-  const periodLabel = PERIOD_LABELS[newEmployeesPeriod]
-
-  const [stats, activityRows, departments] = await Promise.all([
-    getDashboardStats(newEmployeesPeriod),
-    findRecentActivities(),
-    getDepartmentBreakdown(),
-  ])
-
+function buildOrgPrimaryMetrics(stats, periodLabel) {
   const total = stats.totalEmployees || 0
   const active = stats.activeEmployees || 0
   const activeRate =
     total > 0 ? Number(((active / total) * 100).toFixed(1)) : 0
-  const presentToday = (stats.presentToday || 0)
-  const onLeave = stats.employeesOnLeave || 0
   const pendingLeave = stats.pendingLeaveRequests || 0
-  const absentToday = stats.absentToday || 0
-  const unmarkedToday = stats.unmarkedToday || 0
+  const upcomingHolidays = stats.upcomingHolidays || 0
 
-  const primaryMetrics = [
+  return [
     {
       id: 'total-employees',
       label: 'Total Employees',
       value: String(total),
       trend: `${stats.newEmployees} new ${periodLabel}`,
       trendUp: stats.newEmployees > 0,
+      href: '/employees',
     },
     {
       id: 'active-employees',
@@ -51,6 +38,7 @@ async function buildOrgDashboard(req, res) {
       value: String(active),
       trend: `${activeRate}% active`,
       trendUp: activeRate >= 80,
+      href: '/employees?status=Active',
     },
     {
       id: 'new-employees',
@@ -58,6 +46,7 @@ async function buildOrgDashboard(req, res) {
       value: String(stats.newEmployees),
       trend: periodLabel,
       trendUp: stats.newEmployees > 0,
+      href: '/employees',
     },
     {
       id: 'pending-leave',
@@ -65,52 +54,49 @@ async function buildOrgDashboard(req, res) {
       value: String(pendingLeave),
       trend: pendingLeave > 0 ? 'needs review' : 'all clear',
       trendUp: pendingLeave === 0,
+      href: '/leave-approvals?status=Pending',
     },
     {
-      id: 'present-today',
-      label: 'Present Today',
-      value: String(presentToday),
-      trend: `${unmarkedToday} not marked`,
-      trendUp: unmarkedToday === 0,
-    },
-    {
-      id: 'on-leave',
-      label: 'On Leave Today',
-      value: String(onLeave),
-      trend: onLeave > 0 ? 'approved leave' : 'none today',
-      trendUp: onLeave === 0,
-    },
-  ]
-
-  const secondaryMetrics = [
-    {
-      id: 'absent-today',
-      label: 'Absent Today',
-      value: String(absentToday),
-      trend: absentToday > 0 ? 'marked absent' : 'none',
-      trendUp: absentToday === 0,
-    },
-    {
-      id: 'unmarked-today',
-      label: 'Unmarked Today',
-      value: String(unmarkedToday),
-      trend: unmarkedToday > 0 ? 'needs marking' : 'complete',
-      trendUp: unmarkedToday === 0,
-    },
-    {
-      id: 'departments',
-      label: 'Departments',
-      value: String(stats.departments || 0),
-      trend: 'active teams',
+      id: 'upcoming-holidays',
+      label: 'Upcoming Holidays',
+      value: String(upcomingHolidays),
+      trend: 'next 90 days',
       trendUp: true,
+      href: '/holidays',
     },
   ]
+}
+
+async function buildOrgDashboard(req, res) {
+  const newEmployeesPeriod = normalizeNewEmployeesPeriod(
+    req.query.newEmployeesPeriod,
+  )
+  const periodLabel = PERIOD_LABELS[newEmployeesPeriod]
+  const metricsOnly = String(req.query.scope || '') === 'metrics'
+
+  if (metricsOnly) {
+    const stats = await getDashboardStats(newEmployeesPeriod)
+    const primaryMetrics = buildOrgPrimaryMetrics(stats, periodLabel)
+    return res.json({
+      variant: 'org',
+      metrics: primaryMetrics,
+      primaryMetrics,
+      newEmployeesPeriod,
+    })
+  }
+
+  const [stats, activityRows, departments] = await Promise.all([
+    getDashboardStats(newEmployeesPeriod),
+    findRecentActivities(),
+    getDepartmentBreakdown(),
+  ])
+
+  const primaryMetrics = buildOrgPrimaryMetrics(stats, periodLabel)
 
   res.json({
     variant: 'org',
     metrics: primaryMetrics,
     primaryMetrics,
-    secondaryMetrics,
     activities: mapActivityRows(activityRows),
     newEmployeesPeriod,
     departments,
