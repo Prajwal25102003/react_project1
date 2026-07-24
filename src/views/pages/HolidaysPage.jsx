@@ -28,6 +28,8 @@ function HolidaysPage() {
     isYearReleased,
     calendarMonth,
     calendarMonthLabel,
+    selectedCalendarDate,
+    selectCalendarDate,
     shiftCalendar,
     changeYear,
     holidays,
@@ -69,7 +71,6 @@ function HolidaysPage() {
     removeReleaseRow,
     submitRelease,
     recentChanges,
-    actionFlash,
   } = useHolidays();
 
   return (
@@ -87,15 +88,7 @@ function HolidaysPage() {
                 ? `Released ${year}`
                 : calendarStatusLabel(calendar?.status)}
             </span>
-            {actionFlash ? (
-              <span
-                className={`inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-theme-xs font-medium ${actionFlash.toneClass}`}
-                role="status"
-              >
-                {actionFlash.message}
-              </span>
-            ) : null}
-            {!actionFlash && recentChanges.length > 0 ? (
+            {recentChanges.length > 0 ? (
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                 {recentChanges.map((change) => (
                   <span
@@ -200,26 +193,28 @@ function HolidaysPage() {
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden lg:grid-cols-12">
-              <div className="min-h-0 lg:col-span-4">
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-hidden lg:grid-cols-12 lg:items-stretch">
+              <div className="flex min-h-0 min-w-0 flex-col lg:col-span-5 xl:col-span-4">
                 <HolidayMonthCalendar
                   year={year}
                   monthIndex={calendarMonth}
                   monthLabel={calendarMonthLabel}
                   holidays={holidays}
+                  selectedDate={selectedCalendarDate}
+                  onSelectDate={selectCalendarDate}
                   onPrev={() => shiftCalendar(-1)}
                   onNext={() => shiftCalendar(1)}
                 />
               </div>
 
-              <div className="min-h-0 overflow-hidden lg:col-span-8">
+              <div className="flex min-h-0 min-w-0 flex-col overflow-hidden lg:col-span-7 xl:col-span-8">
                 <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
                   <div className="flex shrink-0 items-center border-b border-gray-100 px-3 py-2">
                     <h3 className="text-sm font-semibold text-gray-800">
                       Holiday List ({table.total})
                     </h3>
                   </div>
-                  <div className="min-h-0 flex-1 overflow-auto p-2.5">
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2.5">
                     <DataTable
                       columns={table.visibleColumns}
                       rows={table.rows}
@@ -250,16 +245,19 @@ function HolidaysPage() {
                           : undefined
                       }
                       emptyMessage={
-                        canManage
-                          ? canRelease
-                            ? "No holidays for this year. Use Release Calendar to publish the list."
+                        selectedCalendarDate
+                          ? "No holidays on this date."
+                          : canManage
+                            ? canRelease
+                              ? "No holidays for this year. Use Release Calendar to publish the list."
+                              : "No holidays found for this year."
                             : "No holidays found for this year."
-                          : "No holidays found for this year."
                       }
                       fitWidth
                       mobileCards={false}
                       hideToolbar
                       dense
+                      fillHeight
                     />
                   </div>
                 </div>

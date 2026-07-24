@@ -104,6 +104,7 @@ const METRIC_ICONS = {
   "unread-messages": MessagesIcon,
   "days-present": EmployeesIcon,
   "leave-approved": ActiveIcon,
+  "total-leave": ActiveIcon,
   "casual-leave": ActiveIcon,
   "sick-leave": ActiveIcon,
   "lop-days": ActiveIcon,

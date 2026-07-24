@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS employees (
   email VARCHAR(160) NOT NULL UNIQUE,
   phone VARCHAR(40) NOT NULL,
   gender VARCHAR(20) NOT NULL,
-  department_id VARCHAR(20) NOT NULL REFERENCES departments(id),
+  department_id VARCHAR(20) REFERENCES departments(id),
   designation VARCHAR(120) NOT NULL,
   joining_date DATE NOT NULL,
   salary NUMERIC(12, 2) NOT NULL,

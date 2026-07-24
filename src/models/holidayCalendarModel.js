@@ -107,7 +107,6 @@ const HOLIDAY_CHANGE_TONE = {
   Completed: "bg-brand-50 text-brand-500",
 };
 
-export const HOLIDAY_ACTION_FLASH_MS = 3000;
 const HOLIDAY_CHANGE_CHIP_LIMIT = 3;
 
 const SHORT_MONTHS = [
@@ -139,7 +138,7 @@ function extractQuotedName(text) {
 }
 
 /** Build a short chip label: Added · Name · Jul 25 */
-export function formatHolidayChangeChip(notification) {
+function formatHolidayChangeChip(notification) {
   const status = String(notification?.status || "Updated");
   const description = String(notification?.description || "").trim();
   const title = String(notification?.title || "").trim();
@@ -167,44 +166,6 @@ export function formatHolidayChangeChip(notification) {
   const shortDate = formatHolidayChipDate(date);
   if (shortDate) parts.push(shortDate);
   return parts.join(" · ");
-}
-
-/** Short admin confirmation shown beside the Released badge. */
-export function buildHolidayActionFlash(action, holidayName = "") {
-  const name = String(holidayName || "").trim();
-
-  switch (action) {
-    case "Added":
-      return {
-        status: "Added",
-        message: name ? `Added · ${name}` : "Holiday added",
-        toneClass: HOLIDAY_CHANGE_TONE.Added,
-      };
-    case "Updated":
-      return {
-        status: "Updated",
-        message: name ? `Updated · ${name}` : "Holiday updated",
-        toneClass: HOLIDAY_CHANGE_TONE.Updated,
-      };
-    case "Removed":
-      return {
-        status: "Removed",
-        message: name ? `Deleted · ${name}` : "Holiday deleted",
-        toneClass: HOLIDAY_CHANGE_TONE.Removed,
-      };
-    case "Completed":
-      return {
-        status: "Completed",
-        message: "Calendar released",
-        toneClass: HOLIDAY_CHANGE_TONE.Completed,
-      };
-    default:
-      return {
-        status: "Updated",
-        message: "Calendar updated",
-        toneClass: HOLIDAY_CHANGE_TONE.Updated,
-      };
-  }
 }
 
 /**

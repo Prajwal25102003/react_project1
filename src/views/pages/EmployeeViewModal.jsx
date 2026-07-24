@@ -16,10 +16,13 @@ function DetailItem({ label, children }) {
 function EmployeeViewModal({ employee, onClose }) {
   if (!employee) return null;
 
-  const balances = normalizeLeaveBalances({
-    ...employee,
-    pendingLeaveCount: employee.pendingLeaveCount,
-  });
+  const isAdminAccount = Boolean(employee.isAdminAccount);
+  const balances = isAdminAccount
+    ? null
+    : normalizeLeaveBalances({
+        ...employee,
+        pendingLeaveCount: employee.pendingLeaveCount,
+      });
 
   return (
     <ModalShell
@@ -52,7 +55,9 @@ function EmployeeViewModal({ employee, onClose }) {
           <DetailItem label="Email">{employee.email || "—"}</DetailItem>
           <DetailItem label="Phone">{employee.phone || "—"}</DetailItem>
           <DetailItem label="Gender">{employee.gender || "—"}</DetailItem>
-          <DetailItem label="Department">{employee.department || "—"}</DetailItem>
+          <DetailItem label="Department">
+            {isAdminAccount ? "—" : employee.department || "—"}
+          </DetailItem>
           <DetailItem label="Designation">{employee.designation || "—"}</DetailItem>
           <DetailItem label="Joining Date">{employee.joiningDate || "—"}</DetailItem>
           <DetailItem label="Status">
@@ -63,12 +68,14 @@ function EmployeeViewModal({ employee, onClose }) {
           </DetailItem>
         </div>
 
-        <LeaveBalancePanel
-          balances={balances}
-          showPreview={false}
-          compact
-          title="Leave Balance"
-        />
+        {balances ? (
+          <LeaveBalancePanel
+            balances={balances}
+            showPreview={false}
+            compact
+            title="Leave Balance"
+          />
+        ) : null}
       </div>
     </ModalShell>
   );

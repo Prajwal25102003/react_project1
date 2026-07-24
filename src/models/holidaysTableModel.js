@@ -6,7 +6,6 @@ export const HOLIDAY_SEARCH_KEYS = [
   "dateLabel",
   "day",
   "type",
-  "description",
 ];
 
 export const HOLIDAY_COLUMN_FILTERS = [
@@ -30,6 +29,8 @@ export function getHolidayColumns(canManage) {
       accessor: "name",
       type: "dotName",
       sortable: true,
+      wrap: true,
+      cellClassName: canManage ? "w-[34%]" : "w-[40%]",
       mobilePrimary: true,
     },
     {
@@ -40,6 +41,7 @@ export function getHolidayColumns(canManage) {
       sortable: true,
       sortAccessor: "date",
       nowrap: true,
+      cellClassName: canManage ? "w-[16%]" : "w-[22%]",
       mobilePrimary: true,
     },
     {
@@ -49,6 +51,7 @@ export function getHolidayColumns(canManage) {
       type: "text",
       sortable: true,
       nowrap: true,
+      cellClassName: canManage ? "w-[14%]" : "w-[18%]",
     },
     {
       id: "type",
@@ -56,15 +59,8 @@ export function getHolidayColumns(canManage) {
       accessor: "type",
       type: "status",
       sortable: true,
+      cellClassName: canManage ? "w-[16%]" : "w-[20%]",
       mobilePrimary: true,
-    },
-    {
-      id: "description",
-      header: "Description",
-      accessor: "description",
-      type: "text",
-      sortable: true,
-      wrap: true,
     },
   ];
 
@@ -76,6 +72,7 @@ export function getHolidayColumns(canManage) {
       sortable: false,
       hideable: false,
       nowrap: true,
+      cellClassName: "w-[20%]",
     });
   }
 

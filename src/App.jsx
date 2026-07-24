@@ -6,6 +6,7 @@ import {
   ProtectedRoute,
   RoleRoute,
 } from "./views/components/ProtectedRoute.jsx";
+import { AppToastProvider } from "./views/components/AppToastProvider.jsx";
 import { HR_ADMIN_ROLES, ROLES } from "./models/authModel.js";
 import AppShell from "./views/layout/AppShell.jsx";
 
@@ -81,10 +82,22 @@ function AppRoutes() {
               }
             >
               <Route path="attendance" element={<AttendancePage />} />
+              <Route path="holidays" element={<HolidaysPage />} />
+            </Route>
+
+            <Route
+              element={
+                <RoleRoute roles={[ROLES.HR, ROLES.ADMIN, ROLES.EMPLOYEE]} />
+              }
+            >
               <Route path="leave-requests" element={<LeaveRequestsPage />} />
               <Route path="leave-approvals" element={<LeaveApprovalsPage />} />
+            </Route>
+
+            <Route
+              element={<RoleRoute roles={[ROLES.HR, ROLES.EMPLOYEE]} />}
+            >
               <Route path="leave-requests/new" element={<LeaveFormPage />} />
-              <Route path="holidays" element={<HolidaysPage />} />
             </Route>
           </Route>
         </Route>
@@ -99,7 +112,9 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AppRoutes />
+        <AppToastProvider>
+          <AppRoutes />
+        </AppToastProvider>
       </BrowserRouter>
     </AuthProvider>
   );

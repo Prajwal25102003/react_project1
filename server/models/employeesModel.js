@@ -16,6 +16,28 @@ const PENDING_LEAVE_JOIN = `
   ) pending ON TRUE
 `
 
+const LOGIN_ROLE_SELECT = `
+  u.role AS "loginRole"
+`
+
+const EMPLOYEE_FROM = `
+  FROM employees e
+  LEFT JOIN departments d ON d.id = e.department_id
+  LEFT JOIN LATERAL (
+    SELECT role
+    FROM users
+    WHERE employee_id = e.id
+    ORDER BY
+      CASE role
+        WHEN 'admin' THEN 0
+        WHEN 'hr' THEN 1
+        ELSE 2
+      END
+    LIMIT 1
+  ) u ON TRUE
+  ${PENDING_LEAVE_JOIN}
+`
+
 const EMPLOYEE_SELECT = `
   e.id,
   e.name,
@@ -29,7 +51,8 @@ const EMPLOYEE_SELECT = `
   e.salary,
   e.status,
   e.avatar,
-  ${LEAVE_BALANCE_SELECT}
+  ${LEAVE_BALANCE_SELECT},
+  ${LOGIN_ROLE_SELECT}
 `
 
 /** List DTO omits salary until Payroll needs it on the table. */
@@ -45,7 +68,8 @@ const EMPLOYEE_LIST_SELECT = `
   TO_CHAR(e.joining_date, 'YYYY-MM-DD') AS "joiningDate",
   e.status,
   e.avatar,
-  ${LEAVE_BALANCE_SELECT}
+  ${LEAVE_BALANCE_SELECT},
+  ${LOGIN_ROLE_SELECT}
 `
 
 function mapEmployeeRow(row) {
@@ -75,9 +99,7 @@ export async function findAllEmployees({ excludeLoginRoles = [] } = {}) {
   if (roles.length === 0) {
     const result = await query(
       `SELECT ${EMPLOYEE_LIST_SELECT}
-      FROM employees e
-      INNER JOIN departments d ON d.id = e.department_id
-      ${PENDING_LEAVE_JOIN}
+      ${EMPLOYEE_FROM}
       ORDER BY e.id ASC`,
     )
     return result.rows.map(mapEmployeeRow)
@@ -85,14 +107,12 @@ export async function findAllEmployees({ excludeLoginRoles = [] } = {}) {
 
   const result = await query(
     `SELECT ${EMPLOYEE_LIST_SELECT}
-    FROM employees e
-    INNER JOIN departments d ON d.id = e.department_id
-    ${PENDING_LEAVE_JOIN}
+    ${EMPLOYEE_FROM}
     WHERE NOT EXISTS (
       SELECT 1
-      FROM users u
-      WHERE u.employee_id = e.id
-        AND u.role = ANY($1::text[])
+      FROM users excluded
+      WHERE excluded.employee_id = e.id
+        AND excluded.role = ANY($1::text[])
     )
     ORDER BY e.id ASC`,
     [roles],
@@ -120,9 +140,7 @@ export async function employeeHasExcludedLoginRole(
 export async function findEmployeeById(id) {
   const result = await query(
     `SELECT ${EMPLOYEE_SELECT}
-    FROM employees e
-    INNER JOIN departments d ON d.id = e.department_id
-    ${PENDING_LEAVE_JOIN}
+    ${EMPLOYEE_FROM}
     WHERE e.id = $1`,
     [id],
   )

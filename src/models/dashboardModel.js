@@ -3,6 +3,7 @@ import {
 } from "./chartModel.js";
 import { STATUS_TONE, getStatusClass } from "./statusStylesModel.js";
 import { createSeenStateHelpers } from "../utils/seenState.js";
+import { getNotificationPath } from "./headerModel.js";
 
 export const NEW_EMPLOYEE_PERIODS = [
   { value: "month", label: "This month" },
@@ -30,6 +31,7 @@ function mapActivities(activities) {
     ...activity,
     statusClass: getStatusClass(ACTIVITY_STATUS, activity.status, "Info"),
     isNew: Boolean(activity.isNew),
+    href: getNotificationPath(activity),
   }));
 }
 

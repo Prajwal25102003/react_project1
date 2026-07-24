@@ -6,7 +6,11 @@ import {
   TEXTAREA_CLASS,
 } from "../../models/formLayoutModel.js";
 import { normalizeLeaveBalances } from "../../models/leaveBalancesModel.js";
-import { formatLeaveDaysLabel } from "../../models/leaveRequestsModel.js";
+import {
+  attachmentFileLabel,
+  formatLeaveDaysLabel,
+  leaveTypeSkipsBalanceDeduction,
+} from "../../models/leaveRequestsModel.js";
 
 function LeaveDecisionModal({
   request,
@@ -27,11 +31,12 @@ function LeaveDecisionModal({
   const isHrFinalApprove = status === "Approved";
   const isAdminApprove =
     isHrFinalApprove && Boolean(request?.requesterIsHr);
+  const skipsBalance = leaveTypeSkipsBalanceDeduction(request.leaveType);
 
   const title = isReject
     ? "Reject Leave Request"
     : isTeamLeadApprove
-      ? "Team Lead Approval"
+      ? "Department Head Approval"
       : isAdminApprove
         ? "Admin Approval"
         : "HR Approval";
@@ -44,13 +49,17 @@ function LeaveDecisionModal({
       ? `${request.startDate} · ${daysLabel}`
       : `${request.startDate} to ${request.endDate}`;
 
+  const balanceNote = skipsBalance
+    ? "Leave balances will not be deducted."
+    : "Leave balances will be deducted now.";
+
   const description = isReject
     ? `Reject ${request.leaveType} for ${request.employeeId} (${dateRange}). The workflow will stop.`
     : isTeamLeadApprove
-      ? `Approve ${request.leaveType} for ${request.employeeId} (${dateRange}) as team lead? HR will give the final approval.`
+      ? `Approve ${request.leaveType} for ${request.employeeId} (${dateRange}) as department head? HR will give the final approval.`
       : isAdminApprove
-        ? `Give final Admin approval for HR leave (${request.leaveType}) for ${request.employeeId} (${dateRange})? Leave balances will be deducted now.`
-        : `Give final HR approval for ${request.leaveType} for ${request.employeeId} (${dateRange})? Leave balances will be deducted now.`;
+        ? `Give final Admin approval for HR leave (${request.leaveType}) for ${request.employeeId} (${dateRange})? ${balanceNote}`
+        : `Give final HR approval for ${request.leaveType} for ${request.employeeId} (${dateRange})? ${balanceNote}`;
 
   const balances = normalizeLeaveBalances(request);
 
@@ -70,6 +79,20 @@ function LeaveDecisionModal({
       >
         {error ? (
           <p className="text-theme-sm text-error-600">{error}</p>
+        ) : null}
+
+        {request.attachmentUrl ? (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+            <p className={LABEL_CLASS}>Medical Document</p>
+            <a
+              href={request.attachmentUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
+            >
+              View / download {attachmentFileLabel(request.attachmentUrl)}
+            </a>
+          </div>
         ) : null}
 
         {isHrFinalApprove ? (

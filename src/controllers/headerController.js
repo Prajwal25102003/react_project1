@@ -20,7 +20,6 @@ export function useHeader() {
   const { user: authUser, logout } = useAuth();
   const navigate = useNavigate();
   const [menuToggle, setMenuToggle] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -135,7 +134,7 @@ export function useHeader() {
   }, []);
 
   const acknowledgeNotification = useCallback(
-    (notification) => {
+    (notification, options = {}) => {
       const id = notification?.id;
       if (!seenUserKey || !id) return;
 
@@ -146,15 +145,21 @@ export function useHeader() {
         ),
       );
       requestNotificationsRefresh();
+
+      // Navigate to the relevant leave (or other) page and open that item's modal
+      if (options.navigate !== false && notification.href) {
+        setNotificationsOpen(false);
+        // Force a navigation even when already on leave-requests
+        navigate(notification.href, { replace: false });
+      }
     },
-    [seenUserKey],
+    [seenUserKey, navigate],
   );
 
   const hasUnread = notifications.some((item) => item.isNew);
 
   return {
     menuToggle,
-    searchQuery,
     notificationsOpen,
     userOpen,
     user: mapHeaderUser(authUser),
@@ -164,7 +169,6 @@ export function useHeader() {
     userMenuItems: getUserMenuItems(),
     notificationsRef,
     userRef,
-    setSearchQuery,
     toggleMenu,
     toggleNotifications,
     closeNotifications,

@@ -1,13 +1,8 @@
 /**
- * Admin leave approval config.
+ * Legacy admin leave config.
  *
- * Admin is currently the top of the org chain, so Admin leave is auto-approved
- * on submit (ADMIN_LEAVE_APPROVER_ROLES is empty).
- *
- * Later, when a higher authority exists (e.g. super_admin / director):
- *   1. Add that role to users + auth
- *   2. Put it in ADMIN_LEAVE_APPROVER_ROLES below
- * Admin leave will then stay Pending until that role approves or rejects.
+ * Admin is no longer part of the leave module (system maintainer only).
+ * These helpers remain for any historical admin leave rows in the DB.
  */
 export const ADMIN_LEAVE_APPROVER_ROLES = []
 

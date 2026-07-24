@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./authContext.jsx";
+import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { ROLES } from "../models/authModel.js";
 import {
   buildReleaseYearOptions,
   buildYearOptions,
-  buildHolidayActionFlash,
   CALENDAR_STATUS,
   EMPTY_RELEASE_ROW,
-  HOLIDAY_ACTION_FLASH_MS,
   HOLIDAY_RELEASE_MAX_YEAR,
   mapHolidayChangeNotifications,
   releaseRowsToPayload,
@@ -65,39 +64,41 @@ export function useHolidays() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
   const [holidays, setHolidays] = useState([]);
   const [calendar, setCalendar] = useState(null);
   const [calendars, setCalendars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [recentChanges, setRecentChanges] = useState([]);
-  const [actionFlash, setActionFlash] = useState(null);
   const seenUserKey = user?.id || user?.email || user?.employeeId || "";
   const holidayChangesAckedRef = useRef(false);
-  const actionFlashTimerRef = useRef(null);
+  const toast = useToast();
 
-  const showActionFlash = useCallback((action, holidayName = "") => {
-    if (actionFlashTimerRef.current) {
-      window.clearTimeout(actionFlashTimerRef.current);
-      actionFlashTimerRef.current = null;
-    }
-    setActionFlash(buildHolidayActionFlash(action, holidayName));
-    actionFlashTimerRef.current = window.setTimeout(() => {
-      setActionFlash(null);
-      actionFlashTimerRef.current = null;
-    }, HOLIDAY_ACTION_FLASH_MS);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (actionFlashTimerRef.current) {
-        window.clearTimeout(actionFlashTimerRef.current);
+  const showActionFlash = useCallback(
+    (action, holidayName = "") => {
+      const name = String(holidayName || "").trim();
+      if (action === "Added") {
+        toast.crudSuccess(name ? `Holiday (${name})` : "Holiday", "create");
+      } else if (action === "Updated") {
+        toast.crudSuccess(name ? `Holiday (${name})` : "Holiday", "update");
+      } else if (action === "Removed") {
+        toast.crudSuccess(name ? `Holiday (${name})` : "Holiday", "delete");
+      } else if (action === "Completed") {
+        toast.success("Holiday calendar released successfully");
+      } else {
+        toast.success("Holiday calendar updated successfully");
       }
-    };
-  }, []);
+    },
+    [toast],
+  );
 
   const columns = useMemo(() => getHolidayColumns(canManage), [canManage]);
-  const table = useDataTable(holidays, {
+  const tableRows = useMemo(() => {
+    if (!selectedCalendarDate) return holidays;
+    return holidays.filter((holiday) => holiday.date === selectedCalendarDate);
+  }, [holidays, selectedCalendarDate]);
+  const table = useDataTable(tableRows, {
     columns,
     searchKeys: HOLIDAY_SEARCH_KEYS,
     pageSize: 5,
@@ -229,6 +230,7 @@ export function useHolidays() {
     ) {
       return;
     }
+    setSelectedCalendarDate(null);
     setYear(value);
     setCalendarMonth((current) => {
       if (value === year) return current;
@@ -248,8 +250,13 @@ export function useHolidays() {
     }
     // Do not navigate outside current year … 2030.
     if (nextYear < currentYear || nextYear > HOLIDAY_RELEASE_MAX_YEAR) return;
+    setSelectedCalendarDate(null);
     setCalendarMonth(nextMonth);
     if (nextYear !== year) setYear(nextYear);
+  }
+
+  function selectCalendarDate(isoDate) {
+    setSelectedCalendarDate(isoDate || null);
   }
 
   function openCreateModal() {
@@ -501,9 +508,10 @@ export function useHolidays() {
     calendar,
     isYearReleased,
     recentChanges,
-    actionFlash,
     calendarMonth,
     calendarMonthLabel: `${MONTH_NAMES[calendarMonth]} ${year}`,
+    selectedCalendarDate,
+    selectCalendarDate,
     shiftCalendar,
     changeYear,
     holidays,
@@ -511,7 +519,6 @@ export function useHolidays() {
     loading,
     error,
     table,
-    columns,
     filterDefs: HOLIDAY_COLUMN_FILTERS,
     formOpen,
     editing,

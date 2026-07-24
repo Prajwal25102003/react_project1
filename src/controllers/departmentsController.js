@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
+import { useToast } from "./toastContext.jsx";
 import { fetchEmployees } from "../services/employeesService.js";
 import {
   createDepartment,
@@ -24,6 +25,7 @@ import {
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
 
 export function useDepartments() {
+  const toast = useToast();
   const { rows, loading, error, reload } = useListData(
     fetchDepartments,
     "Failed to load departments",
@@ -54,6 +56,7 @@ export function useDepartments() {
       setDeleting(true);
       setDeleteError("");
       await deleteDepartment(deleteTarget.id);
+      toast.crudSuccess("Department", "delete");
       setDeleteTarget(null);
       reload();
       requestEmsRefresh();
@@ -82,6 +85,7 @@ export function useDepartments() {
 
 export function useDepartmentForm(departmentId) {
   const navigate = useNavigate();
+  const toast = useToast();
   const isEdit = Boolean(departmentId);
 
   const [form, setForm] = useState({ ...EMPTY_DEPARTMENT_FORM });
@@ -162,8 +166,10 @@ export function useDepartmentForm(departmentId) {
 
       if (isEdit) {
         await updateDepartment(departmentId, payload);
+        toast.crudSuccess("Department", "update");
       } else {
         await createDepartment(payload);
+        toast.crudSuccess("Department", "create");
       }
 
       requestEmsRefresh();

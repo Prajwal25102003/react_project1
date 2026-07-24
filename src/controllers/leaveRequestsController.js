@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
+import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
 import {
@@ -9,6 +10,7 @@ import {
   fetchLeaveRequestById,
   fetchLeaveRequests,
   updateLeaveRequestStatus,
+  uploadLeaveMedicalDocument,
 } from "../services/leaveRequestsService.js";
 import { fetchAuthProfile } from "../services/authService.js";
 import {
@@ -20,6 +22,7 @@ import {
   canCancelLeaveRequest,
   canHrApproveRequest,
   canHrRejectRequest,
+  isMedicalLeave,
   isTeamLeadForRequest,
   toLeavePayload,
   validateLeaveForm,
@@ -37,7 +40,8 @@ import {
   LEAVE_REQUEST_SEARCH_KEYS,
   getLeaveRequestDefaultVisibleIds,
 } from "../models/leaveRequestsTableModel.js";
-import { HR_ADMIN_ROLES, ROLES } from "../models/authModel.js";
+import { ROLES } from "../models/authModel.js";
+import { userCanApproveLeaves } from "../models/navModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
 
 const LEAVE_STATUS_FILTERS = new Set([
@@ -54,34 +58,91 @@ function statusFilterFromSearch(searchParams) {
   return { status };
 }
 
-export function useLeaveRequests(mode = "mine") {
+export function useLeaveRequests() {
   const { user } = useAuth();
-  const isEmployee = user?.role === ROLES.EMPLOYEE;
-  const isHrAdmin = HR_ADMIN_ROLES.includes(user?.role);
+  const toast = useToast();
+  const isHr = user?.role === ROLES.HR;
   const isAdmin = user?.role === ROLES.ADMIN;
-  const isApprovalsMode = mode === "approvals";
-  const canRequestLeave = Boolean(user?.employeeId);
-  const [searchParams] = useSearchParams();
+  const isDepartmentHead = Boolean(user?.isDepartmentHead);
+  const canApproveLeaves = userCanApproveLeaves(user?.role, {
+    isDepartmentHead,
+  });
+  // Admin maintains modules and is not an employee leave requester.
+  const canRequestLeave =
+    Boolean(user?.employeeId) && user?.role !== ROLES.ADMIN;
+  // Admin only reviews HR leave; HR / department heads use the unified queue.
+  const listApiScope = isAdmin
+    ? "admin-hr"
+    : canApproveLeaves
+      ? "unified"
+      : "mine";
+  const [searchParams, setSearchParams] = useSearchParams();
   const initialColumnFilters = useMemo(
     () => statusFilterFromSearch(searchParams),
     [searchParams],
   );
+  const urlLeaveId = searchParams.get("id");
+  const urlDirection = searchParams.get("direction"); // sent | received
+
+  // Department heads land on their team queue so approvals are visible first.
+  const [listScope, setListScope] = useState(() => {
+    if (isDepartmentHead || (canApproveLeaves && !canRequestLeave)) {
+      return "employees";
+    }
+    return canRequestLeave ? "mine" : "employees";
+  });
+
+  const listScopeOptions = useMemo(() => {
+    if (isAdmin) return [];
+    if (!canApproveLeaves) return [];
+    const options = [];
+    if (canRequestLeave) {
+      options.push({ value: "mine", label: "My" });
+    }
+    options.push({
+      value: "employees",
+      label: isDepartmentHead && !isHr ? "My Team" : "Employees",
+    });
+    return options;
+  }, [canApproveLeaves, canRequestLeave, isAdmin, isDepartmentHead, isHr]);
+
+  useEffect(() => {
+    if (!canApproveLeaves || isAdmin) return;
+    if (!canRequestLeave && listScope === "mine") {
+      setListScope("employees");
+    }
+  }, [canApproveLeaves, canRequestLeave, isAdmin, listScope]);
 
   const loadLeaveRequests = useCallback(
-    () => fetchLeaveRequests(isApprovalsMode ? "approvals" : "mine"),
-    [isApprovalsMode],
+    () => fetchLeaveRequests(listApiScope),
+    [listApiScope],
   );
 
   const { rows, loading, error, reload } = useListData(
     loadLeaveRequests,
     "Failed to load leave requests",
   );
-  const table = useDataTable(rows, {
+
+  const scopedRows = useMemo(() => {
+    if (isAdmin) return rows || [];
+    if (!canApproveLeaves) return rows || [];
+    const myId = user?.employeeId;
+    if (listScope === "mine") {
+      if (!myId) return [];
+      return (rows || []).filter((row) => row.employeeId === myId);
+    }
+    // employees
+    if (!myId) return rows || [];
+    return (rows || []).filter((row) => row.employeeId !== myId);
+  }, [canApproveLeaves, isAdmin, listScope, rows, user?.employeeId]);
+
+  const table = useDataTable(scopedRows, {
     columns: LEAVE_REQUEST_COLUMNS,
     searchKeys: LEAVE_REQUEST_SEARCH_KEYS,
-    initialVisibleColumnIds: getLeaveRequestDefaultVisibleIds(!isApprovalsMode),
+    initialVisibleColumnIds: getLeaveRequestDefaultVisibleIds(true),
     initialColumnFilters,
   });
+
   const [decisionTarget, setDecisionTarget] = useState(null);
   const [decisionStatus, setDecisionStatus] = useState("");
   const [deciding, setDeciding] = useState(false);
@@ -95,8 +156,59 @@ export function useLeaveRequests(mode = "mine") {
   const [cancelError, setCancelError] = useState("");
   const [viewTarget, setViewTarget] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
+  const [viewDirection, setViewDirection] = useState(null); // sent | received | null
+
+  // Auto-open the matching leave modal when arriving from a Sent/Received notification
+  useEffect(() => {
+    if (!urlLeaveId) return;
+
+    let cancelled = false;
+
+    async function openFromUrl() {
+      try {
+        setViewLoading(true);
+        const detailed = await fetchLeaveRequestById(urlLeaveId);
+        if (cancelled) return;
+        setViewTarget(detailed);
+        setViewDirection(
+          urlDirection === "sent" || urlDirection === "received"
+            ? urlDirection
+            : null,
+        );
+        // Clear deep-link params after opening so refresh doesn't re-open
+        setSearchParams(
+          (current) => {
+            const next = new URLSearchParams(current);
+            next.delete("id");
+            next.delete("direction");
+            return next;
+          },
+          { replace: true },
+        );
+      } catch {
+        if (cancelled) return;
+        setSearchParams(
+          (current) => {
+            const next = new URLSearchParams(current);
+            next.delete("id");
+            next.delete("direction");
+            return next;
+          },
+          { replace: true },
+        );
+      } finally {
+        if (!cancelled) setViewLoading(false);
+      }
+    }
+
+    openFromUrl();
+    return () => {
+      cancelled = true;
+    };
+  }, [urlLeaveId, urlDirection, setSearchParams]);
 
   async function openViewModal(request) {
+    setViewDirection(null);
     setViewTarget(request);
     if (!request?.id) return;
     try {
@@ -112,6 +224,7 @@ export function useLeaveRequests(mode = "mine") {
 
   function closeViewModal() {
     setViewTarget(null);
+    setViewDirection(null);
     setViewLoading(false);
   }
 
@@ -166,6 +279,13 @@ export function useLeaveRequests(mode = "mine") {
         decisionStatus,
         trimmed,
       );
+      const approved =
+        decisionStatus === "Approved" || decisionStatus === "TeamLeadApproved";
+      toast.success(
+        approved
+          ? "Leave request approved successfully"
+          : "Leave request rejected successfully",
+      );
       setDecisionTarget(null);
       setDecisionStatus("");
       setRemarks("");
@@ -173,6 +293,7 @@ export function useLeaveRequests(mode = "mine") {
       requestEmsRefresh();
     } catch (err) {
       setDecisionError(err.message || "Failed to update leave request");
+      toast.error(err.message || "Failed to update leave request");
     } finally {
       setDeciding(false);
     }
@@ -212,12 +333,14 @@ export function useLeaveRequests(mode = "mine") {
       setCancelError("");
       setCancelReasonError("");
       await cancelLeaveRequest(cancelTarget.id, reason);
+      toast.success("Leave request cancelled successfully");
       setCancelTarget(null);
       setCancelReason("");
       reload();
       requestEmsRefresh();
     } catch (err) {
       setCancelError(err.message || "Failed to cancel leave request");
+      toast.error(err.message || "Failed to cancel leave request");
     } finally {
       setCancelling(false);
     }
@@ -225,13 +348,12 @@ export function useLeaveRequests(mode = "mine") {
 
   function getLeaveActions(request) {
     const actions = [];
-    const ownRequest = request.employeeId === user?.employeeId;
     const asTeamLead = isTeamLeadForRequest(request, user?.employeeId);
 
-    if (isApprovalsMode) {
+    if (canApproveLeaves) {
       if (request.status === "Pending" && asTeamLead) {
         actions.push({
-          label: "Approve (TL)",
+          label: "Approve (Head)",
           onClick: () => openDecisionModal(request, "TeamLeadApproved"),
         });
         actions.push({
@@ -256,26 +378,27 @@ export function useLeaveRequests(mode = "mine") {
         });
       }
 
-      if (isHrAdmin && canHrApproveRequest(request)) {
+      if (isHr && canHrApproveRequest(request)) {
         actions.push({
           label: "Approve (HR)",
           onClick: () => openDecisionModal(request, "Approved"),
         });
       }
 
-      if (isHrAdmin && canHrRejectRequest(request)) {
+      if (isHr && canHrRejectRequest(request)) {
         actions.push({
           label: "Reject",
           tone: "danger",
           onClick: () => openRejectModal(request),
         });
       }
-
-      return actions;
     }
 
-    // Personal leave list: cancel only (no approve actions on own list).
-    if (canCancelLeaveRequest(request) && (ownRequest || isHrAdmin)) {
+    if (
+      canCancelLeaveRequest(request, {
+        employeeId: user?.employeeId,
+      })
+    ) {
       actions.push({
         label: "Cancel",
         tone: "danger",
@@ -287,16 +410,18 @@ export function useLeaveRequests(mode = "mine") {
   }
 
   return {
-    mode,
-    isApprovalsMode,
+    canApproveLeaves,
+    isAdmin,
+    isDepartmentHead,
+    listScope,
+    setListScope,
+    listScopeOptions,
     leaveRequests: table.rows,
     loading,
     error,
     reload,
     table,
     filterDefs: LEAVE_REQUEST_COLUMN_FILTERS,
-    isEmployee,
-    isHrAdmin,
     canRequestLeave,
     decisionTarget,
     decisionStatus,
@@ -320,6 +445,7 @@ export function useLeaveRequests(mode = "mine") {
     confirmCancel,
     viewTarget,
     viewLoading,
+    viewDirection,
     openViewModal,
     closeViewModal,
     getLeaveActions,
@@ -329,6 +455,7 @@ export function useLeaveRequests(mode = "mine") {
 export function useLeaveForm() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const toast = useToast();
   const [form, setForm] = useState({ ...EMPTY_LEAVE_FORM });
   const [fieldErrors, setFieldErrors] = useState({});
   const [employees, setEmployees] = useState([]);
@@ -336,10 +463,12 @@ export function useLeaveForm() {
   const [balances, setBalances] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState("");
 
   const availableLeaveTypes = leaveTypesForGender(gender, LEAVE_TYPES);
   const maternitySelected = isMaternityLeave(form.leaveType);
+  const medicalSelected = isMedicalLeave(form.leaveType);
 
   useEffect(() => {
     let cancelled = false;
@@ -348,6 +477,10 @@ export function useLeaveForm() {
       try {
         setLoading(true);
         setError("");
+
+        if (user?.role === ROLES.ADMIN) {
+          throw new Error("Admin accounts cannot submit leave requests");
+        }
 
         if (!user?.employeeId) {
           throw new Error("Your account is not linked to an employee record");
@@ -397,6 +530,10 @@ export function useLeaveForm() {
       const next = { ...current, [field]: value };
 
       if (field === "leaveType") {
+        if (!isMedicalLeave(value)) {
+          next.attachmentUrl = "";
+          next.attachmentName = "";
+        }
         if (isMaternityLeave(value)) {
           next.duration = "full";
           next.halfDaySession = "first_half";
@@ -481,6 +618,46 @@ export function useLeaveForm() {
     setError("");
   }
 
+  async function handleAttachmentChange(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      setUploadingAttachment(true);
+      setError("");
+      setFieldErrors((current) => {
+        const next = { ...current };
+        delete next.attachmentUrl;
+        return next;
+      });
+      const uploaded = await uploadLeaveMedicalDocument(file);
+      setForm((current) => ({
+        ...current,
+        attachmentUrl: uploaded.url,
+        attachmentName: uploaded.originalName || file.name,
+      }));
+    } catch (err) {
+      setError(err.message || "Failed to upload medical document");
+      toast.error(err.message || "Failed to upload medical document");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  }
+
+  function clearAttachment() {
+    setForm((current) => ({
+      ...current,
+      attachmentUrl: "",
+      attachmentName: "",
+    }));
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next.attachmentUrl;
+      return next;
+    });
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     const validation = validateLeaveForm(form, { gender });
@@ -495,10 +672,12 @@ export function useLeaveForm() {
       setError("");
       setFieldErrors({});
       await createLeaveRequest(toLeavePayload(form));
+      toast.crudSuccess("Leave request", "create");
       requestEmsRefresh();
       navigate("/leave-requests");
     } catch (err) {
       setError(err.message || "Failed to create leave request");
+      toast.error(err.message || "Failed to create leave request");
     } finally {
       setSaving(false);
     }
@@ -515,13 +694,17 @@ export function useLeaveForm() {
     gender,
     availableLeaveTypes,
     maternitySelected,
+    medicalSelected,
     halfDaySelected: !maternitySelected && form.duration === "half",
     maternityHelp: MATERNITY_LEAVE_HELP,
     balances,
     loading,
     saving,
+    uploadingAttachment,
     error,
     updateField,
+    handleAttachmentChange,
+    clearAttachment,
     handleSubmit,
     handleCancel,
   };

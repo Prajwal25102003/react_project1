@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt'
 import { query } from '../config/db.js'
+import { loginRoleForEmployee } from '../utils/loginRole.js'
 
 const BCRYPT_ROUNDS = 10
 
@@ -117,6 +118,28 @@ export async function updateEmployeeUserCredentials(
     [existing.id, nextEmail, nextName, nextHash, nextRole],
   )
   return mapUser(result.rows[0])
+}
+
+/**
+ * Recompute employee/hr login roles for everyone in a department.
+ * Admin-linked accounts are left unchanged.
+ */
+export async function syncDepartmentEmployeeLoginRoles(department) {
+  if (!department?.id) return
+
+  const result = await query(
+    `SELECT id FROM employees WHERE department_id = $1`,
+    [department.id],
+  )
+
+  for (const row of result.rows) {
+    const role = loginRoleForEmployee({
+      departmentName: department.name,
+      employeeId: row.id,
+      headEmployeeId: department.headEmployeeId,
+    })
+    await updateEmployeeUserCredentials(row.id, { role })
+  }
 }
 
 export async function verifyPassword(plainPassword, passwordHash) {

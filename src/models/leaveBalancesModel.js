@@ -7,10 +7,16 @@ export const DEFAULT_LEAVE_BALANCES = {
 };
 
 export function normalizeLeaveBalances(source = {}) {
+  const casualLeaveBalance = Math.max(0, Number(source.casualLeaveBalance ?? 0));
+  const sickLeaveBalance = Math.max(0, Number(source.sickLeaveBalance ?? 0));
+  const lopDays = Math.max(0, Number(source.lopDays ?? 0));
+
   return {
-    casualLeaveBalance: Math.max(0, Number(source.casualLeaveBalance ?? 0)),
-    sickLeaveBalance: Math.max(0, Number(source.sickLeaveBalance ?? 0)),
-    lopDays: Math.max(0, Number(source.lopDays ?? 0)),
+    casualLeaveBalance,
+    sickLeaveBalance,
+    lopDays,
+    /** Paid leave days still available (casual + sick). */
+    totalAvailable: casualLeaveBalance + sickLeaveBalance,
     pendingLeaveCount:
       source.pendingLeaveCount === undefined || source.pendingLeaveCount === null
         ? null
@@ -18,11 +24,17 @@ export function normalizeLeaveBalances(source = {}) {
   };
 }
 
+/** Total paid leave days still available. */
+export function totalLeavesAvailable(source = {}) {
+  return normalizeLeaveBalances(source).totalAvailable;
+}
+
 /**
  * Preview how a leave request will consume quotas on approval.
  * Medical/Sick → sick → casual → LOP
  * Casual → casual → sick → LOP
  * Maternity → paid separately (no sick/casual/LOP change)
+ * Work from Home → no sick/casual/LOP change
  * Loss of Pay / other → LOP
  * LOP only after both casual and sick paid quotas are used up
  * (except when the leave type is explicitly Loss of Pay).
@@ -62,6 +74,19 @@ export function previewLeaveDeduction(balances, leaveType, leaveDays) {
       willUseLop: false,
       summary:
         "Paid maternity leave (2 weeks before + 24 weeks after delivery). Casual and sick balances are not reduced.",
+    };
+  }
+
+  if (type === "Work from Home") {
+    return {
+      ...current,
+      after: { casualLeaveBalance: casual, sickLeaveBalance: sick, lopDays: lop },
+      fromSick,
+      fromCasual,
+      fromLop,
+      willUseLop: false,
+      summary:
+        "Work from home does not reduce casual, sick, or LOP balances.",
     };
   }
 

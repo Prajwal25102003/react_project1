@@ -19,7 +19,11 @@ CREATE TABLE IF NOT EXISTS recent_activities (
       'Absent',
       'Half Day'
     )
-  )
+  ),
+  event_type VARCHAR(60),
+  subject_employee_id VARCHAR(20),
+  actor_employee_id VARCHAR(20),
+  meta JSONB
 );
 
 INSERT INTO recent_activities (id, title, description, category, activity_time, status) VALUES

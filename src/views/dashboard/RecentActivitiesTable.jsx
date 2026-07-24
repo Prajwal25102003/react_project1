@@ -1,16 +1,32 @@
+import { useNavigate } from "react-router-dom";
 import StatusPill from "../components/StatusPill.jsx";
 
 /** Visible rows before the rest scroll (invisible scrollbar). */
 const VISIBLE_ACTIVITY_ROWS = 5;
 
-function ActivityCard({ activity }) {
+function ActivityCard({ activity, onClick }) {
+  const isClickable = Boolean(activity.href);
+
   return (
     <article
-      className={
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onClick={isClickable ? () => onClick?.(activity) : undefined}
+      onKeyDown={
+        isClickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick?.(activity);
+              }
+            }
+          : undefined
+      }
+      className={`${
         activity.isNew
           ? "rounded-xl border border-brand-100 bg-brand-50/70 p-3"
           : "rounded-xl border border-gray-100 bg-white p-3"
-      }
+      } ${isClickable ? "cursor-pointer transition hover:border-brand-200 hover:shadow-sm" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
@@ -47,10 +63,17 @@ function RecentActivitiesTable({
   title = "Recent Activities",
   compact = false,
 }) {
+  const navigate = useNavigate();
   const needsScroll = activities.length > VISIBLE_ACTIVITY_ROWS;
   // ~5 table rows (title + description) or ~5 stacked cards
   const scrollMaxClass = compact ? "max-h-[17.5rem]" : "max-h-[20rem]";
   const cardScrollMaxClass = compact ? "max-h-[22rem]" : "max-h-[24rem]";
+
+  function handleActivityClick(activity) {
+    if (activity.href) {
+      navigate(activity.href);
+    }
+  }
 
   return (
     <div
@@ -82,7 +105,11 @@ function RecentActivitiesTable({
             }`}
           >
             {activities.map((activity) => (
-              <ActivityCard key={activity.id} activity={activity} />
+              <ActivityCard
+                key={activity.id}
+                activity={activity}
+                onClick={handleActivityClick}
+              />
             ))}
           </div>
 
@@ -128,46 +155,78 @@ function RecentActivitiesTable({
               </thead>
 
               <tbody className="divide-y divide-gray-100">
-                {activities.map((activity) => (
-                  <tr
-                    key={activity.id}
-                    className={activity.isNew ? "bg-brand-50/70" : undefined}
-                  >
-                    <td className={compact ? "py-2 pr-3" : "py-3 pr-4"}>
-                      <div className="flex items-start gap-2">
-                        <div className="min-w-0">
-                          <p className="text-theme-sm font-medium text-gray-800">
-                            {activity.title}
-                          </p>
-                          <span className="break-words text-theme-xs text-gray-500">
-                            {activity.description}
-                          </span>
+                {activities.map((activity) => {
+                  const isClickable = Boolean(activity.href);
+                  return (
+                    <tr
+                      key={activity.id}
+                      role={isClickable ? "button" : undefined}
+                      tabIndex={isClickable ? 0 : undefined}
+                      onClick={
+                        isClickable
+                          ? () => handleActivityClick(activity)
+                          : undefined
+                      }
+                      onKeyDown={
+                        isClickable
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleActivityClick(activity);
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`${activity.isNew ? "bg-brand-50/70" : ""} ${
+                        isClickable
+                          ? "cursor-pointer transition hover:bg-gray-50"
+                          : ""
+                      }`}
+                    >
+                      <td className={compact ? "py-2 pr-3" : "py-3 pr-4"}>
+                        <div className="flex items-start gap-2">
+                          <div className="min-w-0">
+                            <p
+                              className={`text-theme-sm font-medium ${
+                                activity.direction === "sent"
+                                  ? "text-brand-500"
+                                  : activity.direction === "received"
+                                    ? "text-gray-800"
+                                    : "text-gray-800"
+                              }`}
+                            >
+                              {activity.title}
+                            </p>
+                            <span className="break-words text-theme-xs text-gray-500">
+                              {activity.description}
+                            </span>
+                          </div>
+                          {activity.isNew ? (
+                            <span className="shrink-0 rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+                              New
+                            </span>
+                          ) : null}
                         </div>
-                        {activity.isNew ? (
-                          <span className="shrink-0 rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
-                            New
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className={compact ? "py-2 pr-2" : "py-3 pr-2"}>
-                      <p className="truncate text-theme-sm text-gray-500">
-                        {activity.category}
-                      </p>
-                    </td>
-                    <td className={compact ? "py-2 pr-2" : "py-3 pr-2"}>
-                      <p className="whitespace-nowrap text-theme-sm text-gray-500">
-                        {activity.time}
-                      </p>
-                    </td>
-                    <td className={compact ? "py-2" : "py-3"}>
-                      <StatusPill
-                        label={activity.status}
-                        statusClass={activity.statusClass}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className={compact ? "py-2 pr-2" : "py-3 pr-2"}>
+                        <p className="truncate text-theme-sm text-gray-500">
+                          {activity.category}
+                        </p>
+                      </td>
+                      <td className={compact ? "py-2 pr-2" : "py-3 pr-2"}>
+                        <p className="whitespace-nowrap text-theme-sm text-gray-500">
+                          {activity.time}
+                        </p>
+                      </td>
+                      <td className={compact ? "py-2" : "py-3"}>
+                        <StatusPill
+                          label={activity.status}
+                          statusClass={activity.statusClass}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

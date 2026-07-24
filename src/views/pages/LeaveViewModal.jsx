@@ -1,9 +1,14 @@
 import ModalShell from "../components/ModalShell.jsx";
 import LeaveBalancePanel from "../components/LeaveBalancePanel.jsx";
+import LeaveApprovalStepper from "../components/LeaveApprovalStepper.jsx";
 import StatusPill from "../components/StatusPill.jsx";
 import { LABEL_CLASS } from "../../models/formLayoutModel.js";
 import { normalizeLeaveBalances } from "../../models/leaveBalancesModel.js";
-import { formatLeaveDaysLabel } from "../../models/leaveRequestsModel.js";
+import {
+  attachmentFileLabel,
+  buildLeaveApprovalSteps,
+  formatLeaveDaysLabel,
+} from "../../models/leaveRequestsModel.js";
 
 function DetailItem({ label, children }) {
   return (
@@ -15,7 +20,7 @@ function DetailItem({ label, children }) {
 }
 
 function actionTone(action) {
-  if (action === "Approved" || action === "Submitted") {
+  if (action === "Approved" || action === "Submitted" || action === "Requested") {
     return "bg-success-50 text-success-700";
   }
   if (action === "Rejected" || action === "Cancelled") {
@@ -24,27 +29,57 @@ function actionTone(action) {
   return "bg-gray-100 text-gray-700";
 }
 
-function LeaveViewModal({ request, onClose, actions = [] }) {
+function LeaveViewModal({ request, direction = null, onClose }) {
   if (!request) return null;
 
   const history = (request.approvalHistory || []).filter(
     (entry) =>
       entry.step !== "Submit" &&
       entry.action !== "Submitted" &&
-      entry.stepLabel !== "Submitted",
+      entry.stepLabel !== "Submitted" &&
+      entry.stepLabel !== "Requested",
   );
 
   const balances = normalizeLeaveBalances(request);
   const showBalancePreview =
     request.status === "Pending" || request.status === "TeamLeadApproved";
+  const approvalSteps = buildLeaveApprovalSteps(request);
+  const directionLabel =
+    direction === "sent" ? "Sent" : direction === "received" ? "Received" : null;
 
   return (
     <ModalShell
       onClose={onClose}
-      title="Leave Request Details"
-      description={`${request.employeeId || "Employee"}${request.employeeName ? ` · ${request.employeeName}` : ""}`}
       panelClassName="relative mx-auto w-full min-w-0 max-w-[min(720px,calc(100vw-2.5rem))] rounded-3xl bg-white p-5 lg:p-8"
     >
+      <div className="mb-5 pr-10 sm:mb-6 lg:mb-7">
+        <div className="min-w-0 px-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-2xl font-semibold text-gray-800">
+              Leave Request Details
+            </h4>
+            {directionLabel ? (
+              <span
+                className={
+                  direction === "sent"
+                    ? "rounded-full bg-brand-50 px-2.5 py-0.5 text-theme-xs font-medium text-brand-500"
+                    : "rounded-full bg-gray-100 px-2.5 py-0.5 text-theme-xs font-medium text-gray-600"
+                }
+              >
+                {directionLabel}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm text-gray-500">
+            {request.employeeId || "Employee"}
+            {request.employeeName ? ` · ${request.employeeName}` : ""}
+          </p>
+          <div className="mt-4 flex w-full justify-center">
+            <LeaveApprovalStepper steps={approvalSteps} />
+          </div>
+        </div>
+      </div>
+
       <div className="no-scrollbar max-h-[min(70vh,640px)] space-y-4 overflow-y-auto px-1">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           <DetailItem label="Employee ID">{request.employeeId || "—"}</DetailItem>
@@ -101,6 +136,20 @@ function LeaveViewModal({ request, onClose, actions = [] }) {
           </p>
         </div>
 
+        {request.attachmentUrl ? (
+          <div className="min-w-0 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+            <p className={LABEL_CLASS}>Medical Document</p>
+            <a
+              href={request.attachmentUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
+            >
+              View / download {attachmentFileLabel(request.attachmentUrl)}
+            </a>
+          </div>
+        ) : null}
+
         <div className="min-w-0">
           <p className={`${LABEL_CLASS} mb-2`}>Approval History</p>
           {history.length === 0 ? (
@@ -142,35 +191,6 @@ function LeaveViewModal({ request, onClose, actions = [] }) {
           )}
         </div>
       </div>
-
-      {actions.length > 0 ? (
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-gray-100 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50"
-          >
-            Close
-          </button>
-          {actions.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              onClick={() => {
-                onClose();
-                action.onClick?.();
-              }}
-              className={
-                action.tone === "danger"
-                  ? "rounded-lg border border-error-300 bg-white px-4 py-2.5 text-sm font-medium text-error-600 shadow-theme-xs hover:bg-error-50"
-                  : "rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
-              }
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
     </ModalShell>
   );
 }

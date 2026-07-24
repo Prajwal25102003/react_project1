@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
+import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
 import { HR_ADMIN_ROLES } from "../models/authModel.js";
@@ -30,6 +31,7 @@ import { requestEmsRefresh } from "../utils/emsRefresh.js";
 import { sanitizeIndianPhoneInput } from "../utils/indianPhone.js";
 
 export function useEmployees() {
+  const toast = useToast();
   const { rows, loading, error, reload } = useListData(
     fetchEmployees,
     "Failed to load employees",
@@ -110,6 +112,7 @@ export function useEmployees() {
       setDeleting(true);
       setDeleteError("");
       await deleteEmployee(deleteTarget.id);
+      toast.crudSuccess("Employee", "delete");
       setDeleteTarget(null);
       reload();
       requestEmsRefresh();
@@ -142,6 +145,7 @@ export function useEmployees() {
 export function useEmployeeForm(employeeId) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const toast = useToast();
   const isEdit = Boolean(employeeId);
   const canManageCredentials = HR_ADMIN_ROLES.includes(user?.role);
   const showPasswordFields = !isEdit || canManageCredentials;
@@ -149,6 +153,7 @@ export function useEmployeeForm(employeeId) {
   const [form, setForm] = useState({ ...EMPTY_EMPLOYEE_FORM });
   const [fieldErrors, setFieldErrors] = useState({});
   const [departments, setDepartments] = useState([]);
+  const [isAdminAccount, setIsAdminAccount] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -172,12 +177,14 @@ export function useEmployeeForm(employeeId) {
           if (cancelled) return;
 
           setDepartments(departmentRows);
+          setIsAdminAccount(Boolean(employee.isAdminAccount));
           setForm(toEmployeeFormValues(employee));
         } else {
           const departmentRows = await fetchDepartments();
           if (cancelled) return;
 
           setDepartments(departmentRows);
+          setIsAdminAccount(false);
           setForm({
             ...EMPTY_EMPLOYEE_FORM,
             departmentId: departmentRows[0]?.id || "",
@@ -257,6 +264,7 @@ export function useEmployeeForm(employeeId) {
     const validation = validateEmployeeForm(form, {
       isEdit,
       canManageCredentials,
+      isAdminAccount,
     });
     if (!validation.ok) {
       setFieldErrors(validation.fieldErrors);
@@ -275,12 +283,15 @@ export function useEmployeeForm(employeeId) {
       const payload = toEmployeePayload(form, {
         includeCredentials,
         includePassword,
+        isAdminAccount,
       });
 
       if (isEdit) {
         await updateEmployee(employeeId, payload);
+        toast.crudSuccess("Employee", "update");
       } else {
         await createEmployee(payload);
+        toast.crudSuccess("Employee", "create");
       }
 
       requestEmsRefresh();
@@ -301,6 +312,7 @@ export function useEmployeeForm(employeeId) {
     form,
     fieldErrors,
     departments,
+    isAdminAccount,
     loading,
     saving,
     uploadingAvatar,

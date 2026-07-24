@@ -23,8 +23,6 @@ function AppShell() {
           onToggleSidebar={toggleSidebar}
           menuToggle={header.menuToggle}
           onToggleMenu={header.toggleMenu}
-          searchQuery={header.searchQuery}
-          onSearchChange={header.setSearchQuery}
           notificationsOpen={header.notificationsOpen}
           onToggleNotifications={header.toggleNotifications}
           onCloseNotifications={header.closeNotifications}

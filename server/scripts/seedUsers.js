@@ -2,7 +2,8 @@
  * Ensures users table exists and upserts login accounts.
  * Password for all users: 12345678
  *
- * - One user per employee (employee email + department-based role)
+ * - One user per employee
+ * - HR login role only for the Human Resources department head
  * - Demo accounts: hr@company.com, admin@company.com, arjuntejas@company.com
  *
  * Usage:
@@ -14,7 +15,7 @@ import dotenv from 'dotenv'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import pool, { connectDatabase, query } from '../config/db.js'
-import { loginRoleForDepartmentName } from '../utils/loginRole.js'
+import { loginRoleForEmployee } from '../utils/loginRole.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../.env') })
@@ -24,18 +25,29 @@ const forceReset = process.argv.includes('--force')
 
 async function resolveEmployeeUsers() {
   const result = await query(
-    `SELECT e.id, e.name, e.email, d.name AS department_name
+    `SELECT
+       e.id,
+       e.name,
+       e.email,
+       d.name AS department_name,
+       d.head_employee_id AS head_employee_id
      FROM employees e
      LEFT JOIN departments d ON d.id = e.department_id
      ORDER BY e.id ASC`,
   )
 
-  return result.rows.map((row) => ({
-    email: row.email,
-    role: loginRoleForDepartmentName(row.department_name),
-    name: row.name,
-    employeeId: row.id,
-  }))
+  return result.rows
+    .filter((row) => row.id !== 'EMP-1')
+    .map((row) => ({
+      email: row.email,
+      role: loginRoleForEmployee({
+        departmentName: row.department_name,
+        employeeId: row.id,
+        headEmployeeId: row.head_employee_id,
+      }),
+      name: row.name,
+      employeeId: row.id,
+    }))
 }
 
 async function resolveDemoUsers(employees) {
@@ -47,6 +59,11 @@ async function resolveDemoUsers(employees) {
     employees.find((row) => row.employeeId !== hrEmployee?.employeeId) ||
     employees[0] ||
     null
+
+  const adminEmployeeResult = await query(
+    `SELECT id, name FROM employees WHERE id = 'EMP-1' LIMIT 1`,
+  )
+  const adminEmployee = adminEmployeeResult.rows[0] || null
 
   return [
     {
@@ -64,8 +81,8 @@ async function resolveDemoUsers(employees) {
     {
       email: 'admin@company.com',
       role: 'admin',
-      name: byId['EMP-1']?.name || 'Rahul Aman',
-      employeeId: byId['EMP-1']?.employeeId || null,
+      name: adminEmployee?.name || 'System Admin',
+      employeeId: adminEmployee?.id || 'EMP-1',
     },
   ]
 }
@@ -117,13 +134,9 @@ async function seed() {
   const demoUsers = await resolveDemoUsers(employeeUsers)
 
   for (const user of employeeUsers) {
-    // Demo admin@company.com owns EMP-1; skip the department-based login for that employee.
-    if (user.employeeId === 'EMP-1') continue
     await upsertUser(user, passwordHash)
   }
-  console.log(
-    `Seeded ${employeeUsers.filter((u) => u.employeeId !== 'EMP-1').length} employee login(s)`,
-  )
+  console.log(`Seeded ${employeeUsers.length} employee login(s)`)
 
   for (const user of demoUsers) {
     await upsertUser(user, passwordHash)

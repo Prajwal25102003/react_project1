@@ -84,7 +84,13 @@ function TableCell({ column, row, getActions, clamp = false }) {
           className={`h-2 w-2 shrink-0 rounded-full ${row.typeDotClass || "bg-gray-400"}`}
           aria-hidden="true"
         />
-        <span className="truncate text-theme-sm font-medium text-gray-800">
+        <span
+          className={
+            column.wrap
+              ? "whitespace-normal break-words text-theme-sm font-medium text-gray-800"
+              : "truncate text-theme-sm font-medium text-gray-800"
+          }
+        >
           {display}
         </span>
       </div>
@@ -312,6 +318,8 @@ function DataTable({
   hideToolbar = false,
   /** Tighter cell padding for dense layouts. */
   dense = false,
+  /** Stretch to fill parent height with pagination pinned to the bottom. */
+  fillHeight = false,
 }) {
   const [periodModes, setPeriodModes] = useState(() =>
     initialPeriodModes(filterDefs),
@@ -337,6 +345,12 @@ function DataTable({
         (onToggleColumn && allColumns) ||
         onPageSizeChange,
     );
+  const fillRowsEvenly =
+    fillHeight && pageSize > 0 && rows.length >= pageSize;
+  const fillRowHeight = fillRowsEvenly
+    ? `${100 / rows.length}%`
+    : undefined;
+  const rowAlign = fillRowsEvenly ? "align-middle" : "align-top";
 
   function handleClearFilters() {
     setPeriodModes(initialPeriodModes(filterDefs));
@@ -350,7 +364,13 @@ function DataTable({
 
   return (
     <div
-      className={`min-w-0 max-w-full overflow-x-hidden ${showToolbar ? "space-y-4" : "space-y-3"}`}
+      className={[
+        "min-w-0 max-w-full overflow-x-hidden",
+        fillHeight ? "flex h-full min-h-0 flex-col" : "",
+        showToolbar ? "space-y-4" : fillHeight ? "gap-3" : "space-y-3",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       {showToolbar ? (
       <div className="flex min-w-0 w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -537,31 +557,45 @@ function DataTable({
       ) : null}
 
       <div
-        className={
+        className={[
+          "overflow-hidden rounded-xl border border-gray-200 bg-white",
           showMobileCards
-            ? "hidden overflow-hidden rounded-xl border border-gray-200 bg-white md:block"
-            : "overflow-hidden rounded-xl border border-gray-200 bg-white"
-        }
+            ? fillHeight
+              ? "relative hidden min-h-0 flex-1 md:block"
+              : "hidden md:block"
+            : fillHeight
+              ? "relative min-h-0 flex-1"
+              : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
       >
         <div
           className={
-            fitWidth
-              ? "w-full overflow-x-auto lg:overflow-x-visible"
-              : "max-w-full overflow-x-auto"
+            fillHeight
+              ? fitWidth
+                ? "absolute inset-0 overflow-x-auto overflow-y-hidden lg:overflow-x-visible"
+                : "absolute inset-0 overflow-x-auto overflow-y-hidden"
+              : fitWidth
+                ? "w-full overflow-x-auto lg:overflow-x-visible"
+                : "max-w-full overflow-x-auto"
           }
         >
           <table
-            className={
+            className={[
               fitWidth
                 ? "min-w-[720px] w-full lg:min-w-0 lg:table-fixed"
-                : "min-w-full"
-            }
+                : "min-w-full",
+              fillHeight ? "h-full" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
           >
             <thead>
               <tr className="border-b border-gray-100">
                 {columns.map((column) => {
                   const cellClass = [
-                    `${cellPad} text-left align-top`,
+                    `${cellPad} text-left ${rowAlign}`,
                     column.nowrap && !column.wrap ? "whitespace-nowrap" : "",
                     column.cellClassName || "",
                   ]
@@ -594,7 +628,7 @@ function DataTable({
             </thead>
             <tbody className="divide-y divide-gray-100">
               {rows.length === 0 ? (
-                <tr>
+                <tr className={fillHeight ? "h-full" : undefined}>
                   <td
                     colSpan={columns.length}
                     className={`${bodyPad} py-8 text-center`}
@@ -606,6 +640,9 @@ function DataTable({
                 rows.map((row) => (
                   <tr
                     key={row[rowKey]}
+                    style={
+                      fillRowHeight ? { height: fillRowHeight } : undefined
+                    }
                     className={
                       onRowClick
                         ? "cursor-pointer hover:bg-gray-50/80"
@@ -613,9 +650,9 @@ function DataTable({
                     }
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                   >
-                    {columns.map((column) => {
+                    {columns.map((column, columnIndex) => {
                       const cellClass = [
-                        `${bodyPad} align-top`,
+                        `${bodyPad} ${rowAlign}`,
                         column.nowrap && !column.wrap
                           ? "whitespace-nowrap"
                           : "",
@@ -629,6 +666,11 @@ function DataTable({
                         <td
                           key={column.id}
                           className={cellClass}
+                          style={
+                            fillRowHeight && columnIndex === 0
+                              ? { height: fillRowHeight }
+                              : undefined
+                          }
                           onClick={
                             stopRowClick
                               ? (event) => event.stopPropagation()
@@ -654,7 +696,13 @@ function DataTable({
 
       {onPageChange ? (
         <div
-          className={`flex min-w-0 w-full flex-col gap-2 max-sm:items-stretch sm:flex-row sm:items-center sm:justify-between ${dense ? "pt-1" : ""}`}
+          className={[
+            "flex min-w-0 w-full flex-col gap-2 max-sm:items-stretch sm:flex-row sm:items-center sm:justify-between",
+            dense ? "pt-1" : "",
+            fillHeight ? "mt-auto shrink-0" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
           <p className="min-w-0 text-theme-xs text-gray-500 sm:text-theme-sm">
             {total === 0

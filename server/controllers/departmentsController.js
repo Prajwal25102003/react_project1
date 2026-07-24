@@ -8,6 +8,7 @@ import {
   updateDepartment,
 } from '../models/departmentsModel.js'
 import { findEmployeeById } from '../models/employeesModel.js'
+import { syncDepartmentEmployeeLoginRoles } from '../models/authModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
@@ -83,6 +84,8 @@ export async function createDepartmentHandler(req, res) {
     const id = await generateNextDepartmentId()
     const created = await createDepartment({ ...department, id })
 
+    await syncDepartmentEmployeeLoginRoles(created)
+
     await createRecentActivity({
       title: 'New department created',
       description: `${created.name} was added to the organization.`,
@@ -118,9 +121,32 @@ export async function updateDepartmentHandler(req, res) {
       }
     }
 
+    const existing = await findDepartmentById(req.params.id)
+    if (!existing) {
+      return res.status(404).json({ message: 'Department not found' })
+    }
+
     const updated = await updateDepartment(req.params.id, department)
     if (!updated) {
       return res.status(404).json({ message: 'Department not found' })
+    }
+
+    await syncDepartmentEmployeeLoginRoles(updated)
+    // If the head moved from another department, refresh that dept's roles too.
+    if (
+      existing.headEmployeeId &&
+      existing.headEmployeeId !== updated.headEmployeeId
+    ) {
+      const previousHead = await findEmployeeById(existing.headEmployeeId)
+      if (
+        previousHead?.departmentId &&
+        previousHead.departmentId !== updated.id
+      ) {
+        const previousDept = await findDepartmentById(previousHead.departmentId)
+        if (previousDept) {
+          await syncDepartmentEmployeeLoginRoles(previousDept)
+        }
+      }
     }
 
     await createRecentActivity({
