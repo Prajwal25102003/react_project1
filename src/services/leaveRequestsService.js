@@ -1,4 +1,4 @@
-import { fetchJson } from "./apiService.js";
+import { fetchFormData, fetchJson } from "./apiService.js";
 import { mapLeaveRequest } from "../models/leaveRequestsModel.js";
 
 export async function fetchLeaveRequests(scope = "mine") {
@@ -25,6 +25,22 @@ export async function createLeaveRequest(payload) {
     { method: "POST", body: payload },
   );
   return mapLeaveRequest(data.leaveRequest);
+}
+
+export async function uploadLeaveMedicalDocument(file) {
+  const formData = new FormData();
+  formData.append("document", file);
+
+  const data = await fetchFormData(
+    "/api/uploads/leave-medical",
+    "Failed to upload medical document",
+    formData,
+  );
+
+  return {
+    url: data.url,
+    originalName: data.originalName || file?.name || "",
+  };
 }
 
 export async function updateLeaveRequestStatus(id, status, remarks) {

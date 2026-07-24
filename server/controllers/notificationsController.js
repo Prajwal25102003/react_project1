@@ -1,6 +1,9 @@
+import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
 import {
+  findNotificationsForAdmin,
   findNotificationsForEmployee,
   findNotificationsForOrg,
+  findNotificationsForTeamLead,
 } from '../models/notificationsModel.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import { mapActivityRows } from '../utils/relativeTime.js'
@@ -54,11 +57,15 @@ export async function getNotifications(req, res) {
           message: 'Your account is not linked to an employee record',
         })
       }
-      rows = withAudience(
-        await findNotificationsForEmployee(req.user.employeeId),
-        'self',
-      )
-    } else if (role === 'hr' || role === 'admin') {
+
+      const isTeamLead = await isEmployeeDepartmentHead(req.user.employeeId)
+      rows = isTeamLead
+        ? await findNotificationsForTeamLead(req.user.employeeId)
+        : await findNotificationsForEmployee(req.user.employeeId)
+    } else if (role === 'admin') {
+      // Admin maintains modules + HR leave approvals only.
+      rows = withAudience(await findNotificationsForAdmin(10), 'org')
+    } else if (role === 'hr') {
       const orgRows = await findNotificationsForOrg(10)
       if (req.user.employeeId) {
         const personalRows = await findNotificationsForEmployee(
@@ -73,7 +80,12 @@ export async function getNotifications(req, res) {
       return res.status(403).json({ message: 'Unauthorized' })
     }
 
-    const notifications = mapActivityRows(rows)
+    const viewer = {
+      employeeId: req.user?.employeeId || null,
+      role: req.user?.role || null,
+      name: req.user?.name || null,
+    }
+    const notifications = mapActivityRows(rows, viewer)
 
     res.json({ notifications })
   } catch (error) {

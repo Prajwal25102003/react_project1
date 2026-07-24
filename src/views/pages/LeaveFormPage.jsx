@@ -25,13 +25,17 @@ function LeaveFormPage() {
     employees,
     availableLeaveTypes,
     maternitySelected,
+    medicalSelected,
     halfDaySelected,
     maternityHelp,
     balances,
     loading,
     saving,
+    uploadingAttachment,
     error,
     updateField,
+    handleAttachmentChange,
+    clearAttachment,
     handleSubmit,
     handleCancel,
   } = useLeaveForm();
@@ -44,7 +48,7 @@ function LeaveFormPage() {
       <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden sm:space-y-6">
         <PageCard
           title="Create Leave Request"
-          subtitle="Submit a new leave request for approval. Paid quota is 1 casual + 1 sick leave; LOP applies only after both are finished. Maternity is a separate paid entitlement for female employees. Half-day leave counts as 0.5 day."
+          subtitle="Submit a new leave request for approval. Paid quota is 1 casual + 1 sick leave; LOP applies only after both are finished. Maternity is a separate paid entitlement for female employees. Work from home does not reduce leave balances. Medical leave requires a supporting document. Half-day leave counts as 0.5 day."
           bodyClassName="p-5 sm:p-6"
         >
           {loading ? (
@@ -241,6 +245,49 @@ function LeaveFormPage() {
                 <FieldError message={fieldErrors.reason} />
               </div>
 
+              {medicalSelected ? (
+                <div>
+                  <label className={LABEL_CLASS}>
+                    Medical Document <RequiredMark />
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*,.pdf,application/pdf"
+                      onChange={handleAttachmentChange}
+                      disabled={uploadingAttachment || saving}
+                      className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600 disabled:opacity-60"
+                    />
+                    <p className="text-theme-xs text-gray-500">
+                      {uploadingAttachment
+                        ? "Uploading document…"
+                        : "Required for medical leave. PDF or image — max 5MB."}
+                    </p>
+                    {form.attachmentUrl ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <a
+                          href={form.attachmentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-theme-sm font-medium text-brand-500 hover:text-brand-600"
+                        >
+                          {form.attachmentName || "View uploaded document"}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={clearAttachment}
+                          disabled={uploadingAttachment || saving}
+                          className="text-theme-sm font-medium text-error-600 hover:text-error-700 disabled:opacity-60"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <FieldError message={fieldErrors.attachmentUrl} />
+                </div>
+              ) : null}
+
               {error ? (
                 <div className="rounded-xl border border-error-500 bg-error-50 p-4">
                   <p className="text-sm text-error-700">{error}</p>
@@ -250,7 +297,7 @@ function LeaveFormPage() {
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || uploadingAttachment}
                   className="w-full rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60 sm:w-auto"
                 >
                   {saving ? "Submitting…" : "Submit Request"}
@@ -258,7 +305,7 @@ function LeaveFormPage() {
                 <button
                   type="button"
                   onClick={handleCancel}
-                  disabled={saving}
+                  disabled={saving || uploadingAttachment}
                   className="w-full rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:opacity-60 sm:w-auto"
                 >
                   Cancel

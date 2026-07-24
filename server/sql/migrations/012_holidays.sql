@@ -27,6 +27,7 @@ CREATE INDEX IF NOT EXISTS idx_holidays_type
 
 INSERT INTO holidays (id, name, holiday_date, holiday_type, description)
 VALUES
+  ('HOL-1000', 'New Year Day', '2026-01-01', 'National Holiday', 'Public Holiday'),
   ('HOL-1001', 'Republic Day', '2026-01-26', 'National Holiday', 'Public Holiday'),
   ('HOL-1002', 'Holi', '2026-03-03', 'Festival Holiday', 'Festival of Colors'),
   ('HOL-1003', 'Good Friday', '2026-04-03', 'Optional Holiday', 'Optional Holiday'),

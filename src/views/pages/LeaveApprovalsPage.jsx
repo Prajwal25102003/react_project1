@@ -1,8 +1,8 @@
-import LeaveRequestsPage from "./LeaveRequestsPage.jsx";
+import { Navigate } from "react-router-dom";
 
-/** Department head / HR module for approving employee leave requests. */
+/** Legacy route — HR / team lead use the unified Leave Requests page. */
 function LeaveApprovalsPage() {
-  return <LeaveRequestsPage mode="approvals" />;
+  return <Navigate to="/leave-requests" replace />;
 }
 
 export default LeaveApprovalsPage;

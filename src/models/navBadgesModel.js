@@ -10,13 +10,9 @@ const LEAVE_APPROVAL_STATUSES = new Set(["Pending", "TeamLeadApproved"]);
 
 /**
  * Resolve which nav module(s) should show a badge for one notification.
- * Each module only receives messages that belong to it.
  *
- * Leave:
- * - personal + still open (Pending) → My Leave Requests
- * - personal + closed (Approved/Rejected/Cancelled) → no sidebar badge
- * - org/team awaiting decision → Employee Leave Requests (approvals count)
- * - org-wide leave outcomes → no sidebar module badge
+ * Leave: open personal leave → Leave Requests; actionable org/team leave → Leave Requests.
+ * Closed leave outcomes do not badge the sidebar.
  */
 export function navIdsForNotification(
   notification,
@@ -34,7 +30,6 @@ export function navIdsForNotification(
   if (category === "Leave") {
     const stillOpen = LEAVE_APPROVAL_STATUSES.has(status);
 
-    // Personal leave: badge My Leave only while the request is still open.
     const isPersonalLeave =
       isPersonalAudience ||
       (!isOrgAudience && (!isStaff || role === "employee"));
@@ -43,9 +38,8 @@ export function navIdsForNotification(
       return stillOpen ? ["leave-requests"] : [];
     }
 
-    // Org/team items still awaiting a decision → approvals module.
-    if (stillOpen && available.has("leave-approvals")) {
-      return ["leave-approvals"];
+    if (stillOpen && available.has("leave-requests")) {
+      return ["leave-requests"];
     }
 
     return [];
@@ -77,7 +71,13 @@ export function countNavBadgesFromNotifications(
     for (const navId of navIdsForNotification(notification, availableNavIds, {
       role,
     })) {
-      if (navId === "leave-approvals") continue;
+      // Actionable leave work is counted from the approvals API in navController.
+      // Keep notification badges only for an employee's own open leave.
+      if (navId === "leave-requests") {
+        if (role === "hr" || role === "admin") continue;
+        const audience = String(notification?.audience || "").toLowerCase();
+        if (audience === "org") continue;
+      }
       counts[navId] = (counts[navId] || 0) + 1;
     }
   }

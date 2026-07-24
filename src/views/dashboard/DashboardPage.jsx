@@ -2,6 +2,7 @@ import { useDashboard } from "../../controllers/dashboardController.js";
 import { NEW_EMPLOYEE_PERIODS } from "../../models/dashboardModel.js";
 import MetricCards, { MetricCardsSkeleton } from "./MetricCards.jsx";
 import ChartTwo from "./ChartTwo.jsx";
+import DashboardNotifications from "./DashboardNotifications.jsx";
 import DepartmentOverview from "./DepartmentOverview.jsx";
 import RecentActivitiesTable from "./RecentActivitiesTable.jsx";
 import UnreadMessagesModal from "./UnreadMessagesModal.jsx";
@@ -69,24 +70,32 @@ function OrgDashboard({
   newEmployeesPeriod,
   setNewEmployeesPeriod,
   onMetricAction,
+  unreadMessages,
   messagesOpen,
   messagesPreview,
   onCloseMessages,
   onAcknowledgeMessage,
+  onDismissMessage,
 }) {
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 shrink-0">
           <h2 className="text-xl font-semibold text-gray-800">Dashboard</h2>
           <p className="mt-0.5 text-theme-sm text-gray-500">
             Workforce and leave overview
           </p>
         </div>
-        <PeriodTabs
-          value={newEmployeesPeriod}
-          onChange={setNewEmployeesPeriod}
+        <DashboardNotifications
+          messages={unreadMessages}
+          onDismiss={onDismissMessage}
         />
+        <div className="ml-auto shrink-0 self-center">
+          <PeriodTabs
+            value={newEmployeesPeriod}
+            onChange={setNewEmployeesPeriod}
+          />
+        </div>
       </div>
 
       <MetricCards
@@ -161,10 +170,12 @@ function DashboardPage() {
       newEmployeesPeriod={dashboard.newEmployeesPeriod}
       setNewEmployeesPeriod={dashboard.setNewEmployeesPeriod}
       onMetricAction={dashboard.handleMetricAction}
+      unreadMessages={dashboard.unreadMessages}
       messagesOpen={dashboard.messagesOpen}
       messagesPreview={dashboard.messagesPreview}
       onCloseMessages={dashboard.closeUnreadMessages}
       onAcknowledgeMessage={dashboard.acknowledgeUnreadMessage}
+      onDismissMessage={dashboard.dismissUnreadMessage}
     />
   );
 }

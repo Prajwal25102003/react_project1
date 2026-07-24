@@ -11,8 +11,28 @@ export const LEAVE_TYPES = [
   "Casual Leave",
   "Maternity Leave",
   "Medical Leave",
+  "Work from Home",
   "Loss of Pay",
 ];
+
+export const MEDICAL_LEAVE_TYPE = "Medical Leave";
+export const WORK_FROM_HOME_TYPE = "Work from Home";
+
+export function isMedicalLeave(leaveType) {
+  return String(leaveType || "").trim() === MEDICAL_LEAVE_TYPE;
+}
+
+export function isWorkFromHome(leaveType) {
+  return String(leaveType || "").trim() === WORK_FROM_HOME_TYPE;
+}
+
+/** True when approval does not change casual / sick / LOP quotas. */
+export function leaveTypeSkipsBalanceDeduction(leaveType) {
+  return (
+    isWorkFromHome(leaveType) ||
+    String(leaveType || "").trim() === "Maternity Leave"
+  );
+}
 
 export const LEAVE_DURATIONS = [
   { value: "full", label: "Full day" },
@@ -34,14 +54,24 @@ export const EMPTY_LEAVE_FORM = {
   endDate: "",
   leaveDays: "",
   reason: "",
+  attachmentUrl: "",
+  attachmentName: "",
 };
+
+export function attachmentFileLabel(url, fallbackName = "") {
+  if (fallbackName) return fallbackName;
+  const path = String(url || "").trim();
+  if (!path) return "";
+  const parts = path.split("/");
+  return parts[parts.length - 1] || "Attached document";
+}
 
 const LEAVE_STATUS = {
   Pending: STATUS_TONE.warning,
   TeamLeadApproved: STATUS_TONE.info,
   Approved: STATUS_TONE.success,
   Rejected: STATUS_TONE.error,
-  Cancelled: STATUS_TONE.info,
+  Cancelled: STATUS_TONE.warning,
 };
 
 export const LEAVE_STATUS_LABEL = {
@@ -76,6 +106,7 @@ export function isRequesterAdmin(request) {
   return Boolean(request?.requesterIsAdmin);
 }
 
+/** HR may reject employee leave (not HR/Admin requesters — those go to Admin). */
 export function canHrRejectRequest(request) {
   if (!request) return false;
   if (isRequesterHr(request) || isRequesterAdmin(request)) return false;
@@ -93,8 +124,8 @@ export function canHrRejectRequest(request) {
 export function mapApprovalHistoryEntry(entry) {
   const stepLabel =
     {
-      Submit: "Submitted",
-      TeamLead: "Team Lead",
+      Submit: "Requested",
+      TeamLead: "Dept Head",
       HR: "HR",
       Admin: "Admin",
       HigherAuthority: "Higher Authority",
@@ -105,6 +136,123 @@ export function mapApprovalHistoryEntry(entry) {
     ...entry,
     stepLabel,
   };
+}
+
+/**
+ * Multilevel approval steps for the leave details stepper.
+ * state: completed | current | upcoming | rejected | cancelled
+ * Always returns the full path; terminal outcomes mark the fail step.
+ */
+export function buildLeaveApprovalSteps(request) {
+  if (!request) return [];
+
+  const status = request.status || "Pending";
+  const isHeadSelf =
+    Boolean(request.departmentHeadId) &&
+    request.departmentHeadId === request.employeeId;
+
+  let defs;
+  if (isRequesterAdmin(request)) {
+    defs = [
+      { id: "submit", label: "Requested", historySteps: ["Submit"] },
+      {
+        id: "approver",
+        label: "Higher Auth",
+        historySteps: ["HigherAuthority", "Admin"],
+      },
+      { id: "done", label: "Approved", historySteps: [] },
+    ];
+  } else if (isRequesterHr(request)) {
+    defs = [
+      { id: "submit", label: "Requested", historySteps: ["Submit"] },
+      { id: "approver", label: "Admin", historySteps: ["Admin"] },
+      { id: "done", label: "Approved", historySteps: [] },
+    ];
+  } else if (isHeadSelf) {
+    defs = [
+      { id: "submit", label: "Requested", historySteps: ["Submit"] },
+      { id: "hr", label: "HR", historySteps: ["HR", "Admin"] },
+      { id: "done", label: "Approved", historySteps: [] },
+    ];
+  } else {
+    defs = [
+      { id: "submit", label: "Requested", historySteps: ["Submit"] },
+      { id: "teamLead", label: "Dept Head", historySteps: ["TeamLead"] },
+      { id: "hr", label: "HR", historySteps: ["HR", "Admin"] },
+      { id: "done", label: "Approved", historySteps: [] },
+    ];
+  }
+
+  const history = request.approvalHistory || [];
+  let currentIndex = 1;
+  let terminalState = null;
+
+  if (status === "Pending") {
+    currentIndex = 1;
+  } else if (status === "TeamLeadApproved") {
+    currentIndex = defs.findIndex((step) => step.id === "hr");
+    if (currentIndex < 0) currentIndex = Math.min(2, defs.length - 1);
+  } else if (status === "Approved") {
+    currentIndex = defs.length - 1;
+  } else if (status === "Rejected" || status === "Cancelled") {
+    terminalState = status === "Rejected" ? "rejected" : "cancelled";
+    const failEntry = [...history]
+      .reverse()
+      .find(
+        (entry) =>
+          entry.action === "Rejected" ||
+          entry.action === "Cancelled" ||
+          entry.step === "Cancel",
+      );
+
+    let failIndex = failEntry?.step
+      ? defs.findIndex((step) =>
+          (step.historySteps || []).includes(failEntry.step),
+        )
+      : -1;
+
+    // Sender cancel → mark Requested as cancelled (only requester can cancel).
+    if (failEntry?.step === "Cancel" || failEntry?.action === "Cancelled") {
+      failIndex = 0;
+    } else if (failIndex < 0) {
+      // Unknown reject → mark the step that was waiting (first approver).
+      failIndex = 1;
+    }
+    currentIndex = failIndex;
+  }
+
+  return defs.map((step, index) => {
+    let state = "upcoming";
+    let label = step.label;
+
+    if (status === "Approved") {
+      state = "completed";
+    } else if (terminalState) {
+      if (index < currentIndex) state = "completed";
+      else if (index === currentIndex) state = terminalState;
+      else state = "upcoming";
+    } else if (index < currentIndex) {
+      state = "completed";
+    } else if (index === currentIndex) {
+      state = "current";
+    }
+
+    if (step.id === "submit") {
+      if (terminalState === "cancelled" && currentIndex === 0) {
+        state = "cancelled";
+        label = "Cancelled";
+      } else {
+        state = "completed";
+        label = "Requested";
+      }
+    }
+
+    return {
+      id: step.id,
+      label,
+      state,
+    };
+  });
 }
 
 export function mapLeaveRequest(request) {
@@ -149,7 +297,10 @@ export function isTeamLeadForRequest(request, employeeId) {
   );
 }
 
-/** HR final approve, or HR direct-approve when the requester is the department head. */
+/**
+ * HR final approve, or HR direct-approve when the requester is the department head.
+ * HR leave is approved by Admin only.
+ */
 export function canHrApproveRequest(request) {
   if (!request || isRequesterHr(request) || isRequesterAdmin(request)) {
     return false;
@@ -180,13 +331,13 @@ export function canAdminRejectRequest(request) {
 }
 
 /** True when the signed-in user can approve or reject this leave request. */
-export function canActOnLeaveApproval(request, { employeeId, role } = {}) {
+function canActOnLeaveApproval(request, { employeeId, role } = {}) {
   if (!request) return false;
   const asTeamLead = isTeamLeadForRequest(request, employeeId);
   if (request.status === "Pending" && asTeamLead) return true;
   if (role === "admin" && canAdminApproveRequest(request)) return true;
   if (
-    (role === "hr" || role === "admin") &&
+    role === "hr" &&
     (canHrApproveRequest(request) || canHrRejectRequest(request))
   ) {
     return true;
@@ -201,10 +352,14 @@ export function countActionableLeaveApprovals(requests, userContext) {
   ).length;
 }
 
-export function canCancelLeaveRequest(request) {
-  return (
-    request?.status === "Pending" || request?.status === "TeamLeadApproved"
-  );
+/** Whether this user may cancel the leave request in its current status. */
+export function canCancelLeaveRequest(request, { employeeId } = {}) {
+  if (!request) return false;
+  const status = request.status;
+  if (status !== "Pending" && status !== "TeamLeadApproved") return false;
+
+  // Only the requester can cancel. HR uses Approve / Reject for employee leave.
+  return Boolean(employeeId) && request.employeeId === employeeId;
 }
 
 export function calculateLeaveDays(startDate, endDate, duration = "full") {
@@ -247,6 +402,11 @@ export function toLeavePayload(form) {
       form.expectedDeliveryDate || "",
     ).trim();
   }
+
+  if (isMedicalLeave(form.leaveType)) {
+    payload.attachmentUrl = String(form.attachmentUrl || "").trim();
+  }
+
   return payload;
 }
 
@@ -315,6 +475,16 @@ export function validateLeaveForm(form, { gender } = {}) {
   }
 
   if (!reason) fieldErrors.reason = "Leave reason is required";
+
+  if (isMedicalLeave(leaveType)) {
+    const attachmentUrl = String(form?.attachmentUrl ?? "").trim();
+    if (!attachmentUrl) {
+      fieldErrors.attachmentUrl =
+        "Upload a medical certificate or supporting document";
+    } else if (!/^\/uploads\/medical-[^/]+$/i.test(attachmentUrl)) {
+      fieldErrors.attachmentUrl = "Upload a valid medical document";
+    }
+  }
 
   const keys = Object.keys(fieldErrors);
   if (keys.length === 0) return { ok: true, fieldErrors: {} };

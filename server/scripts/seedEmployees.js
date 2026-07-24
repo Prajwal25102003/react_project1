@@ -123,7 +123,7 @@ const ANCHORS = [
     email: 'rahulaman@company.in',
     phone: '+91 98765 41000',
     gender: 'Male',
-    departmentId: 'DEP-01',
+    departmentId: null,
     designation: 'System Administrator',
     joiningDate: '2020-01-15',
     salary: 150000,
@@ -341,13 +341,17 @@ export async function seedEmployees() {
   const employees = buildEmployees()
 
   for (const employee of employees) {
+    const isAdminSeed = employee.id === 'EMP-1' || employee.departmentId == null
+    const casual = isAdminSeed ? 0 : 1
+    const sick = isAdminSeed ? 0 : 1
+
     await query(
       `INSERT INTO employees (
         id, name, email, phone, gender, department_id, designation,
         joining_date, salary, status, avatar,
         casual_leave_balance, sick_leave_balance, lop_days
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, 1, 1, 0
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, $11, $12, 0
       )
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
@@ -360,8 +364,8 @@ export async function seedEmployees() {
         salary = EXCLUDED.salary,
         status = EXCLUDED.status,
         avatar = EXCLUDED.avatar,
-        casual_leave_balance = 1,
-        sick_leave_balance = 1,
+        casual_leave_balance = EXCLUDED.casual_leave_balance,
+        sick_leave_balance = EXCLUDED.sick_leave_balance,
         lop_days = 0`,
       [
         employee.id,
@@ -374,6 +378,8 @@ export async function seedEmployees() {
         employee.joiningDate,
         employee.salary,
         employee.status,
+        casual,
+        sick,
       ],
     )
   }

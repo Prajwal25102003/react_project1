@@ -4,23 +4,22 @@ import {
   applyNavBadges,
   countNavBadgesFromNotifications,
 } from "../models/navBadgesModel.js";
-import { getNavGroups, isNavItemActive } from "../models/navModel.js";
+import {
+  getNavGroups,
+  isNavItemActive,
+  userCanApproveLeaves,
+} from "../models/navModel.js";
 import { countActionableLeaveApprovals } from "../models/leaveRequestsModel.js";
-import { ROLES } from "../models/authModel.js";
 import { fetchLeaveRequests } from "../services/leaveRequestsService.js";
 import { NOTIFICATIONS_REFRESH_EVENT } from "../utils/notificationsRefresh.js";
 import { useAuth } from "./authContext.jsx";
 
-function userCanApproveLeaves(user) {
-  if (!user) return false;
-  if (user.role === ROLES.HR || user.role === ROLES.ADMIN) return true;
-  return user.role === ROLES.EMPLOYEE && Boolean(user.isDepartmentHead);
-}
-
 export function useNav(notifications = []) {
   const { user } = useAuth();
   const [leaveApprovalsBadge, setLeaveApprovalsBadge] = useState(0);
-  const canApproveLeaves = userCanApproveLeaves(user);
+  const canApproveLeaves = userCanApproveLeaves(user?.role, {
+    isDepartmentHead: Boolean(user?.isDepartmentHead),
+  });
 
   const loadLeaveApprovalsBadge = useCallback(async () => {
     if (!canApproveLeaves) {
@@ -29,8 +28,14 @@ export function useNav(notifications = []) {
     }
 
     try {
-      const requests = await fetchLeaveRequests("approvals");
-      setLeaveApprovalsBadge(countActionableLeaveApprovals(requests));
+      const scope = user?.role === "admin" ? "admin-hr" : "approvals";
+      const requests = await fetchLeaveRequests(scope);
+      setLeaveApprovalsBadge(
+        countActionableLeaveApprovals(requests, {
+          employeeId: user?.employeeId,
+          role: user?.role,
+        }),
+      );
     } catch {
       setLeaveApprovalsBadge(0);
     }
@@ -65,7 +70,8 @@ export function useNav(notifications = []) {
       }),
     };
     if (canApproveLeaves && leaveApprovalsBadge > 0) {
-      badgeCounts["leave-approvals"] = leaveApprovalsBadge;
+      badgeCounts["leave-requests"] =
+        (badgeCounts["leave-requests"] || 0) + leaveApprovalsBadge;
     }
     return applyNavBadges(baseGroups, badgeCounts);
   }, [user, notifications, canApproveLeaves, leaveApprovalsBadge]);

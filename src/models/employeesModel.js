@@ -85,12 +85,22 @@ const EMPLOYEE_STATUS = {
 };
 
 export function mapEmployee(employee) {
+  const isAdminAccount = employee?.loginRole === "admin";
   return {
     ...employee,
-    casualLeaveBalance: Number(employee?.casualLeaveBalance ?? 0),
-    sickLeaveBalance: Number(employee?.sickLeaveBalance ?? 0),
-    lopDays: Number(employee?.lopDays ?? 0),
-    pendingLeaveCount: Number(employee?.pendingLeaveCount ?? 0),
+    isAdminAccount,
+    department: isAdminAccount ? "" : employee.department || "",
+    departmentId: isAdminAccount ? "" : employee.departmentId || "",
+    casualLeaveBalance: isAdminAccount
+      ? 0
+      : Number(employee?.casualLeaveBalance ?? 0),
+    sickLeaveBalance: isAdminAccount
+      ? 0
+      : Number(employee?.sickLeaveBalance ?? 0),
+    lopDays: isAdminAccount ? 0 : Number(employee?.lopDays ?? 0),
+    pendingLeaveCount: isAdminAccount
+      ? 0
+      : Number(employee?.pendingLeaveCount ?? 0),
     statusClass: getStatusClass(EMPLOYEE_STATUS, employee.status, "Inactive"),
   };
 }
@@ -123,7 +133,11 @@ export function toEmployeeFormValues(employee) {
  * @param {{ includeCredentials?: boolean, includePassword?: boolean }} [options]
  */
 export function toEmployeePayload(form, options = {}) {
-  const { includeCredentials = false, includePassword = false } = options;
+  const {
+    includeCredentials = false,
+    includePassword = false,
+    isAdminAccount = false,
+  } = options;
   // Salary is kept in the DB but hidden in UI until Payroll is added.
   const salaryValue = Number(form.salary);
   const payload = {
@@ -131,7 +145,7 @@ export function toEmployeePayload(form, options = {}) {
     email: form.email.trim(),
     phone: normalizeIndianPhone(form.phone) || form.phone.trim(),
     gender: form.gender,
-    departmentId: form.departmentId,
+    departmentId: isAdminAccount ? null : form.departmentId,
     designation: form.designation.trim(),
     joiningDate: form.joiningDate,
     salary: Number.isNaN(salaryValue) ? 0 : salaryValue,
@@ -158,10 +172,14 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
  * Returns { ok: true } or { ok: false, fieldErrors, message }.
  *
  * @param {object} form
- * @param {{ isEdit?: boolean, canManageCredentials?: boolean }} [options]
+ * @param {{ isEdit?: boolean, canManageCredentials?: boolean, isAdminAccount?: boolean }} [options]
  */
 export function validateEmployeeForm(form, options = {}) {
-  const { isEdit = false, canManageCredentials = false } = options;
+  const {
+    isEdit = false,
+    canManageCredentials = false,
+    isAdminAccount = false,
+  } = options;
   const fieldErrors = {};
 
   const name = String(form?.name ?? "").trim();
@@ -194,7 +212,9 @@ export function validateEmployeeForm(form, options = {}) {
     fieldErrors.gender = "Select a valid gender";
   }
 
-  if (!departmentId) fieldErrors.departmentId = "Department is required";
+  if (!isAdminAccount && !departmentId) {
+    fieldErrors.departmentId = "Department is required";
+  }
 
   if (!designation) fieldErrors.designation = "Designation is required";
 

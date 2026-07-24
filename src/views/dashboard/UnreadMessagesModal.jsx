@@ -12,7 +12,7 @@ function UnreadMessagesModal({ open, messages, onClose, onMessageClick }) {
       title="Unread Messages"
       description={
         count > 0
-          ? `${count} message${count === 1 ? "" : "s"} — click one to mark it as read`
+          ? `${count} message${count === 1 ? "" : "s"} — click to view details`
           : "You are all caught up"
       }
       panelClassName="relative mx-auto w-full min-w-0 max-w-[min(560px,calc(100vw-2.5rem))] rounded-3xl bg-white p-5 lg:p-8"

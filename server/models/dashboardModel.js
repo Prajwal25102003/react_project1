@@ -50,7 +50,11 @@ export async function findRecentActivities() {
       description,
       category,
       activity_time AS "activityTime",
-      status
+      status,
+      event_type AS "eventType",
+      subject_employee_id AS "subjectEmployeeId",
+      actor_employee_id AS "actorEmployeeId",
+      meta
     FROM recent_activities
     ORDER BY activity_time DESC
     LIMIT 15`,
@@ -162,72 +166,166 @@ export async function getEmployeeDashboardStats(employeeId) {
   return result.rows[0]
 }
 
-export async function findEmployeeActivityRows(employeeId, limit = 10) {
+/** Employees in departments headed by this person (includes the head when in-dept). */
+export async function findTeamEmployeeIds(headEmployeeId) {
+  if (!headEmployeeId) return []
+  const result = await query(
+    `SELECT e.id
+     FROM employees e
+     INNER JOIN departments d ON d.id = e.department_id
+     WHERE d.head_employee_id = $1`,
+    [headEmployeeId],
+  )
+  const ids = result.rows.map((row) => row.id)
+  if (!ids.includes(headEmployeeId)) ids.push(headEmployeeId)
+  return ids
+}
+
+/**
+ * Attendance + leave activity rows for one or more employees.
+ * Meta includes subjectName / leaveType / range so copy can personalize per viewer.
+ */
+export async function findActivityRowsForEmployees(employeeIds, limit = 10) {
+  const ids = [...new Set((employeeIds || []).filter(Boolean))]
+  if (ids.length === 0) return []
+
   const result = await query(
     `
     SELECT *
     FROM (
       (
         SELECT
-          ('att-' || id) AS id,
-          CASE status
+          ('att-' || a.id) AS id,
+          CASE a.status
             WHEN 'Absent' THEN 'Marked absent'
             WHEN 'Half Day' THEN 'Half day recorded'
             ELSE 'Attendance marked'
           END AS title,
-          (status || ' on ' || TO_CHAR(attendance_date, 'YYYY-MM-DD')) AS description,
+          (e.name || ' was marked ' || a.status || ' on ' || TO_CHAR(a.attendance_date, 'YYYY-MM-DD')) AS description,
           'Attendance' AS category,
-          (attendance_date::timestamp + TIME '12:00') AS "activityTime",
+          (a.attendance_date::timestamp + TIME '12:00') AS "activityTime",
           CASE
-            WHEN status = 'Absent' THEN 'Absent'
-            WHEN status = 'Half Day' THEN 'Half Day'
+            WHEN a.status = 'Absent' THEN 'Absent'
+            WHEN a.status = 'Half Day' THEN 'Half Day'
             ELSE 'Present'
-          END AS status
-        FROM attendance
-        WHERE employee_id = $1
-        ORDER BY attendance_date DESC, id DESC
+          END AS status,
+          'attendance.marked'::varchar AS "eventType",
+          a.employee_id AS "subjectEmployeeId",
+          NULL::varchar AS "actorEmployeeId",
+          jsonb_build_object(
+            'subjectName', e.name,
+            'attendanceDate', TO_CHAR(a.attendance_date, 'YYYY-MM-DD'),
+            'attendanceStatus', a.status
+          ) AS meta
+        FROM attendance a
+        INNER JOIN employees e ON e.id = a.employee_id
+        WHERE a.employee_id = ANY($1::varchar[])
+        ORDER BY a.attendance_date DESC, a.id DESC
         LIMIT $2
       )
       UNION ALL
       (
         SELECT
-          ('leave-' || id) AS id,
-          CASE status
-            WHEN 'Pending' THEN 'Leave request submitted'
-            WHEN 'Approved' THEN 'Leave approved'
-            WHEN 'Cancelled' THEN 'Leave request cancelled'
-            ELSE 'Leave rejected'
+          ('leave-' || lr.id) AS id,
+          CASE lr.status
+            WHEN 'Pending' THEN 'Sent'
+            WHEN 'TeamLeadApproved' THEN 'Received'
+            WHEN 'Approved' THEN 'Received'
+            WHEN 'Cancelled' THEN 'Sent'
+            ELSE 'Received'
           END AS title,
-          (leave_type || ' · ' || TO_CHAR(start_date, 'YYYY-MM-DD') ||
-            CASE WHEN end_date <> start_date
-              THEN ' to ' || TO_CHAR(end_date, 'YYYY-MM-DD')
-              ELSE ''
-            END) AS description,
+          CASE lr.status
+            WHEN 'Pending' THEN
+              e.name || ' requested ' || lr.leave_type || ' for ' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              CASE WHEN lr.end_date <> lr.start_date
+                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                ELSE ''
+              END || '.'
+            WHEN 'Cancelled' THEN
+              e.name || ' cancelled ' || lr.leave_type || ' (' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              CASE WHEN lr.end_date <> lr.start_date
+                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                ELSE ''
+              END || ').'
+            WHEN 'Approved' THEN
+              e.name || '''s ' || lr.leave_type || ' (' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              CASE WHEN lr.end_date <> lr.start_date
+                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                ELSE ''
+              END || ') was approved.'
+            WHEN 'TeamLeadApproved' THEN
+              e.name || '''s ' || lr.leave_type || ' (' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              CASE WHEN lr.end_date <> lr.start_date
+                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                ELSE ''
+              END || ') was approved by team lead.'
+            ELSE
+              e.name || '''s ' || lr.leave_type || ' (' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              CASE WHEN lr.end_date <> lr.start_date
+                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                ELSE ''
+              END || ') was rejected.'
+          END AS description,
           'Leave' AS category,
-          COALESCE(updated_at, created_at, start_date::timestamptz) AS "activityTime",
+          COALESCE(lr.updated_at, lr.created_at, lr.start_date::timestamptz) AS "activityTime",
           CASE
-            WHEN status = 'Pending' THEN 'Pending'
-            WHEN status = 'Approved' THEN 'Approved'
-            WHEN status = 'Rejected' THEN 'Rejected'
-            WHEN status = 'Cancelled' THEN 'Cancelled'
+            WHEN lr.status = 'Pending' THEN 'Pending'
+            WHEN lr.status = 'Approved' THEN 'Approved'
+            WHEN lr.status = 'Rejected' THEN 'Rejected'
+            WHEN lr.status = 'Cancelled' THEN 'Cancelled'
+            WHEN lr.status = 'TeamLeadApproved' THEN 'TeamLeadApproved'
             ELSE 'Pending'
-          END AS status
-        FROM leave_requests
-        WHERE employee_id = $1
-        ORDER BY COALESCE(updated_at, created_at, start_date::timestamptz) DESC, id DESC
+          END AS status,
+          CASE lr.status
+            WHEN 'Pending' THEN 'leave.submitted'
+            WHEN 'Cancelled' THEN 'leave.cancelled'
+            WHEN 'Approved' THEN 'leave.approved'
+            WHEN 'TeamLeadApproved' THEN 'leave.approved'
+            ELSE 'leave.rejected'
+          END AS "eventType",
+          lr.employee_id AS "subjectEmployeeId",
+          NULL::varchar AS "actorEmployeeId",
+          jsonb_build_object(
+            'leaveRequestId', lr.id,
+            'subjectName', e.name,
+            'leaveType', lr.leave_type,
+            'range',
+              TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              CASE WHEN lr.end_date <> lr.start_date
+                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                ELSE ''
+              END
+          ) AS meta
+        FROM leave_requests lr
+        INNER JOIN employees e ON e.id = lr.employee_id
+        WHERE lr.employee_id = ANY($1::varchar[])
+        ORDER BY COALESCE(lr.updated_at, lr.created_at, lr.start_date::timestamptz) DESC, lr.id DESC
         LIMIT $2
       )
     ) activities
     ORDER BY "activityTime" DESC, id DESC
     LIMIT $2
     `,
-    [employeeId, limit],
+    [ids, limit],
   )
 
   return result.rows
 }
 
+export async function findEmployeeActivityRows(employeeId, limit = 10) {
+  return findActivityRowsForEmployees([employeeId], limit)
+}
+
+export async function findTeamActivityRows(headEmployeeId, limit = 10) {
+  const teamIds = await findTeamEmployeeIds(headEmployeeId)
+  return findActivityRowsForEmployees(teamIds, limit)
+}
+
 export async function getEmployeeRecentActivities(employeeId) {
   return findEmployeeActivityRows(employeeId, 10)
+}
+
+export async function getTeamRecentActivities(headEmployeeId) {
+  return findTeamActivityRows(headEmployeeId, 15)
 }
 

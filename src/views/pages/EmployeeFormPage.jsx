@@ -26,6 +26,7 @@ function EmployeeFormPage() {
     form,
     fieldErrors,
     departments,
+    isAdminAccount,
     loading,
     saving,
     uploadingAvatar,
@@ -160,25 +161,34 @@ function EmployeeFormPage() {
 
                 <div>
                   <label className={LABEL_CLASS}>
-                    Department <RequiredMark />
+                    Department{" "}
+                    {isAdminAccount ? null : <RequiredMark />}
                   </label>
-                  <SelectField
-                    value={form.departmentId}
-                    onChange={(nextValue) =>
-                      updateField("departmentId", nextValue)
-                    }
-                    ariaLabel="Department"
-                    placeholder="Select department"
-                    hasError={Boolean(fieldErrors.departmentId)}
-                    options={[
-                      { value: "", label: "Select department" },
-                      ...departments.map((department) => ({
-                        value: department.id,
-                        label: department.name,
-                      })),
-                    ]}
-                  />
-                  <FieldError message={fieldErrors.departmentId} />
+                  {isAdminAccount ? (
+                    <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-theme-sm text-gray-500">
+                      Not applicable — Admin is not assigned to a department
+                    </p>
+                  ) : (
+                    <>
+                      <SelectField
+                        value={form.departmentId}
+                        onChange={(nextValue) =>
+                          updateField("departmentId", nextValue)
+                        }
+                        ariaLabel="Department"
+                        placeholder="Select department"
+                        hasError={Boolean(fieldErrors.departmentId)}
+                        options={[
+                          { value: "", label: "Select department" },
+                          ...departments.map((department) => ({
+                            value: department.id,
+                            label: department.name,
+                          })),
+                        ]}
+                      />
+                      <FieldError message={fieldErrors.departmentId} />
+                    </>
+                  )}
                 </div>
 
                 <div>

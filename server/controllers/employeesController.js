@@ -2,6 +2,7 @@ import {
   createEmployeeUser,
   findUserByEmployeeId,
   hashPassword,
+  syncDepartmentEmployeeLoginRoles,
   updateEmployeeUserCredentials,
 } from '../models/authModel.js'
 import {
@@ -16,7 +17,7 @@ import { findDepartmentById } from '../models/departmentsModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
 import pool from '../config/db.js'
 import { formatDbError } from '../utils/formatDbError.js'
-import { loginRoleForDepartmentName } from '../utils/loginRole.js'
+import { loginRoleForEmployee } from '../utils/loginRole.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 import {
   isValidIndianPhone,
@@ -66,14 +67,14 @@ function parseLoginEmail(body, { required }) {
   return { errors, loginEmail }
 }
 
-function parseEmployeePayload(body) {
+function parseEmployeePayload(body, { requireDepartment = true } = {}) {
   const errors = []
 
   const name = String(body?.name ?? '').trim()
   const email = String(body?.email ?? '').trim().toLowerCase()
   const phone = String(body?.phone ?? '').trim()
   const gender = String(body?.gender ?? '').trim()
-  const departmentId = String(body?.departmentId ?? '').trim()
+  const departmentId = String(body?.departmentId ?? '').trim() || null
   const designation = String(body?.designation ?? '').trim()
   const joiningDate = String(body?.joiningDate ?? '').trim()
   const status = String(body?.status ?? '').trim()
@@ -98,7 +99,7 @@ function parseEmployeePayload(body) {
   const normalizedPhone = normalizeIndianPhone(phone) || phone
   if (!gender) errors.push('Gender is required')
   else if (!GENDERS.has(gender)) errors.push('Gender must be Male or Female')
-  if (!departmentId) errors.push('Department is required')
+  if (requireDepartment && !departmentId) errors.push('Department is required')
   if (!designation) errors.push('Designation is required')
   if (!joiningDate) errors.push('Joining date is required')
   else if (!/^\d{4}-\d{2}-\d{2}$/.test(joiningDate)) {
@@ -220,9 +221,13 @@ export async function createEmployeeHandler(req, res) {
       return res.status(400).json({ message: 'Department not found' })
     }
 
-    const loginRole = loginRoleForDepartmentName(department.name)
-
     const id = await generateNextEmployeeId()
+    const loginRole = loginRoleForEmployee({
+      departmentName: department.name,
+      employeeId: id,
+      headEmployeeId: department.headEmployeeId,
+    })
+
     const passwordHash = await hashPassword(password)
 
     await client.query('BEGIN')
@@ -276,7 +281,19 @@ export async function createEmployeeHandler(req, res) {
 
 export async function updateEmployeeHandler(req, res) {
   try {
-    const { errors, employee } = parseEmployeePayload(req.body)
+    const previous = await findEmployeeById(req.params.id)
+    if (!previous) {
+      return res.status(404).json({ message: 'Employee not found' })
+    }
+
+    const isAdminAccount = previous.loginRole === 'admin'
+    const { errors, employee } = parseEmployeePayload(req.body, {
+      requireDepartment: !isAdminAccount,
+    })
+    if (isAdminAccount) {
+      employee.departmentId = null
+    }
+
     const manageLogin = canManageLogin(req.user?.role)
     const { errors: loginEmailErrors, loginEmail } = parseLoginEmail(req.body, {
       required: false,
@@ -300,12 +317,21 @@ export async function updateEmployeeHandler(req, res) {
       return res.status(400).json({ message: allErrors.join('; ') })
     }
 
-    const department = await findDepartmentById(employee.departmentId)
-    if (!department) {
-      return res.status(400).json({ message: 'Department not found' })
+    let department = null
+    if (!isAdminAccount) {
+      department = await findDepartmentById(employee.departmentId)
+      if (!department) {
+        return res.status(400).json({ message: 'Department not found' })
+      }
     }
 
-    const loginRole = loginRoleForDepartmentName(department.name)
+    const loginRole = isAdminAccount
+      ? 'admin'
+      : loginRoleForEmployee({
+          departmentName: department.name,
+          employeeId: req.params.id,
+          headEmployeeId: department.headEmployeeId,
+        })
 
     const updated = await updateEmployee(req.params.id, employee)
     if (!updated) {
@@ -319,7 +345,7 @@ export async function updateEmployeeHandler(req, res) {
         name: employee.name,
       }
 
-      // Keep admin accounts as admin; only sync employee/hr from department.
+      // Keep admin accounts as admin; only sync employee/hr from department headship.
       if (existingLogin.role !== 'admin') {
         credentialUpdate.role = loginRole
       }
@@ -348,9 +374,23 @@ export async function updateEmployeeHandler(req, res) {
       })
     }
 
+    await syncDepartmentEmployeeLoginRoles(department)
+    if (
+      department &&
+      previous.departmentId &&
+      previous.departmentId !== department.id
+    ) {
+      const previousDept = await findDepartmentById(previous.departmentId)
+      if (previousDept) {
+        await syncDepartmentEmployeeLoginRoles(previousDept)
+      }
+    }
+
     await createRecentActivity({
       title: 'Employee updated',
-      description: `${updated.name}'s profile was updated (${updated.designation}, ${updated.department}).`,
+      description: isAdminAccount
+        ? `${updated.name}'s profile was updated (${updated.designation}).`
+        : `${updated.name}'s profile was updated (${updated.designation}, ${updated.department}).`,
       category: 'Employees',
       status: 'Updated',
     })

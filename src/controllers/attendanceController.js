@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
+import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
 import { fetchEmployeeById, fetchEmployees } from "../services/employeesService.js";
@@ -33,6 +34,7 @@ import { requestEmsRefresh } from "../utils/emsRefresh.js";
 
 export function useAttendance() {
   const { user } = useAuth();
+  const toast = useToast();
   const isEmployee = user?.role === ROLES.EMPLOYEE;
   const { rows, loading, error, reload } = useListData(
     fetchAttendanceRecords,
@@ -68,6 +70,7 @@ export function useAttendance() {
       setDeleting(true);
       setDeleteError("");
       await deleteAttendance(deleteTarget.id);
+      toast.crudSuccess("Attendance", "delete");
       setDeleteTarget(null);
       reload();
       requestEmsRefresh();
@@ -115,10 +118,14 @@ export function useAttendance() {
         );
       }
       setImportStats(stats);
+      toast.success(
+        `Attendance imported · ${stats.imported} record(s) processed`,
+      );
       reload();
       requestEmsRefresh();
     } catch (err) {
       setImportError(err.message || "Failed to import attendance");
+      toast.error(err.message || "Failed to import attendance");
     } finally {
       setImporting(false);
     }
@@ -150,6 +157,7 @@ export function useAttendance() {
 
 export function useAttendanceForm(attendanceId) {
   const navigate = useNavigate();
+  const toast = useToast();
   const [form, setForm] = useState({ ...EMPTY_ATTENDANCE_FORM });
   const [fieldErrors, setFieldErrors] = useState({});
   const [employees, setEmployees] = useState([]);
@@ -250,6 +258,7 @@ export function useAttendanceForm(attendanceId) {
       setError("");
       setFieldErrors({});
       await updateAttendance(attendanceId, toAttendancePayload(form));
+      toast.crudSuccess("Attendance", "update");
       requestEmsRefresh();
       navigate("/attendance");
     } catch (err) {

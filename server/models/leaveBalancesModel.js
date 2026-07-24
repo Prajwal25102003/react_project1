@@ -5,6 +5,7 @@ import { query } from '../config/db.js'
  * - Medical Leave / Sick Leave → sick → casual → LOP
  * - Casual Leave → casual → sick → LOP
  * - Maternity Leave → paid (2 weeks before + 24 weeks after delivery); no sick/casual/LOP change
+ * - Work from Home → attendance exception; no sick/casual/LOP change
  * - Loss of Pay / other → LOP
  * LOP is applied only after both casual and sick paid quotas are exhausted
  * (except when the leave type is explicitly Loss of Pay).
@@ -25,7 +26,11 @@ export function computeLeaveDeduction(
 
   const type = String(leaveType || '').trim()
 
-  if (days === 0 || type === 'Maternity Leave') {
+  if (
+    days === 0 ||
+    type === 'Maternity Leave' ||
+    type === 'Work from Home'
+  ) {
     return {
       casualLeaveBalance: casual,
       sickLeaveBalance: sick,

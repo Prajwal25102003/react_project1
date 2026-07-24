@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { fetchDashboard } from "../services/dashboardService.js";
 import { fetchNotifications } from "../services/notificationsService.js";
@@ -34,6 +35,7 @@ const EMPTY = {
 
 export function useDashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(EMPTY);
   const [newEmployeesPeriod, setNewEmployeesPeriod] = useState("month");
   const [loading, setLoading] = useState(true);
@@ -205,7 +207,7 @@ export function useDashboard() {
   }, []);
 
   const acknowledgeUnreadMessage = useCallback(
-    (message) => {
+    (message, options = {}) => {
       const id = message?.id;
       if (!seenUserKey || !id) return;
 
@@ -223,8 +225,19 @@ export function useDashboard() {
         );
       });
       requestNotificationsRefresh();
+
+      // Stack X = dismiss only; modal row click may navigate to the module.
+      if (options.navigate !== false && message.href) {
+        setMessagesOpen(false);
+        navigate(message.href);
+      }
     },
-    [seenUserKey],
+    [seenUserKey, navigate],
+  );
+
+  const dismissUnreadMessage = useCallback(
+    (message) => acknowledgeUnreadMessage(message, { navigate: false }),
+    [acknowledgeUnreadMessage],
   );
 
   const handleMetricAction = useCallback(
@@ -247,6 +260,7 @@ export function useDashboard() {
     openUnreadMessages,
     closeUnreadMessages,
     acknowledgeUnreadMessage,
+    dismissUnreadMessage,
     handleMetricAction,
   };
 }

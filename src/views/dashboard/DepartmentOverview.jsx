@@ -71,11 +71,21 @@ function OverviewPanel({
   );
 }
 
+function formatDateLabel() {
+  const now = new Date();
+  const day = now.getDate();
+  const month = now.toLocaleString("en-US", { month: "short" });
+  const year = now.getFullYear();
+  return `as of ${day} ${month} ${year}`;
+}
+
 function DepartmentOverview({ departments, compact = false }) {
+  const dateLabel = formatDateLabel();
+
   return (
     <OverviewPanel
       title="Departments"
-      description="Headcount by department"
+      description={`Headcount by department · ${dateLabel}`}
       items={departments}
       emptyMessage="No departments to show."
       compact={compact}

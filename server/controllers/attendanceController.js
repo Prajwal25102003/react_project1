@@ -159,6 +159,14 @@ export async function updateAttendanceHandler(req, res) {
       description: `${updated.employeeName}'s attendance on ${updated.date} was updated (${updated.status}).`,
       category: 'Attendance',
       status: updated.status,
+      eventType: 'attendance.marked',
+      subjectEmployeeId: updated.employeeId,
+      actorEmployeeId: req.user?.employeeId || null,
+      meta: {
+        subjectName: updated.employeeName,
+        attendanceDate: updated.date,
+        attendanceStatus: updated.status,
+      },
     })
 
     res.json({ record: mapAttendanceRow(updated) })
@@ -185,6 +193,12 @@ export async function deleteAttendanceHandler(req, res) {
       description: `Attendance for ${existing.employeeName} on ${existing.date} was removed.`,
       category: 'Attendance',
       status: 'Removed',
+      subjectEmployeeId: existing.employeeId,
+      actorEmployeeId: req.user?.employeeId || null,
+      meta: {
+        subjectName: existing.employeeName,
+        attendanceDate: existing.date,
+      },
     })
 
     res.json({ message: 'Attendance record deleted' })

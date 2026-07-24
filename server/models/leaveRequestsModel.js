@@ -27,6 +27,7 @@ const LEAVE_SELECT = `
   lr.leave_days::float AS "leaveDays",
   lr.half_day_session AS "halfDaySession",
   lr.reason,
+  lr.attachment_url AS "attachmentUrl",
   lr.cancellation_reason AS "cancellationReason",
   lr.rejection_reason AS "rejectionReason",
   lr.status
@@ -101,7 +102,23 @@ export async function findLeaveRequestsForTeamApprovals(headEmployeeId) {
   return result.rows
 }
 
-/** HR/Admin employee leave queue (optionally excludes the reviewer's own requests). */
+/** Leave submitted by HR users — Admin approval queue. */
+export async function findLeaveRequestsForAdminApprovals() {
+  const result = await query(
+    `SELECT ${LEAVE_SELECT}
+    ${LEAVE_FROM}
+    WHERE EXISTS (
+      SELECT 1
+      FROM users u
+      WHERE u.employee_id = lr.employee_id
+        AND u.role = 'hr'
+    )
+    ORDER BY lr.id DESC`,
+  )
+  return result.rows
+}
+
+/** HR employee leave queue (optionally excludes the reviewer's own requests). */
 export async function findLeaveRequestsForHrApprovals(excludeEmployeeId = null) {
   if (excludeEmployeeId) {
     const result = await query(
@@ -195,9 +212,9 @@ export async function createLeaveRequest(leaveRequest, client = null) {
   const result = await runner.query(
     `INSERT INTO leave_requests (
       id, employee_id, leave_type, start_date, end_date, leave_days,
-      half_day_session, reason, status
+      half_day_session, reason, attachment_url, status
     ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
     )
     RETURNING id`,
     [
@@ -209,6 +226,7 @@ export async function createLeaveRequest(leaveRequest, client = null) {
       leaveRequest.leaveDays,
       leaveRequest.halfDaySession || null,
       leaveRequest.reason,
+      leaveRequest.attachmentUrl || null,
       leaveRequest.status,
     ],
   )

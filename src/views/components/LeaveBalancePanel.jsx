@@ -1,4 +1,7 @@
-import { previewLeaveDeduction } from "../../models/leaveBalancesModel.js";
+import {
+  normalizeLeaveBalances,
+  previewLeaveDeduction,
+} from "../../models/leaveBalancesModel.js";
 
 function formatBalanceValue(value) {
   const n = Number(value);
@@ -12,12 +15,16 @@ function Stat({ label, value, tone = "default" }) {
       ? "text-warning-700"
       : tone === "error"
         ? "text-error-700"
-        : "text-gray-800";
+        : tone === "brand"
+          ? "text-brand-500"
+          : "text-gray-800";
 
   return (
     <div className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-3">
       <p className="truncate text-theme-xs text-gray-500">{label}</p>
-      <p className={`mt-1 break-words text-xl font-semibold leading-tight ${valueClass}`}>
+      <p
+        className={`mt-1 break-words text-xl font-semibold leading-tight ${valueClass}`}
+      >
         {formatBalanceValue(value)}
       </p>
     </div>
@@ -37,12 +44,14 @@ function LeaveBalancePanel({
 }) {
   if (!balances) return null;
 
+  const normalized = normalizeLeaveBalances(balances);
   const preview =
     showPreview && leaveType
-      ? previewLeaveDeduction(balances, leaveType, leaveDays)
+      ? previewLeaveDeduction(normalized, leaveType, leaveDays)
       : null;
 
-  const showPending = balances.pendingLeaveCount != null;
+  const showPending = normalized.pendingLeaveCount != null;
+  const totalAvailable = normalized.totalAvailable;
 
   return (
     <div
@@ -62,22 +71,27 @@ function LeaveBalancePanel({
       <div
         className={
           showPending
-            ? "grid grid-cols-2 gap-2 sm:grid-cols-4"
-            : "grid grid-cols-3 gap-2"
+            ? "grid grid-cols-2 gap-2 sm:grid-cols-5"
+            : "grid grid-cols-2 gap-2 sm:grid-cols-4"
         }
       >
-        <Stat label="Casual left" value={balances.casualLeaveBalance} />
-        <Stat label="Sick left" value={balances.sickLeaveBalance} />
+        <Stat
+          label="Total available"
+          value={totalAvailable}
+          tone={totalAvailable > 0 ? "brand" : "warning"}
+        />
+        <Stat label="Casual left" value={normalized.casualLeaveBalance} />
+        <Stat label="Sick left" value={normalized.sickLeaveBalance} />
         <Stat
           label="LOP days"
-          value={balances.lopDays}
-          tone={balances.lopDays > 0 ? "warning" : "default"}
+          value={normalized.lopDays}
+          tone={normalized.lopDays > 0 ? "warning" : "default"}
         />
         {showPending ? (
           <Stat
             label="Pending requests"
-            value={balances.pendingLeaveCount}
-            tone={balances.pendingLeaveCount > 0 ? "warning" : "default"}
+            value={normalized.pendingLeaveCount}
+            tone={normalized.pendingLeaveCount > 0 ? "warning" : "default"}
           />
         ) : null}
       </div>

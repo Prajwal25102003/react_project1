@@ -15,7 +15,7 @@ router.get('/:id', requireAuth, getLeaveRequestByIdHandler)
 router.post(
   '/',
   requireAuth,
-  requireRole('employee', 'hr', 'admin'),
+  requireRole('employee', 'hr'),
   createLeaveRequestHandler,
 )
 router.patch(
@@ -27,7 +27,7 @@ router.patch(
 router.patch(
   '/:id/cancel',
   requireAuth,
-  requireRole('employee', 'hr', 'admin'),
+  requireRole('employee', 'hr'),
   cancelLeaveRequestHandler,
 )
 
