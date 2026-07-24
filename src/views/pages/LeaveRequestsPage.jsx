@@ -3,6 +3,7 @@ import { useLeaveRequests } from "../../controllers/leaveRequestsController.js";
 import { LEAVE_REQUEST_COLUMNS } from "../../models/leaveRequestsTableModel.js";
 import DataTable from "../components/DataTable.jsx";
 import ListPageShell from "../components/ListPageShell.jsx";
+import { PlusIcon } from "../icons/ActionIcons.jsx";
 import LeaveCancelModal from "./LeaveCancelModal.jsx";
 import LeaveDecisionModal from "./LeaveDecisionModal.jsx";
 import LeaveViewModal from "./LeaveViewModal.jsx";
@@ -114,9 +115,11 @@ function LeaveRequestsPage() {
             {canRequestLeave ? (
               <Link
                 to="/leave-requests/new"
-                className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+                title="Request Leave"
+                aria-label="Request Leave"
+                className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
               >
-                Request Leave
+                <PlusIcon />
               </Link>
             ) : null}
           </div>

@@ -64,7 +64,8 @@ function LeaveBalancePanel({
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h4 className="text-sm font-semibold text-gray-800">{title}</h4>
         <p className="text-theme-xs text-gray-500">
-          Paid quota: 1 casual + 1 sick. LOP only after both are used.
+          Paid leave uses this employee&apos;s casual and sick balances. LOP
+          applies only after both are used.
         </p>
       </div>
 

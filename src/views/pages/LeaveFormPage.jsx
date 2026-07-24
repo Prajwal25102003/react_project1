@@ -2,6 +2,8 @@ import { useLeaveForm } from "../../controllers/leaveRequestsController.js";
 import {
   HALF_DAY_SESSIONS,
   LEAVE_DURATIONS,
+  MAX_MEDICAL_ATTACHMENTS,
+  attachmentFileLabel,
 } from "../../models/leaveRequestsModel.js";
 import {
   FORM_GRID_CLASS,
@@ -35,7 +37,8 @@ function LeaveFormPage() {
     error,
     updateField,
     handleAttachmentChange,
-    clearAttachment,
+    removeAttachment,
+    clearAttachments,
     handleSubmit,
     handleCancel,
   } = useLeaveForm();
@@ -48,7 +51,7 @@ function LeaveFormPage() {
       <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden sm:space-y-6">
         <PageCard
           title="Create Leave Request"
-          subtitle="Submit a new leave request for approval. Paid quota is 1 casual + 1 sick leave; LOP applies only after both are finished. Maternity is a separate paid entitlement for female employees. Work from home does not reduce leave balances. Medical leave requires a supporting document. Half-day leave counts as 0.5 day."
+          subtitle="Submit a new leave request for approval. Paid leave uses your casual and sick balances; LOP applies only after both are finished. Maternity is a separate paid entitlement for female employees. Work from home does not reduce leave balances. Medical leave requires a supporting document. Half-day leave counts as 0.5 day."
           bodyClassName="p-5 sm:p-6"
         >
           {loading ? (
@@ -248,43 +251,66 @@ function LeaveFormPage() {
               {medicalSelected ? (
                 <div>
                   <label className={LABEL_CLASS}>
-                    Medical Document <RequiredMark />
+                    Medical Documents <RequiredMark />
                   </label>
                   <div className="space-y-2">
                     <input
                       type="file"
                       accept="image/*,.pdf,application/pdf"
+                      multiple
                       onChange={handleAttachmentChange}
-                      disabled={uploadingAttachment || saving}
+                      disabled={
+                        uploadingAttachment ||
+                        saving ||
+                        (form.attachments?.length || 0) >= MAX_MEDICAL_ATTACHMENTS
+                      }
                       className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600 disabled:opacity-60"
                     />
                     <p className="text-theme-xs text-gray-500">
                       {uploadingAttachment
-                        ? "Uploading document…"
-                        : "Required for medical leave. PDF or image — max 5MB."}
+                        ? "Uploading documents…"
+                        : `Required for medical leave. Select one or more PDF/image files — max ${MAX_MEDICAL_ATTACHMENTS} files, 5MB each.`}
                     </p>
-                    {form.attachmentUrl ? (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <a
-                          href={form.attachmentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-theme-sm font-medium text-brand-500 hover:text-brand-600"
-                        >
-                          {form.attachmentName || "View uploaded document"}
-                        </a>
-                        <button
-                          type="button"
-                          onClick={clearAttachment}
-                          disabled={uploadingAttachment || saving}
-                          className="text-theme-sm font-medium text-error-600 hover:text-error-700 disabled:opacity-60"
-                        >
-                          Remove
-                        </button>
-                      </div>
+                    {(form.attachments || []).length > 0 ? (
+                      <ul className="space-y-2">
+                        {form.attachments.map((file) => (
+                          <li
+                            key={file.url}
+                            className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                          >
+                            <a
+                              href={file.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="min-w-0 flex-1 truncate text-theme-sm font-medium text-brand-500 hover:text-brand-600"
+                            >
+                              {attachmentFileLabel(file.url, file.name) ||
+                                "View uploaded document"}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(file.url)}
+                              disabled={uploadingAttachment || saving}
+                              className="text-theme-sm font-medium text-error-600 hover:text-error-700 disabled:opacity-60"
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {(form.attachments || []).length > 1 ? (
+                      <button
+                        type="button"
+                        onClick={clearAttachments}
+                        disabled={uploadingAttachment || saving}
+                        className="text-theme-sm font-medium text-error-600 hover:text-error-700 disabled:opacity-60"
+                      >
+                        Remove all
+                      </button>
                     ) : null}
                   </div>
-                  <FieldError message={fieldErrors.attachmentUrl} />
+                  <FieldError message={fieldErrors.attachments} />
                 </div>
               ) : null}
 

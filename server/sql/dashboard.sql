@@ -29,40 +29,40 @@ CREATE TABLE IF NOT EXISTS recent_activities (
 INSERT INTO recent_activities (id, title, description, category, activity_time, status) VALUES
   (
     'ACT-01',
-    'New employee added',
-    'Aditya Kunal joined Development as QA Engineer in Bengaluru.',
+    'New Employee Added',
+    'Aditya Kunal joined the Development Department as QA Engineer.',
     'Employees',
     NOW() - INTERVAL '2 hours',
     'Completed'
   ),
   (
     'ACT-02',
-    'Leave approved',
-    'Suresh Milan — Sick Leave (14–15 Jul) approved by HR.',
+    'Leave Request Approved',
+    'Suresh Milan''s Sick Leave request (14 Jul 2026 - 15 Jul 2026) has been approved by HR Manager.',
     'Leave',
     NOW() - INTERVAL '4 hours',
     'Completed'
   ),
   (
     'ACT-03',
-    'Leave request submitted',
-    'Ananya Reva requested Casual Leave for 18 Jul.',
+    'Leave Request Submitted',
+    'Ananya Reva submitted a Casual Leave request (18 Jul 2026).',
     'Leave',
     NOW() - INTERVAL '5 hours',
     'Pending'
   ),
   (
     'ACT-05',
-    'Department head updated',
-    'Siddharth Menon assigned as head of Human Resources.',
+    'Human Resources Department Updated',
+    'HR Admin assigned Siddharth Menon as head of Human Resources.',
     'Departments',
     NOW() - INTERVAL '2 days',
     'Updated'
   ),
   (
     'ACT-06',
-    'Attendance marked',
-    'Siddharth Menon marked Present on 14 Jul.',
+    'Attendance Marked',
+    'Siddharth Menon checked in at 09:05 AM.',
     'Attendance',
     NOW() - INTERVAL '2 days',
     'Present'

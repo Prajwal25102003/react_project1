@@ -50,6 +50,18 @@ export async function deleteEmployee(id) {
   );
 }
 
+/** Bulk set/add leave balances (All / Department / Custom). */
+export async function assignEmployeeLeaveBalances(payload) {
+  return fetchJson(
+    "/api/employees/leave-balances/assign",
+    "Failed to assign leave balances",
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}
+
 export async function uploadEmployeeAvatar(file) {
   const formData = new FormData();
   formData.append("avatar", file);

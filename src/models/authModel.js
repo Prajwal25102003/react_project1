@@ -32,6 +32,7 @@ export const ROLE_NAV_IDS = {
     "departments",
     "attendance",
     "leave-requests",
+    "leave-hierarchy",
     "holidays",
     // "payroll", // later
     // "system-health", // later

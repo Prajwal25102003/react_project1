@@ -41,8 +41,7 @@ function LeaveViewModal({ request, direction = null, onClose }) {
   );
 
   const balances = normalizeLeaveBalances(request);
-  const showBalancePreview =
-    request.status === "Pending" || request.status === "TeamLeadApproved";
+  const showBalancePreview = request.status === "Pending";
   const approvalSteps = buildLeaveApprovalSteps(request);
   const directionLabel =
     direction === "sent" ? "Sent" : direction === "received" ? "Received" : null;
@@ -136,7 +135,28 @@ function LeaveViewModal({ request, direction = null, onClose }) {
           </p>
         </div>
 
-        {request.attachmentUrl ? (
+        {request.attachments?.length ? (
+          <div className="min-w-0 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+            <p className={LABEL_CLASS}>
+              Medical Document{request.attachments.length > 1 ? "s" : ""}
+            </p>
+            <ul className="mt-1 space-y-1.5">
+              {request.attachments.map((file) => (
+                <li key={file.url}>
+                  <a
+                    href={file.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
+                  >
+                    View / download{" "}
+                    {attachmentFileLabel(file.url, file.name)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : request.attachmentUrl ? (
           <div className="min-w-0 rounded-2xl border border-gray-200 bg-white px-4 py-3">
             <p className={LABEL_CLASS}>Medical Document</p>
             <a

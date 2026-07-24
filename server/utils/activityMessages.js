@@ -1,16 +1,13 @@
 /**
  * Personalize activity/notification copy for the viewing user.
- * Titles are Sent / Received based on who acted vs who is viewing.
+ * Titles stay descriptive; direction (sent/received) is for navigation only.
  */
 
-function roleLabel(role) {
-  const key = String(role || '').toLowerCase()
-  if (key === 'hr') return 'HR'
-  if (key === 'admin') return 'Admin'
-  if (key === 'team_lead' || key === 'teamlead') return 'team lead'
-  if (key === 'employee') return 'employee'
-  return role || 'reviewer'
-}
+import {
+  formatApproverLabel,
+  formatDisplayDate,
+  formatLeaveRangeText,
+} from './activityCopy.js'
 
 function sameId(a, b) {
   return Boolean(a && b && String(a) === String(b))
@@ -46,8 +43,8 @@ export function resolveActivityDirection(row, viewer = {}) {
   const isActor = sameId(viewerId, actorId)
   const isPersonalSelf =
     row.audience === 'self' ||
-    (String(row.id || '').startsWith('leave-') && sameId(viewerId, subjectId))
-    || (String(row.id || '').startsWith('att-') && sameId(viewerId, subjectId))
+    (String(row.id || '').startsWith('leave-') && sameId(viewerId, subjectId)) ||
+    (String(row.id || '').startsWith('att-') && sameId(viewerId, subjectId))
 
   if (eventType.startsWith('leave.')) {
     if (
@@ -86,21 +83,26 @@ export function resolveActivityDirection(row, viewer = {}) {
     title.includes('leave request') ||
     title.includes('leave approved') ||
     title.includes('leave rejected') ||
-    title.includes('leave auto-approved')
+    title.includes('leave auto-approved') ||
+    title === 'sent' ||
+    title === 'received'
 
   if (isLeaveTitle || row.category === 'Leave') {
     if (startsWithViewerName(row.description, viewer.name)) {
       if (title.includes('cancel')) return 'sent'
-      if (title.includes('submitted') || title.includes('request')) return 'sent'
+      if (title.includes('submitted') || title.includes('request') || title === 'sent') {
+        return 'sent'
+      }
     }
     if (
       title.includes('submitted') ||
       title.includes('cancelled') ||
       title.includes('approved') ||
       title.includes('rejected') ||
-      title.includes('quotas')
+      title.includes('quotas') ||
+      title === 'sent' ||
+      title === 'received'
     ) {
-      // Org inbox: someone else's leave action → received
       if (!startsWithViewerName(row.description, viewer.name)) {
         return 'received'
       }
@@ -113,39 +115,39 @@ export function resolveActivityDirection(row, viewer = {}) {
 function leaveSubmittedCopy({ isSubject, subjectName, leaveType, range }) {
   if (isSubject) {
     return {
-      title: 'Sent',
-      description: `You requested ${leaveType} for ${range}.`,
+      title: 'Leave Request Submitted',
+      description: `You submitted a ${leaveType} request (${range}).`,
     }
   }
   return {
-    title: 'Received',
-    description: `${subjectName} requested ${leaveType} for ${range}.`,
+    title: 'Leave Request Submitted',
+    description: `${subjectName} submitted a ${leaveType} request (${range}).`,
   }
 }
 
 function leaveCancelledCopy({ isSubject, subjectName, leaveType, range }) {
   if (isSubject) {
     return {
-      title: 'Sent',
-      description: `You cancelled ${leaveType} (${range}).`,
+      title: 'Leave Request Cancelled',
+      description: `You cancelled your ${leaveType} request (${range}).`,
     }
   }
   return {
-    title: 'Received',
-    description: `${subjectName} cancelled ${leaveType} (${range}).`,
+    title: 'Leave Request Cancelled',
+    description: `${subjectName} cancelled a ${leaveType} request (${range}).`,
   }
 }
 
 function leaveAutoApprovedCopy({ isSubject, subjectName, leaveType, range }) {
   if (isSubject) {
     return {
-      title: 'Sent',
-      description: `You requested ${leaveType} for ${range} — auto-approved.`,
+      title: 'Leave Request Auto-Approved',
+      description: `Your ${leaveType} request (${range}) was approved automatically by the system.`,
     }
   }
   return {
-    title: 'Received',
-    description: `${subjectName} requested ${leaveType} for ${range} — auto-approved.`,
+    title: 'Leave Request Auto-Approved',
+    description: `${subjectName}'s ${leaveType} request (${range}) was approved automatically by the system.`,
   }
 }
 
@@ -157,48 +159,120 @@ function leaveDecisionCopy({
   range,
   remarks,
   actorRole,
+  actorName,
+  stepLabel,
   approved,
 }) {
   const verb = approved ? 'approved' : 'rejected'
-  const byRole = roleLabel(actorRole)
-  const remarkSuffix = remarks ? `: ${remarks}` : ''
+  const title = approved ? 'Leave Request Approved' : 'Leave Request Rejected'
+  const hasApprover = Boolean(actorRole || actorName || stepLabel)
+  const byLabel = hasApprover
+    ? formatApproverLabel({
+        role: actorRole,
+        name: actorName,
+        stepLabel,
+      })
+    : ''
+  const byClause = byLabel ? ` by ${byLabel}` : ''
+  const remarkSuffix = remarks ? ` Remarks: ${remarks}` : ''
 
   if (isActor) {
     return {
-      title: 'Sent',
-      description: `You ${verb} ${subjectName}'s ${leaveType} (${range})${remarkSuffix}.`,
+      title,
+      description: `You ${verb} ${subjectName}'s ${leaveType} request (${range}).${remarkSuffix}`,
     }
   }
 
   if (isSubject) {
     return {
-      title: 'Received',
-      description: actorRole
-        ? `Your ${leaveType} (${range}) was ${verb} by ${byRole}${remarkSuffix}.`
-        : `Your ${leaveType} (${range}) was ${verb}${remarkSuffix}.`,
+      title,
+      description: `Your ${leaveType} request (${range}) has been ${verb}${byClause}.${remarkSuffix}`,
     }
   }
 
   return {
-    title: 'Received',
-    description: `${subjectName} — ${leaveType} (${range}) ${verb} by ${byRole}${remarkSuffix}`,
+    title,
+    description: `${subjectName}'s ${leaveType} request (${range}) was ${verb}${byClause}.${remarkSuffix}`,
   }
 }
 
-/** Rewrite legacy titles that still say "Leave request submitted" etc. */
-function legacyTitleForDirection(title, direction) {
-  if (!direction) return title
+function attendanceCopy({ isSubject, subjectName, status, date, checkIn }) {
+  const dateLabel = date ? formatDisplayDate(date) : ''
+  const hasCheckIn = checkIn && checkIn !== '—' && checkIn !== '-'
+
+  if (status === 'Absent') {
+    return {
+      title: 'Marked Absent',
+      description: isSubject
+        ? dateLabel
+          ? `You were marked Absent on ${dateLabel}.`
+          : 'You were marked Absent.'
+        : dateLabel
+          ? `${subjectName} was marked Absent on ${dateLabel}.`
+          : `${subjectName} was marked Absent.`,
+    }
+  }
+
+  if (status === 'Half Day') {
+    return {
+      title: 'Half Day Recorded',
+      description: isSubject
+        ? hasCheckIn
+          ? `Half-day attendance recorded at ${checkIn}.`
+          : dateLabel
+            ? `Half-day attendance recorded on ${dateLabel}.`
+            : 'Half-day attendance recorded.'
+        : hasCheckIn
+          ? `${subjectName} recorded a half day at ${checkIn}.`
+          : dateLabel
+            ? `${subjectName} recorded a half day on ${dateLabel}.`
+            : `${subjectName} recorded a half day.`,
+    }
+  }
+
+  return {
+    title: 'Attendance Marked',
+    description: isSubject
+      ? hasCheckIn
+        ? `Check-in recorded at ${checkIn}.`
+        : dateLabel
+          ? `Attendance marked Present on ${dateLabel}.`
+          : 'Attendance marked Present.'
+      : hasCheckIn
+        ? `${subjectName} checked in at ${checkIn}.`
+        : dateLabel
+          ? `${subjectName} was marked Present on ${dateLabel}.`
+          : `${subjectName} was marked Present.`,
+  }
+}
+
+/** Map legacy Sent/Received leave titles to descriptive ones. */
+function legacyLeaveTitle(title, status) {
   const lower = String(title || '').toLowerCase()
   if (
+    lower === 'sent' ||
+    lower === 'received' ||
     lower.includes('leave request submitted') ||
-    lower.includes('leave request sent') ||
-    lower.includes('leave request cancelled') ||
-    lower.includes('leave approved') ||
-    lower.includes('leave rejected') ||
-    lower.includes('leave auto-approved') ||
-    lower.includes('leave decision')
+    lower.includes('leave request sent')
   ) {
-    return direction === 'sent' ? 'Sent' : 'Received'
+    if (status === 'Cancelled') return 'Leave Request Cancelled'
+    if (status === 'Approved' || status === 'TeamLeadApproved') {
+      return 'Leave Request Approved'
+    }
+    if (status === 'Rejected') return 'Leave Request Rejected'
+    if (status === 'Pending') return 'Leave Request Submitted'
+  }
+  if (lower.includes('leave request cancelled') || lower.includes('leave cancelled')) {
+    return 'Leave Request Cancelled'
+  }
+  if (lower.includes('leave approved') || lower.includes('approved by')) {
+    return 'Leave Request Approved'
+  }
+  if (lower.includes('leave rejected') || lower.includes('rejected by')) {
+    return 'Leave Request Rejected'
+  }
+  if (lower.includes('leave auto-approved')) {
+    return 'Leave Request Auto-Approved'
   }
   return title
 }
@@ -218,9 +292,11 @@ export function personalizeActivityMessage(row, viewer = {}) {
 
   const subjectName = meta.subjectName || 'Employee'
   const leaveType = meta.leaveType || 'Leave'
-  const range = meta.range || ''
+  const range = formatLeaveRangeText(meta.range || '')
   const remarks = meta.remarks || ''
   const actorRole = meta.actorRole || row.actorRole || ''
+  const actorName = meta.actorName || ''
+  const stepLabel = meta.stepLabel || ''
 
   let title = row.title || ''
   let description = row.description || ''
@@ -258,39 +334,25 @@ export function personalizeActivityMessage(row, viewer = {}) {
       range,
       remarks,
       actorRole,
+      actorName,
+      stepLabel,
       approved: eventType === 'leave.approved',
     }))
   } else if (eventType === 'attendance.marked') {
-    const date = meta.attendanceDate || ''
-    const status = meta.attendanceStatus || row.status || 'Present'
-    if (isSubject) {
-      title =
-        status === 'Absent'
-          ? 'Marked absent'
-          : status === 'Half Day'
-            ? 'Half day recorded'
-            : 'Attendance marked'
-      description = date
-        ? `You were marked ${status} on ${date}`
-        : `You were marked ${status}`
-    } else {
-      title =
-        status === 'Absent'
-          ? 'Marked absent'
-          : status === 'Half Day'
-            ? 'Half day recorded'
-            : 'Attendance marked'
-      description = date
-        ? `${subjectName} was marked ${status} on ${date}`
-        : `${subjectName} was marked ${status}`
-    }
+    ;({ title, description } = attendanceCopy({
+      isSubject,
+      subjectName,
+      status: meta.attendanceStatus || row.status || 'Present',
+      date: meta.attendanceDate || '',
+      checkIn: meta.checkIn || '',
+    }))
   } else if (
     row.audience === 'self' ||
     (String(row.id || '').startsWith('leave-') && isSubject)
   ) {
-    title = direction === 'sent' ? 'Sent' : direction === 'received' ? 'Received' : title
-  } else if (direction) {
-    title = legacyTitleForDirection(title, direction)
+    title = legacyLeaveTitle(title, row.status)
+  } else if (direction && row.category === 'Leave') {
+    title = legacyLeaveTitle(title, row.status)
   }
 
   return { title, description, direction }

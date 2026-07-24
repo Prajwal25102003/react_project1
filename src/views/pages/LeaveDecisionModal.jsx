@@ -8,8 +8,11 @@ import {
 import { normalizeLeaveBalances } from "../../models/leaveBalancesModel.js";
 import {
   attachmentFileLabel,
+  currentHierarchyStep,
   formatLeaveDaysLabel,
+  hierarchyStepLabel,
   leaveTypeSkipsBalanceDeduction,
+  nextStepAfterCurrent,
 } from "../../models/leaveRequestsModel.js";
 
 function LeaveDecisionModal({
@@ -25,21 +28,16 @@ function LeaveDecisionModal({
 }) {
   if (!request || !status) return null;
 
-  const isTeamLeadApprove = status === "TeamLeadApproved";
   const isReject = status === "Rejected";
   const isApprove = !isReject;
-  const isHrFinalApprove = status === "Approved";
-  const isAdminApprove =
-    isHrFinalApprove && Boolean(request?.requesterIsHr);
+  const currentStep = currentHierarchyStep(request);
+  const stepLabel = hierarchyStepLabel(currentStep);
+  const hasNextStep = Boolean(nextStepAfterCurrent(request));
   const skipsBalance = leaveTypeSkipsBalanceDeduction(request.leaveType);
 
   const title = isReject
     ? "Reject Leave Request"
-    : isTeamLeadApprove
-      ? "Department Head Approval"
-      : isAdminApprove
-        ? "Admin Approval"
-        : "HR Approval";
+    : `${stepLabel} Approval`;
 
   const daysLabel =
     request.leaveDaysLabel ||
@@ -55,11 +53,9 @@ function LeaveDecisionModal({
 
   const description = isReject
     ? `Reject ${request.leaveType} for ${request.employeeId} (${dateRange}). The workflow will stop.`
-    : isTeamLeadApprove
-      ? `Approve ${request.leaveType} for ${request.employeeId} (${dateRange}) as department head? HR will give the final approval.`
-      : isAdminApprove
-        ? `Give final Admin approval for HR leave (${request.leaveType}) for ${request.employeeId} (${dateRange})? ${balanceNote}`
-        : `Give final HR approval for ${request.leaveType} for ${request.employeeId} (${dateRange})? ${balanceNote}`;
+    : hasNextStep
+      ? `Approve ${request.leaveType} for ${request.employeeId} (${dateRange}) as ${stepLabel}? The next approver will continue the workflow.`
+      : `Give final ${stepLabel} approval for ${request.leaveType} for ${request.employeeId} (${dateRange})? ${balanceNote}`;
 
   const balances = normalizeLeaveBalances(request);
 
@@ -81,7 +77,28 @@ function LeaveDecisionModal({
           <p className="text-theme-sm text-error-600">{error}</p>
         ) : null}
 
-        {request.attachmentUrl ? (
+        {request.attachments?.length ? (
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+            <p className={LABEL_CLASS}>
+              Medical Document{request.attachments.length > 1 ? "s" : ""}
+            </p>
+            <ul className="mt-1 space-y-1.5">
+              {request.attachments.map((file) => (
+                <li key={file.url}>
+                  <a
+                    href={file.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
+                  >
+                    View / download{" "}
+                    {attachmentFileLabel(file.url, file.name)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : request.attachmentUrl ? (
           <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
             <p className={LABEL_CLASS}>Medical Document</p>
             <a
@@ -95,7 +112,7 @@ function LeaveDecisionModal({
           </div>
         ) : null}
 
-        {isHrFinalApprove ? (
+        {isApprove && !hasNextStep ? (
           <LeaveBalancePanel
             balances={balances}
             leaveType={request.leaveType}

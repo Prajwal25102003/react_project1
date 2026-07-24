@@ -1,6 +1,7 @@
 import ModalShell from "../components/ModalShell.jsx";
 import { FieldError, RequiredMark } from "../components/forms/FormHelpers.jsx";
 import SelectField from "../components/forms/SelectField.jsx";
+import { PlusIcon } from "../icons/ActionIcons.jsx";
 import { HOLIDAY_TYPES } from "../../models/holidaysModel.js";
 import { LABEL_CLASS } from "../../models/formLayoutModel.js";
 
@@ -69,9 +70,11 @@ function HolidayReleaseModal({
             type="button"
             onClick={onAddRow}
             disabled={loading || releasing}
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:opacity-60"
+            title="Add Row"
+            aria-label="Add Row"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105 disabled:opacity-60"
           >
-            + Add Row
+            <PlusIcon />
           </button>
         </div>
 

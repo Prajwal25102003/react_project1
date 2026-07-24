@@ -9,6 +9,11 @@ import {
 } from '../models/attendanceModel.js'
 import { employeeExists, employeeHasExcludedLoginRole } from '../models/employeesModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
+import {
+  actorFromUser,
+  formatActorLabel,
+  formatDisplayDate,
+} from '../utils/activityCopy.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 import { calculateWorkingHours } from '../utils/workingHours.js'
@@ -154,9 +159,22 @@ export async function updateAttendanceHandler(req, res) {
       return res.status(404).json({ message: 'Attendance record not found' })
     }
 
+    const actorLabel = formatActorLabel(actorFromUser(req.user))
+    const dateLabel = formatDisplayDate(updated.date)
+    const hasCheckIn =
+      updated.checkIn && updated.checkIn !== '—' && updated.checkIn !== '-'
+    let description
+    if (updated.status === 'Absent') {
+      description = `${updated.employeeName} was marked Absent on ${dateLabel} by ${actorLabel}.`
+    } else if (hasCheckIn) {
+      description = `${updated.employeeName} checked in at ${updated.checkIn} (${updated.status}) on ${dateLabel}. Updated by ${actorLabel}.`
+    } else {
+      description = `${updated.employeeName}'s attendance on ${dateLabel} was updated to ${updated.status} by ${actorLabel}.`
+    }
+
     await createRecentActivity({
-      title: 'Attendance updated',
-      description: `${updated.employeeName}'s attendance on ${updated.date} was updated (${updated.status}).`,
+      title: 'Attendance Marked',
+      description,
       category: 'Attendance',
       status: updated.status,
       eventType: 'attendance.marked',
@@ -166,6 +184,9 @@ export async function updateAttendanceHandler(req, res) {
         subjectName: updated.employeeName,
         attendanceDate: updated.date,
         attendanceStatus: updated.status,
+        checkIn: updated.checkIn,
+        actorName: req.user?.name || null,
+        actorRole: req.user?.role || null,
       },
     })
 
@@ -188,9 +209,11 @@ export async function deleteAttendanceHandler(req, res) {
 
     await deleteAttendanceById(req.params.id)
 
+    const actorLabel = formatActorLabel(actorFromUser(req.user))
+    const dateLabel = formatDisplayDate(existing.date)
     await createRecentActivity({
-      title: 'Attendance removed',
-      description: `Attendance for ${existing.employeeName} on ${existing.date} was removed.`,
+      title: 'Attendance Removed',
+      description: `Attendance for ${existing.employeeName} on ${dateLabel} was removed by ${actorLabel}.`,
       category: 'Attendance',
       status: 'Removed',
       subjectEmployeeId: existing.employeeId,
@@ -198,6 +221,8 @@ export async function deleteAttendanceHandler(req, res) {
       meta: {
         subjectName: existing.employeeName,
         attendanceDate: existing.date,
+        actorName: req.user?.name || null,
+        actorRole: req.user?.role || null,
       },
     })
 
@@ -266,11 +291,19 @@ export async function importAttendanceHandler(req, res) {
 
     const saved = imported + updated
     if (saved > 0) {
+      const actorLabel = formatActorLabel(actorFromUser(req.user))
       await createRecentActivity({
-        title: 'Attendance imported',
-        description: `${saved} attendance rows imported from Excel (${imported} new, ${updated} updated).`,
+        title: 'Attendance Imported',
+        description: `${actorLabel} imported ${saved} attendance rows from Excel (${imported} new, ${updated} updated).`,
         category: 'Attendance',
         status: 'Updated',
+        actorEmployeeId: req.user?.employeeId || null,
+        meta: {
+          imported,
+          updated,
+          actorName: req.user?.name || null,
+          actorRole: req.user?.role || null,
+        },
       })
     }
 

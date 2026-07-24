@@ -31,6 +31,12 @@ const NAV_ITEMS = {
     icon: "forms",
     path: "/leave-requests",
   },
+  "leave-hierarchy": {
+    id: "leave-hierarchy",
+    label: "Leave Hierarchy",
+    icon: "tables",
+    path: "/leave-hierarchy",
+  },
   holidays: {
     id: "holidays",
     label: "Holiday Calendar",
@@ -54,16 +60,17 @@ const DEPARTMENT_HEAD_LABELS = {
 };
 
 /**
- * HR, Admin, and any department head can act on leave approvals.
+ * HR, Admin, department heads, and named hierarchy approvers can act on leave.
  * @param {string} role
- * @param {{ isDepartmentHead?: boolean, employeeId?: string|null }} [options]
+ * @param {{ isDepartmentHead?: boolean, isNamedLeaveApprover?: boolean, employeeId?: string|null }} [options]
  */
 export function userCanApproveLeaves(role, options = {}) {
-  const { isDepartmentHead = false } = options;
+  const { isDepartmentHead = false, isNamedLeaveApprover = false } = options;
   return (
     role === ROLES.HR ||
     role === ROLES.ADMIN ||
-    Boolean(isDepartmentHead)
+    Boolean(isDepartmentHead) ||
+    Boolean(isNamedLeaveApprover)
   );
 }
 

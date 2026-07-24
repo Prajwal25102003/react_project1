@@ -9,6 +9,7 @@ import {
   periodFilterTitle,
 } from "../../models/datePickerModel.js";
 import { INPUT_CLASS } from "../../models/formLayoutModel.js";
+import { ActionIcon } from "../icons/ActionIcons.jsx";
 import DateField from "./forms/DateField.jsx";
 import SelectField from "./forms/SelectField.jsx";
 import StatusPill from "./StatusPill.jsx";
@@ -16,6 +17,31 @@ import UserAvatar from "./UserAvatar.jsx";
 
 const TOOLBAR_BTN =
   "inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
+
+/** Keep outer table edge gap equal to the gap between columns. */
+function cellPadClass({ dense, fitWidth, vertical, columnIndex, columnCount }) {
+  if (dense) {
+    return vertical === "head" ? "px-3 py-1.5 sm:px-3" : "px-3 py-1.5 sm:px-3";
+  }
+
+  if (!fitWidth) {
+    return vertical === "head"
+      ? "px-5 py-3 sm:px-6"
+      : "px-5 py-4 sm:px-6";
+  }
+
+  const y = vertical === "head" ? "py-3" : "py-4";
+  if (columnCount <= 1) {
+    return `${y} px-4 sm:px-5`;
+  }
+
+  const isFirst = columnIndex === 0;
+  const isLast = columnIndex === columnCount - 1;
+  // Outer pad = mid pad × 2 so edge gap matches between-column gap.
+  if (isFirst) return `${y} pl-4 pr-2 sm:pl-5 sm:pr-2.5`;
+  if (isLast) return `${y} pl-2 pr-4 sm:pl-2.5 sm:pr-5`;
+  return `${y} px-2 sm:px-2.5`;
+}
 
 function initialPeriodModes(filterDefs) {
   const modes = {};
@@ -143,15 +169,37 @@ function TableCell({ column, row, getActions, clamp = false }) {
     return (
       <div className="flex flex-wrap items-center gap-3">
         {actions.map((action) => {
-          const className =
-            action.tone === "danger"
+          const iconNode =
+            typeof action.icon === "string" ? (
+              <ActionIcon name={action.icon} />
+            ) : (
+              action.icon
+            );
+          const isIcon = Boolean(iconNode);
+          const className = isIcon
+            ? "inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
+            : action.tone === "danger"
               ? "text-theme-sm font-medium text-error-600 hover:text-error-700"
               : "text-theme-sm font-medium text-brand-500 hover:text-brand-600";
 
+          const content = isIcon ? (
+            <>
+              <span className="sr-only">{action.label}</span>
+              {iconNode}
+            </>
+          ) : (
+            action.label
+          );
+
           if (action.to) {
             return (
-              <Link key={action.label} to={action.to} className={className}>
-                {action.label}
+              <Link
+                key={action.label}
+                to={action.to}
+                className={className}
+                title={action.label}
+              >
+                {content}
               </Link>
             );
           }
@@ -162,8 +210,10 @@ function TableCell({ column, row, getActions, clamp = false }) {
               type="button"
               onClick={action.onClick}
               className={className}
+              title={action.label}
+              aria-label={action.label}
             >
-              {action.label}
+              {content}
             </button>
           );
         })}
@@ -325,16 +375,7 @@ function DataTable({
     initialPeriodModes(filterDefs),
   );
   const hasActiveFilters = Object.values(columnFilters).some(Boolean);
-  const cellPad = dense
-    ? "px-3 py-1.5 sm:px-3"
-    : fitWidth
-      ? "px-3 py-3 sm:px-4"
-      : "px-5 py-3 sm:px-6";
-  const bodyPad = dense
-    ? "px-3 py-1.5 sm:px-3"
-    : fitWidth
-      ? "px-3 py-3 sm:px-4"
-      : "px-5 py-4 sm:px-6";
+  const columnCount = columns.length;
   const showMobileCards = mobileCards;
   const showToolbar =
     !hideToolbar &&
@@ -465,8 +506,14 @@ function DataTable({
           ) : null}
 
           {onExportCsv ? (
-            <button type="button" onClick={onExportCsv} className={TOOLBAR_BTN}>
-              Export CSV
+            <button
+              type="button"
+              onClick={onExportCsv}
+              title="Export CSV"
+              aria-label="Export CSV"
+              className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
+            >
+              <ActionIcon name="export" />
             </button>
           ) : null}
 
@@ -593,9 +640,15 @@ function DataTable({
           >
             <thead>
               <tr className="border-b border-gray-100">
-                {columns.map((column) => {
+                {columns.map((column, columnIndex) => {
                   const cellClass = [
-                    `${cellPad} text-left ${rowAlign}`,
+                    `${cellPadClass({
+                      dense,
+                      fitWidth,
+                      vertical: "head",
+                      columnIndex,
+                      columnCount,
+                    })} text-left ${rowAlign}`,
                     column.nowrap && !column.wrap ? "whitespace-nowrap" : "",
                     column.cellClassName || "",
                   ]
@@ -631,7 +684,13 @@ function DataTable({
                 <tr className={fillHeight ? "h-full" : undefined}>
                   <td
                     colSpan={columns.length}
-                    className={`${bodyPad} py-8 text-center`}
+                    className={`${cellPadClass({
+                      dense,
+                      fitWidth,
+                      vertical: "body",
+                      columnIndex: 0,
+                      columnCount: 1,
+                    })} py-8 text-center`}
                   >
                     <p className="text-theme-sm text-gray-500">{emptyMessage}</p>
                   </td>
@@ -652,7 +711,13 @@ function DataTable({
                   >
                     {columns.map((column, columnIndex) => {
                       const cellClass = [
-                        `${bodyPad} ${rowAlign}`,
+                        `${cellPadClass({
+                          dense,
+                          fitWidth,
+                          vertical: "body",
+                          columnIndex,
+                          columnCount,
+                        })} ${rowAlign}`,
                         column.nowrap && !column.wrap
                           ? "whitespace-nowrap"
                           : "",

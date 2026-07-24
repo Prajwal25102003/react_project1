@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
+import { getMetricToneStyles } from "../../models/dashboardModel.js";
 
-function EmployeesIcon() {
+function EmployeesIcon({ className = "fill-current" }) {
   return (
     <svg
-      className="fill-gray-800"
+      className={className}
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -19,10 +20,10 @@ function EmployeesIcon() {
   );
 }
 
-function ActiveIcon() {
+function ActiveIcon({ className = "fill-current" }) {
   return (
     <svg
-      className="fill-gray-800"
+      className={className}
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -76,10 +77,10 @@ function TrendDownIcon() {
   );
 }
 
-function MessagesIcon() {
+function MessagesIcon({ className = "fill-current" }) {
   return (
     <svg
-      className="fill-gray-800"
+      className={className}
       width="24"
       height="24"
       viewBox="0 0 24 24"
@@ -95,32 +96,49 @@ function MessagesIcon() {
   );
 }
 
+function LeaveIcon({ className = "fill-current" }) {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M8 2.25C8.41421 2.25 8.75 2.58579 8.75 3V4H15.25V3C15.25 2.58579 15.5858 2.25 16 2.25C16.4142 2.25 16.75 2.58579 16.75 3V4H18.5C19.7426 4 20.75 5.00736 20.75 6.25V19.75C20.75 20.9926 19.7426 22 18.5 22H5.5C4.25736 22 3.25 20.9926 3.25 19.75V6.25C3.25 5.00736 4.25736 4 5.5 4H7.25V3C7.25 2.58579 7.58579 2.25 8 2.25ZM5.5 5.5C5.08579 5.5 4.75 5.83579 4.75 6.25V8.5H19.25V6.25C19.25 5.83579 18.9142 5.5 18.5 5.5H5.5ZM19.25 10H4.75V19.75C4.75 20.1642 5.08579 20.5 5.5 20.5H18.5C18.9142 20.5 19.25 20.1642 19.25 19.75V10ZM8 13.25C8 12.8358 8.33579 12.5 8.75 12.5H11.25C11.6642 12.5 12 12.8358 12 13.25V15.75C12 16.1642 11.6642 16.5 11.25 16.5H8.75C8.33579 16.5 8 16.1642 8 15.75V13.25Z"
+      />
+    </svg>
+  );
+}
+
 const METRIC_ICONS = {
   "total-employees": EmployeesIcon,
   "active-employees": ActiveIcon,
   "new-employees": EmployeesIcon,
-  "pending-leave": ActiveIcon,
+  "pending-leave": LeaveIcon,
   "inactive-employees": EmployeesIcon,
   "unread-messages": MessagesIcon,
-  "days-present": EmployeesIcon,
-  "leave-approved": ActiveIcon,
-  "total-leave": ActiveIcon,
-  "casual-leave": ActiveIcon,
-  "sick-leave": ActiveIcon,
-  "lop-days": ActiveIcon,
+  "days-present": ActiveIcon,
+  "leave-approved": LeaveIcon,
+  "total-leave": LeaveIcon,
+  "casual-leave": LeaveIcon,
+  "sick-leave": LeaveIcon,
+  "lop-days": LeaveIcon,
 };
 
-function MetricCardBody({ metric, Icon, compact }) {
+function MetricCardBody({ metric, Icon, compact, tone }) {
   return (
     <>
       <div
-        className={
-          compact
-            ? "flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100"
-            : "flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100"
-        }
+        className={`flex items-center justify-center rounded-xl ${tone.iconWrap} ${tone.icon} ${
+          compact ? "h-10 w-10" : "h-12 w-12"
+        }`}
       >
-        <Icon />
+        <Icon className="fill-current" />
       </div>
 
       <div
@@ -166,16 +184,15 @@ function MetricCards({ metrics, columns = 2, compact = false, onMetricAction }) 
       ? "grid grid-cols-1 gap-3 sm:grid-cols-3 md:gap-4"
       : "grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6";
 
-  const cardClass = compact
-    ? "rounded-2xl border border-gray-200 bg-white p-4"
-    : "rounded-2xl border border-gray-200 bg-white p-5 md:p-6";
-
-  const interactiveClass = `${cardClass} block w-full text-left transition hover:border-brand-200 hover:shadow-theme-xs focus-visible:outline-hidden focus-visible:ring-3 focus-visible:ring-brand-500/20`;
+  const cardPadding = compact ? "p-4" : "p-5 md:p-6";
 
   return (
     <div className={gridClass}>
       {metrics.map((metric) => {
         const Icon = METRIC_ICONS[metric.id] || EmployeesIcon;
+        const tone = getMetricToneStyles(metric.id);
+        const cardClass = `rounded-2xl border ${tone.card} ${cardPadding}`;
+        const interactiveClass = `${cardClass} block w-full text-left transition hover:shadow-theme-xs focus-visible:outline-hidden focus-visible:ring-3 focus-visible:ring-brand-500/20`;
 
         if (metric.href) {
           return (
@@ -185,7 +202,12 @@ function MetricCards({ metrics, columns = 2, compact = false, onMetricAction }) 
               className={interactiveClass}
               aria-label={`Open ${metric.label}`}
             >
-              <MetricCardBody metric={metric} Icon={Icon} compact={compact} />
+              <MetricCardBody
+                metric={metric}
+                Icon={Icon}
+                compact={compact}
+                tone={tone}
+              />
             </Link>
           );
         }
@@ -199,14 +221,24 @@ function MetricCards({ metrics, columns = 2, compact = false, onMetricAction }) 
               aria-label={`Open ${metric.label}`}
               onClick={() => onMetricAction(metric)}
             >
-              <MetricCardBody metric={metric} Icon={Icon} compact={compact} />
+              <MetricCardBody
+                metric={metric}
+                Icon={Icon}
+                compact={compact}
+                tone={tone}
+              />
             </button>
           );
         }
 
         return (
           <article key={metric.id} className={cardClass}>
-            <MetricCardBody metric={metric} Icon={Icon} compact={compact} />
+            <MetricCardBody
+              metric={metric}
+              Icon={Icon}
+              compact={compact}
+              tone={tone}
+            />
           </article>
         );
       })}

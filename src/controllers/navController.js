@@ -19,6 +19,7 @@ export function useNav(notifications = []) {
   const [leaveApprovalsBadge, setLeaveApprovalsBadge] = useState(0);
   const canApproveLeaves = userCanApproveLeaves(user?.role, {
     isDepartmentHead: Boolean(user?.isDepartmentHead),
+    isNamedLeaveApprover: Boolean(user?.isNamedLeaveApprover),
   });
 
   const loadLeaveApprovalsBadge = useCallback(async () => {

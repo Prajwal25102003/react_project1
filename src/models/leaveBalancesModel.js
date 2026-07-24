@@ -1,8 +1,8 @@
 /** Client-side leave balance rules (mirrors server leaveBalancesModel). */
 
 export const DEFAULT_LEAVE_BALANCES = {
-  casualLeaveBalance: 1,
-  sickLeaveBalance: 1,
+  casualLeaveBalance: 0,
+  sickLeaveBalance: 0,
   lopDays: 0,
 };
 

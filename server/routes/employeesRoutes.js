@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import {
+  assignLeaveBalancesHandler,
   createEmployeeHandler,
   deleteEmployeeHandler,
   getEmployeeById,
@@ -13,6 +14,7 @@ const hrAdmin = [requireAuth, requireRole('hr', 'admin')]
 
 router.get('/', ...hrAdmin, getEmployees)
 router.post('/', ...hrAdmin, createEmployeeHandler)
+router.post('/leave-balances/assign', ...hrAdmin, assignLeaveBalancesHandler)
 router.get('/:id', ...hrAdmin, getEmployeeById)
 router.put('/:id', ...hrAdmin, updateEmployeeHandler)
 router.delete('/:id', ...hrAdmin, deleteEmployeeHandler)

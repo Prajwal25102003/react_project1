@@ -7,6 +7,7 @@ import SelectField from "../components/forms/SelectField.jsx";
 import DataTable from "../components/DataTable.jsx";
 import HolidayMonthCalendar from "../components/HolidayMonthCalendar.jsx";
 import UpcomingHolidays from "../components/UpcomingHolidays.jsx";
+import { ActionIcon, PlusIcon } from "../icons/ActionIcons.jsx";
 import HolidayDeleteModal from "./HolidayDeleteModal.jsx";
 import HolidayFormModal from "./HolidayFormModal.jsx";
 import HolidayReleaseModal from "./HolidayReleaseModal.jsx";
@@ -176,18 +177,22 @@ function HolidaysPage() {
                   <button
                     type="button"
                     onClick={openCreateModal}
-                    className={TOOLBAR_BTN}
+                    title="Add Holiday"
+                    aria-label="Add Holiday"
+                    className="inline-flex h-9 items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
                   >
-                    + Add Holiday
+                    <PlusIcon />
                   </button>
                 ) : null}
                 {isYearReleased ? (
                   <button
                     type="button"
                     onClick={() => table.exportCsv(`holidays-${year}.csv`)}
-                    className={TOOLBAR_BTN}
+                    title="Export CSV"
+                    aria-label="Export CSV"
+                    className="inline-flex h-9 items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
                   >
-                    Export CSV
+                    <ActionIcon name="export" />
                   </button>
                 ) : null}
               </div>
@@ -234,10 +239,12 @@ function HolidaysPage() {
                           ? (holiday) => [
                               {
                                 label: "Edit",
+                                icon: "pencil",
                                 onClick: () => openEditModal(holiday),
                               },
                               {
                                 label: "Delete",
+                                icon: "trash",
                                 tone: "danger",
                                 onClick: () => openDeleteModal(holiday),
                               },

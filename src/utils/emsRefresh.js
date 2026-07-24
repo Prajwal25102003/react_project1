@@ -1,8 +1,10 @@
 import { requestDashboardRefresh } from "./dashboardRefresh.js";
 import { requestNotificationsRefresh } from "./notificationsRefresh.js";
+import { requestSessionRefresh } from "./sessionRefresh.js";
 
-/** Refresh header notifications and dashboard KPIs after EMS mutations. */
+/** Refresh header notifications, dashboard KPIs, and auth headship flags. */
 export function requestEmsRefresh() {
   requestNotificationsRefresh();
   requestDashboardRefresh();
+  requestSessionRefresh();
 }

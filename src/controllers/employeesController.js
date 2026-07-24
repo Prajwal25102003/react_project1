@@ -11,6 +11,7 @@ import {
   deleteEmployee,
   fetchEmployeeById,
   fetchEmployees,
+  assignEmployeeLeaveBalances,
   updateEmployee,
   uploadEmployeeAvatar,
 } from "../services/employeesService.js";
@@ -23,6 +24,13 @@ import {
   validateEmployeeForm,
 } from "../models/employeesModel.js";
 import {
+  ASSIGN_LEAVE_MODES,
+  ASSIGN_LEAVE_SCOPES,
+  EMPTY_ASSIGN_LEAVES_FORM,
+  toAssignLeavesPayload,
+  validateAssignLeavesForm,
+} from "../models/assignLeavesModel.js";
+import {
   EMPLOYEE_COLUMN_FILTERS,
   EMPLOYEE_COLUMNS,
   EMPLOYEE_SEARCH_KEYS,
@@ -32,8 +40,12 @@ import { sanitizeIndianPhoneInput } from "../utils/indianPhone.js";
 
 export function useEmployees() {
   const toast = useToast();
+  const loadEmployees = useMemo(
+    () => () => fetchEmployees({ excludeLoginRoles: ["admin"] }),
+    [],
+  );
   const { rows, loading, error, reload } = useListData(
-    fetchEmployees,
+    loadEmployees,
     "Failed to load employees",
   );
   const [searchParams] = useSearchParams();
@@ -42,6 +54,7 @@ export function useEmployees() {
     [searchParams],
   );
   const [departmentFilterOptions, setDepartmentFilterOptions] = useState([]);
+  const [assignDepartments, setAssignDepartments] = useState([]);
   const table = useDataTable(rows, {
     columns: EMPLOYEE_COLUMNS,
     searchKeys: EMPLOYEE_SEARCH_KEYS,
@@ -52,11 +65,19 @@ export function useEmployees() {
   const [deleteError, setDeleteError] = useState("");
   const [viewTarget, setViewTarget] = useState(null);
 
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignForm, setAssignForm] = useState({ ...EMPTY_ASSIGN_LEAVES_FORM });
+  const [assignFieldErrors, setAssignFieldErrors] = useState({});
+  const [assignError, setAssignError] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+
   useEffect(() => {
     let cancelled = false;
     fetchDepartments()
       .then((departments) => {
         if (cancelled) return;
+        setAssignDepartments(departments);
         setDepartmentFilterOptions(
           departments.map((department) => ({
             value: department.name,
@@ -85,6 +106,51 @@ export function useEmployees() {
     ],
     [departmentFilterOptions],
   );
+
+  const assignableEmployees = useMemo(
+    () =>
+      (rows || []).filter(
+        (employee) =>
+          !employee.isAdminAccount && employee.loginRole !== "admin",
+      ),
+    [rows],
+  );
+
+  const scopeAssignableEmployees = useMemo(() => {
+    if (assignForm.scope === "department") {
+      const departmentId = String(assignForm.departmentId || "").trim();
+      if (!departmentId) return [];
+      return assignableEmployees.filter(
+        (employee) => employee.departmentId === departmentId,
+      );
+    }
+    return assignableEmployees;
+  }, [assignableEmployees, assignForm.scope, assignForm.departmentId]);
+
+  const filteredAssignableEmployees = useMemo(() => {
+    const q = employeeSearch.trim().toLowerCase();
+    if (!q) return scopeAssignableEmployees;
+    return scopeAssignableEmployees.filter((employee) => {
+      const haystack = [
+        employee.name,
+        employee.id,
+        employee.department,
+        employee.designation,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [scopeAssignableEmployees, employeeSearch]);
+
+  function employeesInDepartment(departmentId) {
+    const id = String(departmentId || "").trim();
+    if (!id) return [];
+    return assignableEmployees
+      .filter((employee) => employee.departmentId === id)
+      .map((employee) => employee.id);
+  }
 
   function openViewModal(employee) {
     setViewTarget(employee);
@@ -123,6 +189,126 @@ export function useEmployees() {
     }
   }
 
+  function openAssignLeavesModal() {
+    setAssignError("");
+    setAssignFieldErrors({});
+    setEmployeeSearch("");
+    setAssignForm({
+      ...EMPTY_ASSIGN_LEAVES_FORM,
+      departmentId: assignDepartments[0]?.id || "",
+    });
+    setAssignOpen(true);
+  }
+
+  function closeAssignLeavesModal() {
+    if (assigning) return;
+    setAssignOpen(false);
+    setAssignError("");
+    setAssignFieldErrors({});
+    setEmployeeSearch("");
+  }
+
+  function updateAssignField(field, value) {
+    if (field === "scope" || field === "departmentId") {
+      setEmployeeSearch("");
+    }
+    setAssignForm((current) => {
+      const next = { ...current, [field]: value };
+      if (field === "scope") {
+        if (value === "department") {
+          const departmentId =
+            current.departmentId || assignDepartments[0]?.id || "";
+          next.departmentId = departmentId;
+          next.employeeIds = employeesInDepartment(departmentId);
+        } else if (value === "custom") {
+          next.departmentId = "";
+          next.employeeIds = [];
+        } else {
+          next.departmentId = "";
+          next.employeeIds = [];
+        }
+      }
+      if (field === "departmentId") {
+        next.employeeIds = employeesInDepartment(value);
+      }
+      return next;
+    });
+    setAssignFieldErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      if (field === "scope" || field === "departmentId") {
+        delete next.employeeIds;
+        delete next.departmentId;
+      }
+      return next;
+    });
+  }
+
+  function toggleAssignEmployee(employeeId) {
+    setAssignForm((current) => {
+      const selected = new Set(current.employeeIds || []);
+      if (selected.has(employeeId)) selected.delete(employeeId);
+      else selected.add(employeeId);
+      return { ...current, employeeIds: [...selected] };
+    });
+    setAssignFieldErrors((current) => {
+      if (!current.employeeIds) return current;
+      const next = { ...current };
+      delete next.employeeIds;
+      return next;
+    });
+  }
+
+  function selectAllFilteredEmployees() {
+    setAssignForm((current) => {
+      const selected = new Set(current.employeeIds || []);
+      filteredAssignableEmployees.forEach((employee) =>
+        selected.add(employee.id),
+      );
+      return { ...current, employeeIds: [...selected] };
+    });
+    setAssignFieldErrors((current) => {
+      if (!current.employeeIds) return current;
+      const next = { ...current };
+      delete next.employeeIds;
+      return next;
+    });
+  }
+
+  function clearAssignEmployees() {
+    setAssignForm((current) => ({ ...current, employeeIds: [] }));
+  }
+
+  async function submitAssignLeaves(event) {
+    event.preventDefault();
+    const validation = validateAssignLeavesForm(assignForm);
+    if (!validation.ok) {
+      setAssignFieldErrors(validation.fieldErrors);
+      setAssignError(validation.message);
+      return;
+    }
+
+    try {
+      setAssigning(true);
+      setAssignError("");
+      setAssignFieldErrors({});
+      const result = await assignEmployeeLeaveBalances(
+        toAssignLeavesPayload(assignForm),
+      );
+      toast.success(
+        result.message ||
+          `Leave balances updated for ${result.updatedCount} employee(s)`,
+      );
+      setAssignOpen(false);
+      reload();
+      requestEmsRefresh();
+    } catch (err) {
+      setAssignError(err.message || "Failed to assign leave balances");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
   return {
     employees: table.rows,
     loading,
@@ -139,6 +325,24 @@ export function useEmployees() {
     openDeleteModal,
     closeDeleteModal,
     confirmDelete,
+    assignOpen,
+    assignForm,
+    assignFieldErrors,
+    assignError,
+    assigning,
+    assignDepartments,
+    assignScopes: ASSIGN_LEAVE_SCOPES,
+    assignModes: ASSIGN_LEAVE_MODES,
+    filteredAssignableEmployees,
+    employeeSearch,
+    setEmployeeSearch,
+    openAssignLeavesModal,
+    closeAssignLeavesModal,
+    updateAssignField,
+    toggleAssignEmployee,
+    selectAllFilteredEmployees,
+    clearAssignEmployees,
+    submitAssignLeaves,
   };
 }
 
@@ -177,7 +381,14 @@ export function useEmployeeForm(employeeId) {
           if (cancelled) return;
 
           setDepartments(departmentRows);
-          setIsAdminAccount(Boolean(employee.isAdminAccount));
+          if (employee.isAdminAccount) {
+            toast.error(
+              "Admin is a system manager and is not managed from Employees",
+            );
+            navigate("/employees", { replace: true });
+            return;
+          }
+          setIsAdminAccount(false);
           setForm(toEmployeeFormValues(employee));
         } else {
           const departmentRows = await fetchDepartments();

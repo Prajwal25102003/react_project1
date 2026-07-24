@@ -15,6 +15,11 @@ import {
   updateHoliday,
 } from '../models/holidaysModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
+import {
+  actorFromUser,
+  formatActorLabel,
+  formatDisplayDate,
+} from '../utils/activityCopy.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 
@@ -196,11 +201,19 @@ export async function releaseHolidayCalendarHandler(req, res) {
     const saved = await replaceHolidaysForYear(year, holidays)
     const calendar = await releaseHolidayCalendar(year, req.user?.id)
 
+    const actorLabel = formatActorLabel(actorFromUser(req.user))
     await createRecentActivity({
-      title: 'Holiday calendar released',
-      description: `${year} · ${saved.length} holidays`,
+      title: 'Holiday Calendar Released',
+      description: `${actorLabel} released the ${year} holiday calendar with ${saved.length} holidays.`,
       category: 'Holidays',
       status: 'Completed',
+      actorEmployeeId: req.user?.employeeId || null,
+      meta: {
+        year,
+        holidayCount: saved.length,
+        actorName: req.user?.name || null,
+        actorRole: req.user?.role || null,
+      },
     })
 
     res.json({ calendar, holidays: saved })
@@ -300,11 +313,20 @@ export async function createHolidayHandler(req, res) {
     const id = await generateNextHolidayId()
     const created = await createHoliday({ ...holiday, id })
 
+    const actorLabel = formatActorLabel(actorFromUser(req.user))
+    const dateLabel = formatDisplayDate(created.date)
     await createRecentActivity({
-      title: 'Holiday added',
-      description: `${created.name} · ${created.date}`,
+      title: 'Holiday Added to Calendar',
+      description: `${created.name} (${dateLabel}) has been added to the company holiday calendar by ${actorLabel}.`,
       category: 'Holidays',
       status: 'Added',
+      actorEmployeeId: req.user?.employeeId || null,
+      meta: {
+        holidayName: created.name,
+        holidayDate: created.date,
+        actorName: req.user?.name || null,
+        actorRole: req.user?.role || null,
+      },
     })
 
     res.status(201).json({ holiday: created })
@@ -347,11 +369,20 @@ export async function updateHolidayHandler(req, res) {
       return res.status(404).json({ message: 'Holiday not found' })
     }
 
+    const actorLabel = formatActorLabel(actorFromUser(req.user))
+    const dateLabel = formatDisplayDate(updated.date)
     await createRecentActivity({
-      title: 'Holiday updated',
-      description: `${updated.name} · ${updated.date}`,
+      title: 'Holiday Updated',
+      description: `${updated.name} (${dateLabel}) was updated on the holiday calendar by ${actorLabel}.`,
       category: 'Holidays',
       status: 'Updated',
+      actorEmployeeId: req.user?.employeeId || null,
+      meta: {
+        holidayName: updated.name,
+        holidayDate: updated.date,
+        actorName: req.user?.name || null,
+        actorRole: req.user?.role || null,
+      },
     })
 
     res.json({ holiday: updated })
@@ -380,11 +411,20 @@ export async function deleteHolidayHandler(req, res) {
 
     await deleteHolidayById(req.params.id)
 
+    const actorLabel = formatActorLabel(actorFromUser(req.user))
+    const dateLabel = formatDisplayDate(existing.date)
     await createRecentActivity({
-      title: 'Holiday removed',
-      description: `${existing.name} · ${existing.date}`,
+      title: 'Holiday Removed from Calendar',
+      description: `${existing.name} (${dateLabel}) has been removed from the holiday calendar by ${actorLabel}.`,
       category: 'Holidays',
       status: 'Removed',
+      actorEmployeeId: req.user?.employeeId || null,
+      meta: {
+        holidayName: existing.name,
+        holidayDate: existing.date,
+        actorName: req.user?.name || null,
+        actorRole: req.user?.role || null,
+      },
     })
 
     res.json({ message: 'Holiday deleted' })

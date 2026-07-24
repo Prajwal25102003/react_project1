@@ -3,6 +3,7 @@ import { useDepartments } from "../../controllers/departmentsController.js";
 import { DEPARTMENT_COLUMNS } from "../../models/departmentsTableModel.js";
 import DataTable from "../components/DataTable.jsx";
 import ListPageShell from "../components/ListPageShell.jsx";
+import { PlusIcon } from "../icons/ActionIcons.jsx";
 import DepartmentDeleteModal from "./DepartmentDeleteModal.jsx";
 
 function DepartmentsPage() {
@@ -30,9 +31,11 @@ function DepartmentsPage() {
         actions={
           <Link
             to="/departments/new"
-            className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+            title="Add Department"
+            aria-label="Add Department"
+            className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
           >
-            Add Department
+            <PlusIcon />
           </Link>
         }
       >
@@ -66,10 +69,12 @@ function DepartmentsPage() {
           getActions={(department) => [
             {
               label: "Edit",
+              icon: "pencil",
               to: `/departments/${department.id}/edit`,
             },
             {
               label: "Delete",
+              icon: "trash",
               tone: "danger",
               onClick: () => openDeleteModal(department),
             },

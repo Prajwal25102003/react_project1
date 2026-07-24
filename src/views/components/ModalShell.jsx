@@ -24,20 +24,20 @@ function ModalShell({
           {closeIcon}
         </button>
         {(title || description) && (
-          <div className="px-2 pr-8">
+          <div className="shrink-0 px-2 pr-8">
             {title ? (
               <h4 className="mb-2 text-2xl font-semibold text-gray-800">
                 {title}
               </h4>
             ) : null}
             {description ? (
-              <p className="mb-6 text-sm text-gray-500 lg:mb-7">
+              <p className="mb-4 text-sm text-gray-500 lg:mb-5">
                 {description}
               </p>
             ) : null}
           </div>
         )}
-        {children}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
       </div>
     </div>
   );

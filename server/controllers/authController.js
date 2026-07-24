@@ -6,6 +6,7 @@ import {
 } from '../models/authModel.js'
 import { findEmployeeById } from '../models/employeesModel.js'
 import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
+import { isNamedLeaveApprover } from '../models/leaveApprovalHierarchyModel.js'
 import { signAuthToken } from '../middleware/authMiddleware.js'
 import { formatDbError } from '../utils/formatDbError.js'
 
@@ -16,18 +17,21 @@ async function toPublicUserWithAvatar(user) {
       ...publicUser,
       avatar: null,
       isDepartmentHead: false,
+      isNamedLeaveApprover: false,
     }
   }
 
-  const [employee, isDepartmentHead] = await Promise.all([
+  const [employee, isDepartmentHead, namedApprover] = await Promise.all([
     findEmployeeById(user.employeeId),
     isEmployeeDepartmentHead(user.employeeId),
+    isNamedLeaveApprover(user.employeeId),
   ])
 
   return {
     ...publicUser,
     avatar: employee?.avatar || null,
     isDepartmentHead,
+    isNamedLeaveApprover: namedApprover,
   }
 }
 

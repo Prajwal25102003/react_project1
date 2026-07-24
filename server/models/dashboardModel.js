@@ -197,11 +197,18 @@ export async function findActivityRowsForEmployees(employeeIds, limit = 10) {
         SELECT
           ('att-' || a.id) AS id,
           CASE a.status
-            WHEN 'Absent' THEN 'Marked absent'
-            WHEN 'Half Day' THEN 'Half day recorded'
-            ELSE 'Attendance marked'
+            WHEN 'Absent' THEN 'Marked Absent'
+            WHEN 'Half Day' THEN 'Half Day Recorded'
+            ELSE 'Attendance Marked'
           END AS title,
-          (e.name || ' was marked ' || a.status || ' on ' || TO_CHAR(a.attendance_date, 'YYYY-MM-DD')) AS description,
+          CASE
+            WHEN a.status = 'Absent' THEN
+              e.name || ' was marked Absent on ' || TO_CHAR(a.attendance_date, 'DD Mon YYYY') || '.'
+            WHEN a.check_in IS NOT NULL AND a.check_in <> '' AND a.check_in <> '—' THEN
+              e.name || ' checked in at ' || a.check_in || '.'
+            ELSE
+              e.name || ' was marked ' || a.status || ' on ' || TO_CHAR(a.attendance_date, 'DD Mon YYYY') || '.'
+          END AS description,
           'Attendance' AS category,
           (a.attendance_date::timestamp + TIME '12:00') AS "activityTime",
           CASE
@@ -215,7 +222,8 @@ export async function findActivityRowsForEmployees(employeeIds, limit = 10) {
           jsonb_build_object(
             'subjectName', e.name,
             'attendanceDate', TO_CHAR(a.attendance_date, 'YYYY-MM-DD'),
-            'attendanceStatus', a.status
+            'attendanceStatus', a.status,
+            'checkIn', a.check_in
           ) AS meta
         FROM attendance a
         INNER JOIN employees e ON e.id = a.employee_id
@@ -228,43 +236,49 @@ export async function findActivityRowsForEmployees(employeeIds, limit = 10) {
         SELECT
           ('leave-' || lr.id) AS id,
           CASE lr.status
-            WHEN 'Pending' THEN 'Sent'
-            WHEN 'TeamLeadApproved' THEN 'Received'
-            WHEN 'Approved' THEN 'Received'
-            WHEN 'Cancelled' THEN 'Sent'
-            ELSE 'Received'
+            WHEN 'Pending' THEN 'Leave Request Submitted'
+            WHEN 'Cancelled' THEN 'Leave Request Cancelled'
+            WHEN 'Approved' THEN 'Leave Request Approved'
+            WHEN 'TeamLeadApproved' THEN 'Leave Request Approved'
+            WHEN 'Rejected' THEN 'Leave Request Rejected'
+            ELSE 'Leave Request Updated'
           END AS title,
           CASE lr.status
             WHEN 'Pending' THEN
-              e.name || ' requested ' || lr.leave_type || ' for ' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              e.name || ' submitted a ' || lr.leave_type || ' request (' ||
+              TO_CHAR(lr.start_date, 'DD Mon YYYY') ||
               CASE WHEN lr.end_date <> lr.start_date
-                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                THEN ' - ' || TO_CHAR(lr.end_date, 'DD Mon YYYY')
                 ELSE ''
-              END || '.'
+              END || ').'
             WHEN 'Cancelled' THEN
-              e.name || ' cancelled ' || lr.leave_type || ' (' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              e.name || ' cancelled a ' || lr.leave_type || ' request (' ||
+              TO_CHAR(lr.start_date, 'DD Mon YYYY') ||
               CASE WHEN lr.end_date <> lr.start_date
-                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                THEN ' - ' || TO_CHAR(lr.end_date, 'DD Mon YYYY')
                 ELSE ''
               END || ').'
             WHEN 'Approved' THEN
-              e.name || '''s ' || lr.leave_type || ' (' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              e.name || '''s ' || lr.leave_type || ' request (' ||
+              TO_CHAR(lr.start_date, 'DD Mon YYYY') ||
               CASE WHEN lr.end_date <> lr.start_date
-                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                THEN ' - ' || TO_CHAR(lr.end_date, 'DD Mon YYYY')
                 ELSE ''
-              END || ') was approved.'
+              END || ') has been approved.'
             WHEN 'TeamLeadApproved' THEN
-              e.name || '''s ' || lr.leave_type || ' (' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              e.name || '''s ' || lr.leave_type || ' request (' ||
+              TO_CHAR(lr.start_date, 'DD Mon YYYY') ||
               CASE WHEN lr.end_date <> lr.start_date
-                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                THEN ' - ' || TO_CHAR(lr.end_date, 'DD Mon YYYY')
                 ELSE ''
-              END || ') was approved by team lead.'
+              END || ') has been approved by Team Lead.'
             ELSE
-              e.name || '''s ' || lr.leave_type || ' (' || TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              e.name || '''s ' || lr.leave_type || ' request (' ||
+              TO_CHAR(lr.start_date, 'DD Mon YYYY') ||
               CASE WHEN lr.end_date <> lr.start_date
-                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                THEN ' - ' || TO_CHAR(lr.end_date, 'DD Mon YYYY')
                 ELSE ''
-              END || ') was rejected.'
+              END || ') has been rejected.'
           END AS description,
           'Leave' AS category,
           COALESCE(lr.updated_at, lr.created_at, lr.start_date::timestamptz) AS "activityTime",
@@ -290,9 +304,9 @@ export async function findActivityRowsForEmployees(employeeIds, limit = 10) {
             'subjectName', e.name,
             'leaveType', lr.leave_type,
             'range',
-              TO_CHAR(lr.start_date, 'YYYY-MM-DD') ||
+              TO_CHAR(lr.start_date, 'DD Mon YYYY') ||
               CASE WHEN lr.end_date <> lr.start_date
-                THEN ' to ' || TO_CHAR(lr.end_date, 'YYYY-MM-DD')
+                THEN ' - ' || TO_CHAR(lr.end_date, 'DD Mon YYYY')
                 ELSE ''
               END
           ) AS meta
