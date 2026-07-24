@@ -5,11 +5,11 @@ import {
   findAllLeaveRequests,
   findLeaveApprovalHistory,
   findLeaveRequestById,
+  findLeaveRequestsAwaitingActor,
   findLeaveRequestsByEmployeeId,
-  findLeaveRequestsForAdminApprovals,
-  findLeaveRequestsForHrApprovals,
   findLeaveRequestsForTeamApprovals,
   findLeaveRequestsVisibleToEmployee,
+  findLeaveRequestsWithApproverRole,
   generateNextLeaveRequestId,
   updateLeaveRequestStatus,
 } from '../models/leaveRequestsModel.js'
@@ -17,12 +17,32 @@ import { findEmployeeById } from '../models/employeesModel.js'
 import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
 import { deductEmployeeLeaveBalances } from '../models/leaveBalancesModel.js'
 import {
+  actorMatchesStep,
+  findActiveHierarchyByCategory,
+  findStepByOrder,
+  firstActionableStepOrder,
+  historyActorRoleForApprover,
+  historyStepForApprover,
+  isNamedLeaveApprover,
+  nextStepOrder,
+  resolveRequesterCategory,
+  stepDisplayLabel,
+} from '../models/leaveApprovalHierarchyModel.js'
+import {
   isMaternityLeave,
   validateMaternityLeaveRequest,
 } from '../models/maternityLeaveModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
+import {
+  formatApproverLabel,
+  formatDisplayRange,
+} from '../utils/activityCopy.js'
 import { formatDbError } from '../utils/formatDbError.js'
-import pool from '../config/db.js'
+import {
+  serializeMedicalAttachments,
+  validateMedicalAttachmentsInput,
+} from '../utils/medicalAttachments.js'
+import pool, { query } from '../config/db.js'
 
 const LEAVE_TYPES = new Set([
   'Sick Leave',
@@ -33,12 +53,8 @@ const LEAVE_TYPES = new Set([
   'Loss of Pay',
 ])
 
-const MEDICAL_ATTACHMENT_URL =
-  /^\/uploads\/medical-[A-Za-z0-9._-]+$/
-
 function formatLeaveRange(startDate, endDate) {
-  if (startDate === endDate) return startDate
-  return `${startDate} to ${endDate}`
+  return formatDisplayRange(startDate, endDate)
 }
 
 function countLeaveDays(startDate, endDate) {
@@ -57,23 +73,6 @@ function isAdmin(role) {
   return role === 'admin'
 }
 
-function isTeamLeadFor(request, employeeId) {
-  return Boolean(
-    employeeId &&
-      request.departmentHeadId &&
-      employeeId === request.departmentHeadId &&
-      employeeId !== request.employeeId,
-  )
-}
-
-function requesterIsHrUser(request) {
-  return Boolean(request?.requesterIsHr)
-}
-
-function requesterIsAdminUser(request) {
-  return Boolean(request?.requesterIsAdmin)
-}
-
 function actorFromRequest(req) {
   return {
     actorUserId: req.user?.id ?? null,
@@ -81,6 +80,20 @@ function actorFromRequest(req) {
     actorName: req.user?.name || req.user?.email || 'Unknown',
     actorRole: req.user?.role || 'employee',
   }
+}
+
+function actorCanActOnRequest(request, { role, employeeId, departmentHeadId }) {
+  if (!request || request.status !== 'Pending') return false
+  const step = findStepByOrder(request.hierarchySteps, request.currentStep)
+  return actorMatchesStep(step, {
+    role,
+    employeeId,
+    departmentHeadId:
+      departmentHeadId !== undefined
+        ? departmentHeadId
+        : request.departmentHeadId,
+    requesterEmployeeId: request.employeeId,
+  })
 }
 
 const HALF_DAY_SESSIONS = new Set(['first_half', 'second_half'])
@@ -105,22 +118,22 @@ function parseLeavePayload(body) {
   }
   if (!reason) errors.push('Leave reason is required')
 
-  const attachmentUrlRaw = String(body?.attachmentUrl ?? '').trim()
   let attachmentUrl = null
   if (leaveType === 'Medical Leave') {
-    if (!attachmentUrlRaw) {
-      errors.push('Medical leave requires an uploaded supporting document')
-    } else if (!MEDICAL_ATTACHMENT_URL.test(attachmentUrlRaw)) {
-      errors.push('Upload a valid medical document before submitting')
+    const fromArray =
+      body?.attachments ??
+      (body?.attachmentUrl ? body.attachmentUrl : null)
+    const validated = validateMedicalAttachmentsInput(fromArray)
+    if (!validated.ok) {
+      errors.push(validated.message)
     } else {
-      attachmentUrl = attachmentUrlRaw
+      attachmentUrl = serializeMedicalAttachments(validated.attachments)
     }
   }
 
   let leaveDays = null
 
   if (isMaternityLeave(leaveType)) {
-    // Gender + delivery window are validated in the handler after loading the employee.
     leaveDays = countLeaveDays(startDate, endDate)
     return {
       errors,
@@ -185,6 +198,34 @@ async function withHistory(leaveRequest) {
   return { ...leaveRequest, approvalHistory }
 }
 
+async function canViewLeaveRequest(req, existing) {
+  const role = req.user?.role
+  const employeeId = req.user?.employeeId || null
+
+  if (existing.employeeId === employeeId) return true
+  if (isHr(role)) return true
+  if (actorCanActOnRequest(existing, { role, employeeId })) return true
+
+  if (isAdmin(role)) {
+    return (existing.hierarchySteps || []).some(
+      (step) =>
+        step.approverKind === 'role' && step.approverRole === 'admin',
+    )
+  }
+
+  if (employeeId && existing.departmentHeadId === employeeId) return true
+
+  if (employeeId) {
+    return (existing.hierarchySteps || []).some(
+      (step) =>
+        step.approverKind === 'employee' &&
+        step.approverEmployeeId === employeeId,
+    )
+  }
+
+  return false
+}
+
 export async function getLeaveRequests(req, res) {
   try {
     const scope = String(req.query.scope || '').trim().toLowerCase()
@@ -192,20 +233,38 @@ export async function getLeaveRequests(req, res) {
     const employeeId = req.user?.employeeId || null
     const asHr = isHr(role)
     const asAdmin = isAdmin(role)
+    const isHead = employeeId
+      ? await isEmployeeDepartmentHead(employeeId)
+      : false
+    const namedApprover = employeeId
+      ? await isNamedLeaveApprover(employeeId)
+      : false
+    const canApprove = asHr || asAdmin || isHead || namedApprover
 
-    // Admin: HR leave approval queue only
     if (asAdmin) {
       if (scope && scope !== 'admin-hr' && scope !== 'approvals') {
         return res.status(403).json({
-          message: 'Admin can only view HR leave requests for approval',
+          message: 'Admin can only view leave requests in the Admin approval queue',
         })
       }
-      const leaveRequests = await findLeaveRequestsForAdminApprovals()
+      const byId = new Map()
+      for (const row of await findLeaveRequestsAwaitingActor({
+        role: 'admin',
+        employeeId,
+      })) {
+        byId.set(row.id, row)
+      }
+      // Also show chains that include an Admin step (historical HR leave, etc.).
+      for (const row of await findLeaveRequestsWithApproverRole('admin')) {
+        byId.set(row.id, row)
+      }
+      const leaveRequests = [...byId.values()].sort((a, b) =>
+        String(b.id).localeCompare(String(a.id), undefined, { numeric: true }),
+      )
       return res.json({ leaveRequests, scope: 'admin-hr' })
     }
 
-    // Personal leave list
-    if (scope === 'mine' || (!scope && !asHr)) {
+    if (scope === 'mine' || (!scope && !canApprove)) {
       if (!employeeId) {
         return res.status(403).json({
           message: 'Your account is not linked to an employee record',
@@ -215,32 +274,26 @@ export async function getLeaveRequests(req, res) {
       return res.json({ leaveRequests, scope: 'mine' })
     }
 
-    // Approvals queue (team / all employees)
-    if (scope === 'approvals' || (!scope && asHr)) {
-      if (asHr) {
-        const leaveRequests = await findLeaveRequestsForHrApprovals(employeeId)
-        return res.json({ leaveRequests, scope: 'approvals' })
-      }
-
-      if (!employeeId) {
+    if (scope === 'approvals' || (!scope && canApprove && asHr)) {
+      if (!canApprove) {
         return res.status(403).json({
-          message: 'Your account is not linked to an employee record',
+          message: 'You are not allowed to view leave approvals',
         })
       }
-
-      const isHead = await isEmployeeDepartmentHead(employeeId)
-      if (!isHead) {
-        return res.status(403).json({
-          message: 'Only department heads or HR can view leave approvals',
-        })
-      }
-
-      const leaveRequests = await findLeaveRequestsForTeamApprovals(employeeId)
+      const leaveRequests = await findLeaveRequestsAwaitingActor({
+        role: asHr ? 'hr' : role,
+        employeeId,
+      })
       return res.json({ leaveRequests, scope: 'approvals' })
     }
 
-    // One list for HR / team lead: own requests + team/org queue.
     if (scope === 'unified') {
+      if (!canApprove) {
+        return res.status(403).json({
+          message: 'You are not allowed to view leave requests',
+        })
+      }
+
       const byId = new Map()
 
       if (employeeId) {
@@ -250,22 +303,26 @@ export async function getLeaveRequests(req, res) {
       }
 
       if (asHr) {
-        for (const row of await findLeaveRequestsForHrApprovals(employeeId)) {
+        // HR keeps org-wide visibility; action buttons still gate on current step.
+        for (const row of await findAllLeaveRequests()) {
+          byId.set(row.id, row)
+        }
+      } else if (isHead) {
+        // Dept heads keep full team history after they approve (request moves to next step).
+        for (const row of await findLeaveRequestsForTeamApprovals(employeeId)) {
+          byId.set(row.id, row)
+        }
+        // Named-approver rows outside their team still appear when awaiting them.
+        for (const row of await findLeaveRequestsAwaitingActor({
+          employeeId,
+        })) {
           byId.set(row.id, row)
         }
       } else {
-        if (!employeeId) {
-          return res.status(403).json({
-            message: 'Your account is not linked to an employee record',
-          })
-        }
-        const isHead = await isEmployeeDepartmentHead(employeeId)
-        if (!isHead) {
-          return res.status(403).json({
-            message: 'Only department heads or HR can view leave requests',
-          })
-        }
-        for (const row of await findLeaveRequestsForTeamApprovals(employeeId)) {
+        for (const row of await findLeaveRequestsAwaitingActor({
+          role: role === 'employee' ? null : role,
+          employeeId,
+        })) {
           byId.set(row.id, row)
         }
       }
@@ -276,7 +333,6 @@ export async function getLeaveRequests(req, res) {
       return res.json({ leaveRequests, scope: 'unified' })
     }
 
-    // Legacy fallback
     if (asHr) {
       return res.json({
         leaveRequests: await findAllLeaveRequests(),
@@ -298,24 +354,9 @@ export async function getLeaveRequestByIdHandler(req, res) {
       return res.status(404).json({ message: 'Leave request not found' })
     }
 
-    const role = req.user?.role
-    const employeeId = req.user?.employeeId
-
-    if (isAdmin(role)) {
-      if (!requesterIsHrUser(existing)) {
-        return res.status(403).json({
-          message: 'Admin can only view HR leave requests',
-        })
-      }
-    } else {
-      const allowed =
-        isHr(role) ||
-        existing.employeeId === employeeId ||
-        isTeamLeadFor(existing, employeeId)
-
-      if (!allowed) {
-        return res.status(403).json({ message: 'Access denied' })
-      }
+    const allowed = await canViewLeaveRequest(req, existing)
+    if (!allowed) {
+      return res.status(403).json({ message: 'Access denied' })
     }
 
     const leaveRequest = await withHistory(existing)
@@ -370,6 +411,32 @@ export async function createLeaveRequestHandler(req, res) {
 
     delete leaveRequest.expectedDeliveryDate
 
+    const deptContext = await findEmployeeDepartmentContext(
+      leaveRequest.employeeId,
+    )
+    const departmentHeadId = deptContext.departmentHeadId
+    const category = resolveRequesterCategory({
+      role: req.user.role,
+      employeeId: leaveRequest.employeeId,
+      departmentHeadId,
+      departmentName: deptContext.departmentName,
+      requesterIsHr: isHr(req.user.role),
+    })
+
+    const hierarchy = await findActiveHierarchyByCategory(category)
+    if (!hierarchy || !hierarchy.steps?.length) {
+      return res.status(500).json({
+        message: 'Leave approval hierarchy is not configured',
+      })
+    }
+
+    leaveRequest.hierarchyId = hierarchy.id
+    leaveRequest.hierarchySteps = hierarchy.steps
+    leaveRequest.currentStep = firstActionableStepOrder(hierarchy.steps, {
+      employeeId: leaveRequest.employeeId,
+      departmentHeadId,
+    })
+
     const id = await generateNextLeaveRequestId()
     const actor = actorFromRequest(req)
     const created = await createLeaveRequest({ ...leaveRequest, id })
@@ -385,8 +452,8 @@ export async function createLeaveRequestHandler(req, res) {
 
     const submitRange = formatLeaveRange(created.startDate, created.endDate)
     await createRecentActivity({
-      title: 'Leave request submitted',
-      description: `${created.employeeName} requested ${created.leaveType} for ${submitRange}.`,
+      title: 'Leave Request Submitted',
+      description: `${created.employeeName} submitted a ${created.leaveType} request (${submitRange}).`,
       category: 'Leave',
       status: 'Pending',
       eventType: 'leave.submitted',
@@ -397,12 +464,30 @@ export async function createLeaveRequestHandler(req, res) {
         subjectName: created.employeeName,
         leaveType: created.leaveType,
         range: submitRange,
+        actorName: actor.actorName,
+        actorRole: actor.actorRole,
       },
     })
 
     res.status(201).json({ leaveRequest: await withHistory(created) })
   } catch (error) {
     res.status(500).json({ message: formatDbError(error) })
+  }
+}
+
+async function findEmployeeDepartmentContext(employeeId) {
+  const result = await query(
+    `SELECT
+       d.head_employee_id AS "departmentHeadId",
+       d.name AS "departmentName"
+     FROM employees e
+     LEFT JOIN departments d ON d.id = e.department_id
+     WHERE e.id = $1`,
+    [employeeId],
+  )
+  return {
+    departmentHeadId: result.rows[0]?.departmentHeadId || null,
+    departmentName: result.rows[0]?.departmentName || null,
   }
 }
 
@@ -418,197 +503,150 @@ export async function updateLeaveRequestStatusHandler(req, res) {
       return res.status(404).json({ message: 'Leave request not found' })
     }
 
-    if (existing.status === 'Rejected' || existing.status === 'Cancelled' || existing.status === 'Approved') {
+    if (
+      existing.status === 'Rejected' ||
+      existing.status === 'Cancelled' ||
+      existing.status === 'Approved'
+    ) {
       return res.status(400).json({
         message: 'This leave request is already closed and cannot be updated',
       })
     }
 
+    if (existing.requesterIsAdmin) {
+      return res.status(403).json({
+        message:
+          'Admin accounts do not participate in leave. Legacy admin leave cannot be reviewed here.',
+      })
+    }
+
     const isReject = status === 'Rejected'
+    const isApprove = status === 'Approved' || status === 'TeamLeadApproved'
+
+    if (!isReject && !isApprove) {
+      return res.status(400).json({
+        message: 'Status must be Approved or Rejected',
+      })
+    }
+
     if (isReject && !remarks) {
       return res.status(400).json({
         message: 'Remarks are required when rejecting a leave request',
       })
     }
 
-    const asHr = isHr(role)
-    const asAdmin = isAdmin(role)
-    const asTeamLead = isTeamLeadFor(existing, actorEmployeeId)
-    const requesterIsDeptHead =
-      existing.departmentHeadId &&
-      existing.departmentHeadId === existing.employeeId
-    const requesterIsHr = requesterIsHrUser(existing)
-    const requesterIsAdmin = requesterIsAdminUser(existing)
-
-    let allowedFrom = []
-    let activityTitle = ''
-    let historyStep = ''
-    let historyAction = ''
-    let historyActorRole = role
-
-    if (requesterIsAdmin) {
-      return res.status(403).json({
-        message:
-          'Admin accounts do not participate in leave. Legacy admin leave cannot be reviewed here.',
-      })
-    } else if (status === 'TeamLeadApproved') {
-      if (requesterIsHr) {
-        return res.status(400).json({
-          message: 'HR leave requests must be approved by Admin only',
-        })
-      }
-      if (!asTeamLead) {
-        return res.status(403).json({
-          message: 'Only the department head can approve at this stage',
-        })
-      }
-      if (existing.status !== 'Pending') {
-        return res.status(400).json({
-          message: 'Only pending leave requests can be approved by the department head',
-        })
-      }
-      allowedFrom = ['Pending']
-      activityTitle = 'Leave approved by department head'
-      historyStep = 'TeamLead'
-      historyAction = 'Approved'
-      historyActorRole = 'team_lead'
-    } else if (status === 'Approved') {
-      if (requesterIsHr) {
-        if (!asAdmin) {
-          return res.status(403).json({
-            message: 'Only Admin can approve HR leave requests',
-          })
-        }
-        if (existing.status !== 'Pending') {
-          return res.status(400).json({
-            message: 'Only pending HR leave requests can be approved by Admin',
-          })
-        }
-        allowedFrom = ['Pending']
-        activityTitle = 'Leave approved by Admin'
-        historyStep = 'Admin'
-        historyAction = 'Approved'
-        historyActorRole = 'admin'
-      } else if (!asHr) {
-        return res.status(403).json({
-          message: 'Only HR can give final leave approval',
-        })
-      } else if (existing.status === 'TeamLeadApproved') {
-        allowedFrom = ['TeamLeadApproved']
-        activityTitle = 'Leave approved by HR'
-        historyStep = 'HR'
-        historyAction = 'Approved'
-        historyActorRole = 'hr'
-      } else if (existing.status === 'Pending' && requesterIsDeptHead) {
-        allowedFrom = ['Pending']
-        activityTitle = 'Leave approved by HR'
-        historyStep = 'HR'
-        historyAction = 'Approved'
-        historyActorRole = 'hr'
-      } else if (existing.status === 'Pending') {
-        return res.status(400).json({
-          message:
-            'This leave must be approved by the department head before HR approval',
-        })
-      } else {
-        return res.status(400).json({
-          message: 'This leave request cannot be approved in its current status',
-        })
-      }
-    } else if (status === 'Rejected') {
-      if (requesterIsHr) {
-        if (!asAdmin) {
-          return res.status(403).json({
-            message: 'Only Admin can reject HR leave requests',
-          })
-        }
-        if (existing.status !== 'Pending') {
-          return res.status(400).json({
-            message: 'Only pending HR leave requests can be rejected by Admin',
-          })
-        }
-        allowedFrom = ['Pending']
-        activityTitle = 'Leave rejected by Admin'
-        historyStep = 'Admin'
-        historyAction = 'Rejected'
-        historyActorRole = 'admin'
-      } else if (existing.status === 'Pending' && asTeamLead) {
-        allowedFrom = ['Pending']
-        activityTitle = 'Leave rejected by department head'
-        historyStep = 'TeamLead'
-        historyAction = 'Rejected'
-        historyActorRole = 'team_lead'
-      } else if (asHr && existing.status === 'TeamLeadApproved') {
-        allowedFrom = ['TeamLeadApproved']
-        activityTitle = 'Leave rejected by HR'
-        historyStep = 'HR'
-        historyAction = 'Rejected'
-        historyActorRole = 'hr'
-      } else if (asHr && existing.status === 'Pending' && requesterIsDeptHead) {
-        allowedFrom = ['Pending']
-        activityTitle = 'Leave rejected by HR'
-        historyStep = 'HR'
-        historyAction = 'Rejected'
-        historyActorRole = 'hr'
-      } else if (asHr && existing.status === 'Pending') {
-        return res.status(400).json({
-          message:
-            'Department head must act first. HR can reject only after department head approval, or when the requester is a department head.',
-        })
-      } else {
-        return res.status(403).json({
-          message: 'You cannot reject this leave request',
-        })
-      }
-    } else {
+    if (existing.status !== 'Pending') {
       return res.status(400).json({
-        message: 'Status must be TeamLeadApproved, Approved, or Rejected',
+        message: 'Only pending leave requests can be updated',
       })
     }
 
-    let leaveRequest
+    const currentStep = findStepByOrder(
+      existing.hierarchySteps,
+      existing.currentStep,
+    )
+    if (!currentStep) {
+      return res.status(400).json({
+        message: 'Leave approval step is not configured for this request',
+      })
+    }
 
-    if (status === 'Approved') {
-      const client = await pool.connect()
-      try {
-        await client.query('BEGIN')
-        leaveRequest = await updateLeaveRequestStatus(
-          req.params.id,
-          status,
-          allowedFrom,
-          { rejectionReason: '', client },
-        )
-        if (!leaveRequest) {
-          await client.query('ROLLBACK')
-          return res.status(400).json({
-            message: 'Leave request status could not be updated',
-          })
-        }
-        await deductEmployeeLeaveBalances(
-          leaveRequest.employeeId,
-          leaveRequest.leaveType,
-          leaveRequest.leaveDays,
-          client,
-        )
-        await client.query('COMMIT')
-      } catch (balanceError) {
-        await client.query('ROLLBACK')
-        throw balanceError
-      } finally {
-        client.release()
-      }
-    } else {
+    // Always use the requester's current department head so a reassigned head
+    // can approve pending department_head steps (not the previous head).
+    const deptContext = await findEmployeeDepartmentContext(existing.employeeId)
+    const canAct = actorMatchesStep(currentStep, {
+      role,
+      employeeId: actorEmployeeId,
+      departmentHeadId: deptContext.departmentHeadId,
+      requesterEmployeeId: existing.employeeId,
+    })
+
+    if (!canAct) {
+      return res.status(403).json({
+        message: 'You cannot act on this leave request at the current step',
+      })
+    }
+
+    const historyStep = historyStepForApprover(currentStep)
+    const historyActorRole = historyActorRoleForApprover(currentStep, role)
+    const stepLabel = stepDisplayLabel(currentStep)
+
+    let leaveRequest
+    let activityTitle = ''
+    let historyAction = ''
+    let activityStatus = status
+    let finalStatus = status
+
+    if (isReject) {
+      finalStatus = 'Rejected'
+      historyAction = 'Rejected'
+      activityTitle = 'Leave Request Rejected'
+      activityStatus = 'Rejected'
+
       leaveRequest = await updateLeaveRequestStatus(
         req.params.id,
-        status,
-        allowedFrom,
-        { rejectionReason: status === 'Rejected' ? remarks : '' },
+        'Rejected',
+        ['Pending'],
+        { rejectionReason: remarks, currentStep: null },
       )
-      if (!leaveRequest) {
-        return res.status(400).json({
-          message: 'Leave request status could not be updated',
-        })
+    } else {
+      const upcoming = nextStepOrder(
+        existing.hierarchySteps,
+        existing.currentStep,
+      )
+      historyAction = 'Approved'
+
+      if (upcoming == null) {
+        finalStatus = 'Approved'
+        activityTitle = 'Leave Request Approved'
+        activityStatus = 'Approved'
+
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          leaveRequest = await updateLeaveRequestStatus(
+            req.params.id,
+            'Approved',
+            ['Pending'],
+            { rejectionReason: '', currentStep: null, client },
+          )
+          if (!leaveRequest) {
+            await client.query('ROLLBACK')
+            return res.status(400).json({
+              message: 'Leave request status could not be updated',
+            })
+          }
+          await deductEmployeeLeaveBalances(
+            leaveRequest.employeeId,
+            leaveRequest.leaveType,
+            leaveRequest.leaveDays,
+            client,
+          )
+          await client.query('COMMIT')
+        } catch (balanceError) {
+          await client.query('ROLLBACK')
+          throw balanceError
+        } finally {
+          client.release()
+        }
+      } else {
+        finalStatus = 'Pending'
+        activityTitle = 'Leave Request Approved'
+        activityStatus = 'Pending'
+
+        leaveRequest = await updateLeaveRequestStatus(
+          req.params.id,
+          'Pending',
+          ['Pending'],
+          { rejectionReason: '', currentStep: upcoming },
+        )
       }
+    }
+
+    if (!leaveRequest) {
+      return res.status(400).json({
+        message: 'Leave request status could not be updated',
+      })
     }
 
     const actor = actorFromRequest(req)
@@ -625,14 +663,22 @@ export async function updateLeaveRequestStatusHandler(req, res) {
       leaveRequest.startDate,
       leaveRequest.endDate,
     )
-    const decisionApproved =
-      historyAction === 'Approved' || status === 'TeamLeadApproved'
+    const approverLabel = formatApproverLabel({
+      role: historyActorRole,
+      name: actor.actorName,
+      stepLabel,
+    })
+    const decisionVerb = historyAction === 'Approved' ? 'approved' : 'rejected'
+    const decisionDescription = remarks
+      ? `${leaveRequest.employeeName}'s ${leaveRequest.leaveType} request (${decisionRange}) was ${decisionVerb} by ${approverLabel}. Remarks: ${remarks}`
+      : `${leaveRequest.employeeName}'s ${leaveRequest.leaveType} request (${decisionRange}) was ${decisionVerb} by ${approverLabel}.`
+
     await createRecentActivity({
       title: activityTitle,
-      description: `${leaveRequest.employeeName} — ${leaveRequest.leaveType} (${decisionRange}) ${historyAction.toLowerCase()}: ${remarks}`,
+      description: decisionDescription,
       category: 'Leave',
-      status: status === 'TeamLeadApproved' ? 'Pending' : status,
-      eventType: decisionApproved ? 'leave.approved' : 'leave.rejected',
+      status: activityStatus,
+      eventType: historyAction === 'Approved' ? 'leave.approved' : 'leave.rejected',
       subjectEmployeeId: leaveRequest.employeeId,
       actorEmployeeId: actor.actorEmployeeId,
       meta: {
@@ -643,6 +689,8 @@ export async function updateLeaveRequestStatusHandler(req, res) {
         remarks,
         actorRole: historyActorRole,
         actorName: actor.actorName,
+        stepLabel,
+        finalStatus,
       },
     })
 
@@ -687,7 +735,6 @@ export async function cancelLeaveRequestHandler(req, res) {
 
     const isOwner = existing.employeeId === req.user?.employeeId
 
-    // HR reviews employee leave with Approve/Reject — only the requester can cancel.
     if (!isOwner) {
       return res.status(403).json({
         message: isManager
@@ -696,13 +743,9 @@ export async function cancelLeaveRequestHandler(req, res) {
       })
     }
 
-    if (
-      existing.status !== 'Pending' &&
-      existing.status !== 'TeamLeadApproved'
-    ) {
+    if (existing.status !== 'Pending') {
       return res.status(400).json({
-        message:
-          'Only pending or team-lead-approved leave requests can be cancelled',
+        message: 'Only pending leave requests can be cancelled',
       })
     }
 
@@ -712,8 +755,7 @@ export async function cancelLeaveRequestHandler(req, res) {
     })
     if (!leaveRequest) {
       return res.status(400).json({
-        message:
-          'Only pending or team-lead-approved leave requests can be cancelled',
+        message: 'Only pending leave requests can be cancelled',
       })
     }
 
@@ -732,8 +774,8 @@ export async function cancelLeaveRequestHandler(req, res) {
       leaveRequest.endDate,
     )
     await createRecentActivity({
-      title: 'Leave request cancelled',
-      description: `${leaveRequest.employeeName} cancelled ${leaveRequest.leaveType} (${cancelRange}).`,
+      title: 'Leave Request Cancelled',
+      description: `${leaveRequest.employeeName} cancelled a ${leaveRequest.leaveType} request (${cancelRange}).`,
       category: 'Leave',
       status: 'Cancelled',
       eventType: 'leave.cancelled',
@@ -744,6 +786,8 @@ export async function cancelLeaveRequestHandler(req, res) {
         subjectName: leaveRequest.employeeName,
         leaveType: leaveRequest.leaveType,
         range: cancelRange,
+        actorName: actor.actorName,
+        actorRole: isManager ? 'hr' : 'employee',
       },
     })
 

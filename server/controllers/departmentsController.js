@@ -10,6 +10,10 @@ import {
 import { findEmployeeById } from '../models/employeesModel.js'
 import { syncDepartmentEmployeeLoginRoles } from '../models/authModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
+import {
+  actorFromUser,
+  formatActorLabel,
+} from '../utils/activityCopy.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 
@@ -79,18 +83,30 @@ export async function createDepartmentHandler(req, res) {
       if (!head) {
         return res.status(400).json({ message: 'Head employee not found' })
       }
+      // New department has no members yet — head must be assigned on edit.
+      return res.status(400).json({
+        message:
+          'Assign a department head after creating the department and adding employees to it',
+      })
     }
 
     const id = await generateNextDepartmentId()
-    const created = await createDepartment({ ...department, id })
+    const created = await createDepartment({ ...department, id, headEmployeeId: null })
 
     await syncDepartmentEmployeeLoginRoles(created)
 
+    const actorLabel = formatActorLabel(actorFromUser(req.user))
     await createRecentActivity({
-      title: 'New department created',
-      description: `${created.name} was added to the organization.`,
+      title: `${created.name} Department Created`,
+      description: `${actorLabel} added the ${created.name} department to the organization.`,
       category: 'Departments',
       status: 'Added',
+      actorEmployeeId: req.user?.employeeId || null,
+      meta: {
+        departmentName: created.name,
+        actorName: req.user?.name || null,
+        actorRole: req.user?.role || null,
+      },
     })
 
     res.status(201).json({ department: created })
@@ -118,6 +134,11 @@ export async function updateDepartmentHandler(req, res) {
       const head = await findEmployeeById(department.headEmployeeId)
       if (!head) {
         return res.status(400).json({ message: 'Head employee not found' })
+      }
+      if (String(head.departmentId || '') !== String(req.params.id)) {
+        return res.status(400).json({
+          message: 'Department head must be an employee in this department',
+        })
       }
     }
 
@@ -149,11 +170,30 @@ export async function updateDepartmentHandler(req, res) {
       }
     }
 
+    const actorLabel = formatActorLabel(actorFromUser(req.user))
+    let description = `${actorLabel} updated the ${updated.name} department.`
+    if (
+      String(existing.headEmployeeId || '') !==
+      String(updated.headEmployeeId || '')
+    ) {
+      const fromHead = existing.head || 'Unassigned'
+      const toHead = updated.head || 'Unassigned'
+      description = `${actorLabel} updated the ${updated.name} department. Department Head changed from ${fromHead} to ${toHead}.`
+    } else if (existing.name !== updated.name) {
+      description = `${actorLabel} renamed the department from ${existing.name} to ${updated.name}.`
+    }
+
     await createRecentActivity({
-      title: 'Department updated',
-      description: `${updated.name} department details were updated.`,
+      title: `${updated.name} Department Updated`,
+      description,
       category: 'Departments',
       status: 'Updated',
+      actorEmployeeId: req.user?.employeeId || null,
+      meta: {
+        departmentName: updated.name,
+        actorName: req.user?.name || null,
+        actorRole: req.user?.role || null,
+      },
     })
 
     res.json({ department: updated })
@@ -189,11 +229,18 @@ export async function deleteDepartmentHandler(req, res) {
       return res.status(404).json({ message: 'Department not found' })
     }
 
+    const actorLabel = formatActorLabel(actorFromUser(req.user))
     await createRecentActivity({
-      title: 'Department removed',
-      description: `${existing.name} was removed from the organization.`,
+      title: `${existing.name} Department Removed`,
+      description: `${actorLabel} removed the ${existing.name} department from the organization.`,
       category: 'Departments',
       status: 'Removed',
+      actorEmployeeId: req.user?.employeeId || null,
+      meta: {
+        departmentName: existing.name,
+        actorName: req.user?.name || null,
+        actorRole: req.user?.role || null,
+      },
     })
 
     res.json({ message: 'Department deleted' })

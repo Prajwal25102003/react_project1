@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { useEmployees } from "../../controllers/employeesController.js";
 import DataTable from "../components/DataTable.jsx";
 import ListPageShell from "../components/ListPageShell.jsx";
+import { PersonPlusIcon } from "../icons/ActionIcons.jsx";
+import AssignLeavesModal from "./AssignLeavesModal.jsx";
 import EmployeeDeleteModal from "./EmployeeDeleteModal.jsx";
 import EmployeeViewModal from "./EmployeeViewModal.jsx";
 
@@ -21,6 +23,24 @@ function EmployeesPage() {
     openDeleteModal,
     closeDeleteModal,
     confirmDelete,
+    assignOpen,
+    assignForm,
+    assignFieldErrors,
+    assignError,
+    assigning,
+    assignDepartments,
+    assignScopes,
+    assignModes,
+    filteredAssignableEmployees,
+    employeeSearch,
+    setEmployeeSearch,
+    openAssignLeavesModal,
+    closeAssignLeavesModal,
+    updateAssignField,
+    toggleAssignEmployee,
+    selectAllFilteredEmployees,
+    clearAssignEmployees,
+    submitAssignLeaves,
   } = useEmployees();
 
   return (
@@ -31,12 +51,23 @@ function EmployeesPage() {
         error={error}
         loadingLabel="Loading employees…"
         actions={
-          <Link
-            to="/employees/new"
-            className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
-          >
-            Add Employee
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={openAssignLeavesModal}
+              className="inline-flex h-9 items-center justify-center rounded-lg bg-brand-500 px-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+            >
+              Assign Leaves
+            </button>
+            <Link
+              to="/employees/new"
+              title="Add Employee"
+              aria-label="Add Employee"
+              className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
+            >
+              <PersonPlusIcon />
+            </Link>
+          </div>
         }
       >
         <DataTable
@@ -62,17 +93,24 @@ function EmployeesPage() {
           onClearFilters={table.clearColumnFilters}
           onExportCsv={() => table.exportCsv("employees.csv")}
           onRowClick={openViewModal}
-          getActions={(employee) => [
-            {
-              label: "Edit",
-              to: `/employees/${employee.id}/edit`,
-            },
-            {
-              label: "Delete",
-              tone: "danger",
-              onClick: () => openDeleteModal(employee),
-            },
-          ]}
+          getActions={(employee) => {
+            if (employee.isAdminAccount || employee.loginRole === "admin") {
+              return [];
+            }
+            return [
+              {
+                label: "Edit",
+                icon: "pencil",
+                to: `/employees/${employee.id}/edit`,
+              },
+              {
+                label: "Delete",
+                icon: "trash",
+                tone: "danger",
+                onClick: () => openDeleteModal(employee),
+              },
+            ];
+          }}
           emptyMessage="No employees found."
         />
       </ListPageShell>
@@ -85,6 +123,26 @@ function EmployeesPage() {
         error={deleteError}
         onClose={closeDeleteModal}
         onConfirm={confirmDelete}
+      />
+
+      <AssignLeavesModal
+        open={assignOpen}
+        form={assignForm}
+        fieldErrors={assignFieldErrors}
+        error={assignError}
+        assigning={assigning}
+        departments={assignDepartments}
+        scopes={assignScopes}
+        modes={assignModes}
+        employees={filteredAssignableEmployees}
+        employeeSearch={employeeSearch}
+        onEmployeeSearchChange={setEmployeeSearch}
+        onClose={closeAssignLeavesModal}
+        onFieldChange={updateAssignField}
+        onToggleEmployee={toggleAssignEmployee}
+        onSelectAllEmployees={selectAllFilteredEmployees}
+        onClearEmployees={clearAssignEmployees}
+        onSubmit={submitAssignLeaves}
       />
     </>
   );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useToast } from "./toastContext.jsx";
@@ -16,14 +16,13 @@ import { fetchAuthProfile } from "../services/authService.js";
 import {
   EMPTY_LEAVE_FORM,
   LEAVE_TYPES,
+  MAX_MEDICAL_ATTACHMENTS,
+  actorMatchesCurrentStep,
   calculateLeaveDays,
-  canAdminApproveRequest,
-  canAdminRejectRequest,
   canCancelLeaveRequest,
-  canHrApproveRequest,
-  canHrRejectRequest,
+  hierarchyStepLabel,
+  currentHierarchyStep,
   isMedicalLeave,
-  isTeamLeadForRequest,
   toLeavePayload,
   validateLeaveForm,
 } from "../models/leaveRequestsModel.js";
@@ -59,13 +58,15 @@ function statusFilterFromSearch(searchParams) {
 }
 
 export function useLeaveRequests() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const toast = useToast();
   const isHr = user?.role === ROLES.HR;
   const isAdmin = user?.role === ROLES.ADMIN;
   const isDepartmentHead = Boolean(user?.isDepartmentHead);
+  const isNamedLeaveApprover = Boolean(user?.isNamedLeaveApprover);
   const canApproveLeaves = userCanApproveLeaves(user?.role, {
     isDepartmentHead,
+    isNamedLeaveApprover,
   });
   // Admin maintains modules and is not an employee leave requester.
   const canRequestLeave =
@@ -83,6 +84,23 @@ export function useLeaveRequests() {
   );
   const urlLeaveId = searchParams.get("id");
   const urlDirection = searchParams.get("direction"); // sent | received
+
+  // Keep headship flags current so a newly assigned department head can approve.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await refreshUser();
+      } catch {
+        if (!cancelled) {
+          /* keep existing session */
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshUser]);
 
   // Department heads land on their team queue so approvals are visible first.
   const [listScope, setListScope] = useState(() => {
@@ -112,6 +130,16 @@ export function useLeaveRequests() {
       setListScope("employees");
     }
   }, [canApproveLeaves, canRequestLeave, isAdmin, listScope]);
+
+  // When this user becomes department head (e.g. after reassignment), open team queue.
+  const wasDepartmentHeadRef = useRef(isDepartmentHead);
+  useEffect(() => {
+    const becameHead = isDepartmentHead && !wasDepartmentHeadRef.current;
+    wasDepartmentHeadRef.current = isDepartmentHead;
+    if (becameHead && canApproveLeaves && !isAdmin) {
+      setListScope("employees");
+    }
+  }, [isDepartmentHead, canApproveLeaves, isAdmin]);
 
   const loadLeaveRequests = useCallback(
     () => fetchLeaveRequests(listApiScope),
@@ -237,10 +265,7 @@ export function useLeaveRequests() {
   }
 
   function openApproveModal(request) {
-    const nextStatus = isTeamLeadForRequest(request, user?.employeeId)
-      ? "TeamLeadApproved"
-      : "Approved";
-    openDecisionModal(request, nextStatus);
+    openDecisionModal(request, "Approved");
   }
 
   function openRejectModal(request) {
@@ -279,8 +304,7 @@ export function useLeaveRequests() {
         decisionStatus,
         trimmed,
       );
-      const approved =
-        decisionStatus === "Approved" || decisionStatus === "TeamLeadApproved";
+      const approved = decisionStatus === "Approved";
       toast.success(
         approved
           ? "Leave request approved successfully"
@@ -348,50 +372,26 @@ export function useLeaveRequests() {
 
   function getLeaveActions(request) {
     const actions = [];
-    const asTeamLead = isTeamLeadForRequest(request, user?.employeeId);
+    const canAct = actorMatchesCurrentStep(request, {
+      employeeId: user?.employeeId,
+      role: user?.role,
+    });
 
-    if (canApproveLeaves) {
-      if (request.status === "Pending" && asTeamLead) {
-        actions.push({
-          label: "Approve (Head)",
-          onClick: () => openDecisionModal(request, "TeamLeadApproved"),
-        });
-        actions.push({
-          label: "Reject",
-          tone: "danger",
-          onClick: () => openRejectModal(request),
-        });
-      }
-
-      if (isAdmin && canAdminApproveRequest(request)) {
-        actions.push({
-          label: "Approve (Admin)",
-          onClick: () => openDecisionModal(request, "Approved"),
-        });
-      }
-
-      if (isAdmin && canAdminRejectRequest(request)) {
-        actions.push({
-          label: "Reject",
-          tone: "danger",
-          onClick: () => openRejectModal(request),
-        });
-      }
-
-      if (isHr && canHrApproveRequest(request)) {
-        actions.push({
-          label: "Approve (HR)",
-          onClick: () => openDecisionModal(request, "Approved"),
-        });
-      }
-
-      if (isHr && canHrRejectRequest(request)) {
-        actions.push({
-          label: "Reject",
-          tone: "danger",
-          onClick: () => openRejectModal(request),
-        });
-      }
+    // Match current hierarchy step (live department head), not only session flags.
+    if (canAct) {
+      const step = currentHierarchyStep(request);
+      const label = step ? hierarchyStepLabel(step) : "Approve";
+      actions.push({
+        label: `Approve (${label})`,
+        icon: "check-circle",
+        onClick: () => openApproveModal(request),
+      });
+      actions.push({
+        label: "Reject",
+        icon: "x-circle",
+        tone: "danger",
+        onClick: () => openRejectModal(request),
+      });
     }
 
     if (
@@ -531,8 +531,7 @@ export function useLeaveForm() {
 
       if (field === "leaveType") {
         if (!isMedicalLeave(value)) {
-          next.attachmentUrl = "";
-          next.attachmentName = "";
+          next.attachments = [];
         }
         if (isMaternityLeave(value)) {
           next.duration = "full";
@@ -619,23 +618,47 @@ export function useLeaveForm() {
   }
 
   async function handleAttachmentChange(event) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
     event.target.value = "";
-    if (!file) return;
+    if (!files.length) return;
+
+    const currentCount = form.attachments?.length || 0;
+    const slotsLeft = MAX_MEDICAL_ATTACHMENTS - currentCount;
+    if (slotsLeft <= 0) {
+      const message = `You can upload up to ${MAX_MEDICAL_ATTACHMENTS} documents`;
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
+    const toUpload = files.slice(0, slotsLeft);
+    if (files.length > slotsLeft) {
+      toast.error(
+        `Only ${slotsLeft} more file${slotsLeft === 1 ? "" : "s"} can be added (max ${MAX_MEDICAL_ATTACHMENTS}).`,
+      );
+    }
 
     try {
       setUploadingAttachment(true);
       setError("");
       setFieldErrors((current) => {
         const next = { ...current };
-        delete next.attachmentUrl;
+        delete next.attachments;
         return next;
       });
-      const uploaded = await uploadLeaveMedicalDocument(file);
+
+      const uploaded = [];
+      for (const file of toUpload) {
+        const result = await uploadLeaveMedicalDocument(file);
+        uploaded.push({
+          url: result.url,
+          name: result.originalName || file.name,
+        });
+      }
+
       setForm((current) => ({
         ...current,
-        attachmentUrl: uploaded.url,
-        attachmentName: uploaded.originalName || file.name,
+        attachments: [...(current.attachments || []), ...uploaded],
       }));
     } catch (err) {
       setError(err.message || "Failed to upload medical document");
@@ -645,15 +668,28 @@ export function useLeaveForm() {
     }
   }
 
-  function clearAttachment() {
+  function removeAttachment(url) {
     setForm((current) => ({
       ...current,
-      attachmentUrl: "",
-      attachmentName: "",
+      attachments: (current.attachments || []).filter(
+        (item) => item.url !== url,
+      ),
     }));
     setFieldErrors((current) => {
       const next = { ...current };
-      delete next.attachmentUrl;
+      delete next.attachments;
+      return next;
+    });
+  }
+
+  function clearAttachments() {
+    setForm((current) => ({
+      ...current,
+      attachments: [],
+    }));
+    setFieldErrors((current) => {
+      const next = { ...current };
+      delete next.attachments;
       return next;
     });
   }
@@ -704,7 +740,8 @@ export function useLeaveForm() {
     error,
     updateField,
     handleAttachmentChange,
-    clearAttachment,
+    removeAttachment,
+    clearAttachments,
     handleSubmit,
     handleCancel,
   };

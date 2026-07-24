@@ -171,7 +171,7 @@ export async function createEmployee(employee, client = null) {
       casual_leave_balance, sick_leave_balance, lop_days
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-      COALESCE($12, 1), COALESCE($13, 1), COALESCE($14, 0)
+      COALESCE($12, 0), COALESCE($13, 0), COALESCE($14, 0)
     )
     RETURNING id`,
     [
@@ -186,8 +186,8 @@ export async function createEmployee(employee, client = null) {
       employee.salary,
       employee.status,
       employee.avatar,
-      employee.casualLeaveBalance ?? 1,
-      employee.sickLeaveBalance ?? 1,
+      employee.casualLeaveBalance ?? 0,
+      employee.sickLeaveBalance ?? 0,
       employee.lopDays ?? 0,
     ],
   )
@@ -210,7 +210,9 @@ export async function updateEmployee(id, employee) {
       joining_date = $8,
       salary = $9,
       status = $10,
-      avatar = $11
+      avatar = $11,
+      casual_leave_balance = $12,
+      sick_leave_balance = $13
     WHERE id = $1
     RETURNING id`,
     [
@@ -225,6 +227,8 @@ export async function updateEmployee(id, employee) {
       employee.salary,
       employee.status,
       employee.avatar,
+      employee.casualLeaveBalance ?? 0,
+      employee.sickLeaveBalance ?? 0,
     ],
   )
 

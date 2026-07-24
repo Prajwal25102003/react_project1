@@ -284,6 +284,65 @@ function EmployeeFormPage() {
                 </div>
               </div>
 
+              {!isAdminAccount ? (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
+                  <h3 className="text-theme-sm font-medium text-gray-800">
+                    Paid leave balances
+                  </h3>
+                  <p className="mt-1 text-theme-xs text-gray-500">
+                    Optional. Set casual and sick leave days for this employee
+                    now, or leave blank and add them later from Edit Employee.
+                    There is no automatic yearly leave grant.
+                  </p>
+                  <div className={`${FORM_GRID_CLASS} mt-4`}>
+                    <div>
+                      <label className={LABEL_CLASS} htmlFor="casual-leave">
+                        Casual leave (days)
+                      </label>
+                      <input
+                        id="casual-leave"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.casualLeaveBalance}
+                        onChange={(event) =>
+                          updateField("casualLeaveBalance", event.target.value)
+                        }
+                        className={
+                          fieldErrors.casualLeaveBalance
+                            ? INPUT_ERROR_CLASS
+                            : INPUT_CLASS
+                        }
+                        placeholder="e.g. 6"
+                      />
+                      <FieldError message={fieldErrors.casualLeaveBalance} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLASS} htmlFor="sick-leave">
+                        Sick leave (days)
+                      </label>
+                      <input
+                        id="sick-leave"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={form.sickLeaveBalance}
+                        onChange={(event) =>
+                          updateField("sickLeaveBalance", event.target.value)
+                        }
+                        className={
+                          fieldErrors.sickLeaveBalance
+                            ? INPUT_ERROR_CLASS
+                            : INPUT_CLASS
+                        }
+                        placeholder="e.g. 6"
+                      />
+                      <FieldError message={fieldErrors.sickLeaveBalance} />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               {showPasswordFields ? (
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
                   <h3 className="text-theme-sm font-medium text-gray-800">
@@ -298,11 +357,7 @@ function EmployeeFormPage() {
                           ? "Update Gmail or enter a new password to change login credentials. Leave password blank to keep the current password."
                           : "This employee has no login yet. Add a Gmail and password to create their dashboard account."
                         : null
-                      : departments.find(
-                            (department) => department.id === form.departmentId,
-                          )?.name === "Human Resources"
-                        ? "Human Resources staff sign in to the HR dashboard with full workforce access."
-                        : "Add the Gmail and password the employee will use to sign in to their dashboard."}
+                      : "Only the Human Resources department head signs in to the HR dashboard. All other staff — including other HR employees — use the employee dashboard."}
                   </p>
 
                   <div className={`${FORM_GRID_CLASS} mt-4`}>

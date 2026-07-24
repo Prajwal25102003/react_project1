@@ -1,4 +1,8 @@
 export const TOAST_DURATION_MS = 3500;
+/** Max toasts kept in the queue (UI peeks the top few). */
+export const TOAST_QUEUE_MAX = 5;
+/** Visible stacked layers (matches dashboard notification stack). */
+export const TOAST_STACK_DEPTH = 3;
 
 /** Shell classes for TailAdmin-style toast cards (light theme). */
 export const TOAST_SHELL = {

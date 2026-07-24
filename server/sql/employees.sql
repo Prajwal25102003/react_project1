@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS employees (
   salary NUMERIC(12, 2) NOT NULL,
   status VARCHAR(20) NOT NULL CHECK (status IN ('Active', 'Inactive')),
   avatar VARCHAR(255),
-  casual_leave_balance INTEGER NOT NULL DEFAULT 1 CHECK (casual_leave_balance >= 0),
-  sick_leave_balance INTEGER NOT NULL DEFAULT 1 CHECK (sick_leave_balance >= 0),
+  casual_leave_balance INTEGER NOT NULL DEFAULT 0 CHECK (casual_leave_balance >= 0),
+  sick_leave_balance INTEGER NOT NULL DEFAULT 0 CHECK (sick_leave_balance >= 0),
   lop_days INTEGER NOT NULL DEFAULT 0 CHECK (lop_days >= 0)
 );

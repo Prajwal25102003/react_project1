@@ -7,6 +7,7 @@ import employeesRoutes from './routes/employeesRoutes.js'
 import departmentsRoutes from './routes/departmentsRoutes.js'
 import attendanceRoutes from './routes/attendanceRoutes.js'
 import leaveRequestsRoutes from './routes/leaveRequestsRoutes.js'
+import leaveApprovalHierarchyRoutes from './routes/leaveApprovalHierarchyRoutes.js'
 import holidaysRoutes from './routes/holidaysRoutes.js'
 import dashboardRoutes from './routes/dashboardRoutes.js'
 import notificationsRoutes from './routes/notificationsRoutes.js'
@@ -29,6 +30,7 @@ app.use('/api/employees', employeesRoutes)
 app.use('/api/departments', departmentsRoutes)
 app.use('/api/attendance', attendanceRoutes)
 app.use('/api/leave-requests', leaveRequestsRoutes)
+app.use('/api/leave-approval-hierarchies', leaveApprovalHierarchyRoutes)
 app.use('/api/holidays', holidaysRoutes)
 app.use('/api/uploads', uploadsRoutes)
 

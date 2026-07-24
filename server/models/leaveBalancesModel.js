@@ -144,14 +144,89 @@ export async function deductEmployeeLeaveBalances(
   return { ...updated, fromSick: next.fromSick, fromCasual: next.fromCasual, fromLop: next.fromLop }
 }
 
+/**
+ * Bulk assign paid leave quotas.
+ * @param {{
+ *   scope: 'all' | 'department' | 'custom',
+ *   mode: 'set' | 'add',
+ *   casualLeaveBalance: number,
+ *   sickLeaveBalance: number,
+ *   departmentId?: string | null,
+ *   employeeIds?: string[],
+ * }} params
+ */
+export async function assignLeaveBalances({
+  scope,
+  mode,
+  casualLeaveBalance,
+  sickLeaveBalance,
+  departmentId = null,
+  employeeIds = [],
+}) {
+  const casual = Math.max(0, Number(casualLeaveBalance) || 0)
+  const sick = Math.max(0, Number(sickLeaveBalance) || 0)
+  const isAdd = mode === 'add'
+
+  const adminExclude = `
+    NOT EXISTS (
+      SELECT 1
+      FROM users u
+      WHERE u.employee_id = e.id
+        AND u.role = 'admin'
+    )`
+
+  let whereSql = adminExclude
+  const params = [casual, sick]
+  let nextIndex = 3
+
+  if (scope === 'department') {
+    whereSql += ` AND e.department_id = $${nextIndex}`
+    params.push(departmentId)
+    nextIndex += 1
+    if (employeeIds.length > 0) {
+      whereSql += ` AND e.id = ANY($${nextIndex}::text[])`
+      params.push(employeeIds)
+      nextIndex += 1
+    }
+  } else if (scope === 'custom') {
+    whereSql += ` AND e.id = ANY($${nextIndex}::text[])`
+    params.push(employeeIds)
+    nextIndex += 1
+  }
+
+  // All / department: only Active staff. Custom: whatever was selected (still not admin).
+  if (scope === 'all' || scope === 'department') {
+    whereSql += ` AND e.status = 'Active'`
+  }
+
+  const setSql = isAdd
+    ? `casual_leave_balance = casual_leave_balance + $1,
+       sick_leave_balance = sick_leave_balance + $2`
+    : `casual_leave_balance = $1,
+       sick_leave_balance = $2`
+
+  const result = await query(
+    `UPDATE employees e
+     SET ${setSql}
+     WHERE ${whereSql}
+     RETURNING e.id`,
+    params,
+  )
+
+  return {
+    updatedCount: result.rowCount,
+    employeeIds: result.rows.map((row) => row.id),
+  }
+}
+
 /** Reset quotas then re-apply all Approved leave requests (used by seed scripts). */
 export async function rebuildLeaveBalancesFromApprovedLeaves(client = null) {
   const runner = client || { query }
 
   await runner.query(
     `UPDATE employees
-     SET casual_leave_balance = 1,
-         sick_leave_balance = 1,
+     SET casual_leave_balance = 0,
+         sick_leave_balance = 0,
          lop_days = 0`,
   )
 

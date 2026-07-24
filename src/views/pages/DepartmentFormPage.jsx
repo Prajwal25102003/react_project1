@@ -18,7 +18,7 @@ function DepartmentFormPage() {
     isEdit,
     form,
     fieldErrors,
-    employees,
+    headCandidates,
     loading,
     saving,
     error,
@@ -28,6 +28,14 @@ function DepartmentFormPage() {
   } = useDepartmentForm(id);
 
   const pageName = isEdit ? "Edit Department" : "Add Department";
+  const candidates = headCandidates || [];
+  const headOptions = [
+    { value: "", label: "No head assigned" },
+    ...candidates.map((employee) => ({
+      value: employee.id,
+      label: `${employee.name} (${employee.id})`,
+    })),
+  ];
 
   return (
     <>
@@ -86,23 +94,33 @@ function DepartmentFormPage() {
 
                 <div>
                   <label className={LABEL_CLASS}>Department Head</label>
-                  <SelectField
-                    value={form.headEmployeeId}
-                    onChange={(nextValue) =>
-                      updateField("headEmployeeId", nextValue)
-                    }
-                    ariaLabel="Department head"
-                    placeholder="No head assigned"
-                    hasError={Boolean(fieldErrors.headEmployeeId)}
-                    options={[
-                      { value: "", label: "No head assigned" },
-                      ...employees.map((employee) => ({
-                        value: employee.id,
-                        label: employee.name,
-                      })),
-                    ]}
-                  />
-                  <FieldError message={fieldErrors.headEmployeeId} />
+                  {isEdit ? (
+                    <>
+                      <SelectField
+                        value={form.headEmployeeId}
+                        onChange={(nextValue) =>
+                          updateField("headEmployeeId", nextValue)
+                        }
+                        ariaLabel="Department head"
+                        placeholder="No head assigned"
+                        hasError={Boolean(fieldErrors.headEmployeeId)}
+                        options={headOptions}
+                      />
+                      <p className="mt-1.5 text-theme-xs text-gray-500">
+                        Only employees in this department can be selected as
+                        head.
+                        {candidates.length === 0
+                          ? " Add employees to this department first."
+                          : ""}
+                      </p>
+                      <FieldError message={fieldErrors.headEmployeeId} />
+                    </>
+                  ) : (
+                    <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-theme-sm text-gray-500">
+                      Assign a head after creating the department and adding
+                      employees to it.
+                    </p>
+                  )}
                 </div>
               </div>
 

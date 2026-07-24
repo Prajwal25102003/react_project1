@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
@@ -13,6 +13,7 @@ import {
 } from "../services/departmentsService.js";
 import {
   EMPTY_DEPARTMENT_FORM,
+  employeesEligibleAsDepartmentHead,
   toDepartmentFormValues,
   toDepartmentPayload,
   validateDepartmentForm,
@@ -95,6 +96,14 @@ export function useDepartmentForm(departmentId) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const headCandidates = useMemo(
+    () =>
+      isEdit
+        ? employeesEligibleAsDepartmentHead(employees, departmentId)
+        : [],
+    [employees, departmentId, isEdit],
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -106,18 +115,29 @@ export function useDepartmentForm(departmentId) {
 
         if (isEdit) {
           const [employeeRows, department] = await Promise.all([
-            fetchEmployees(),
+            fetchEmployees({ excludeLoginRoles: ["admin"] }),
             fetchDepartmentById(departmentId),
           ]);
           if (cancelled) return;
 
           setEmployees(employeeRows);
-          setForm(toDepartmentFormValues(department));
+          const nextForm = toDepartmentFormValues(department);
+          const eligible = employeesEligibleAsDepartmentHead(
+            employeeRows,
+            departmentId,
+          );
+          if (
+            nextForm.headEmployeeId &&
+            !eligible.some(
+              (employee) => employee.id === nextForm.headEmployeeId,
+            )
+          ) {
+            nextForm.headEmployeeId = "";
+          }
+          setForm(nextForm);
         } else {
-          const employeeRows = await fetchEmployees();
           if (cancelled) return;
-
-          setEmployees(employeeRows);
+          setEmployees([]);
           setForm({ ...EMPTY_DEPARTMENT_FORM });
         }
       } catch (err) {
@@ -151,7 +171,7 @@ export function useDepartmentForm(departmentId) {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    const validation = validateDepartmentForm(form);
+    const validation = validateDepartmentForm(form, { headCandidates });
     if (!validation.ok) {
       setFieldErrors(validation.fieldErrors);
       setError(validation.message);
@@ -168,7 +188,7 @@ export function useDepartmentForm(departmentId) {
         await updateDepartment(departmentId, payload);
         toast.crudSuccess("Department", "update");
       } else {
-        await createDepartment(payload);
+        await createDepartment({ ...payload, headEmployeeId: null });
         toast.crudSuccess("Department", "create");
       }
 
@@ -189,7 +209,7 @@ export function useDepartmentForm(departmentId) {
     isEdit,
     form,
     fieldErrors,
-    employees,
+    headCandidates,
     loading,
     saving,
     error,

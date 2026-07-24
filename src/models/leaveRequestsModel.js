@@ -17,6 +17,9 @@ export const LEAVE_TYPES = [
 
 export const MEDICAL_LEAVE_TYPE = "Medical Leave";
 export const WORK_FROM_HOME_TYPE = "Work from Home";
+export const MAX_MEDICAL_ATTACHMENTS = 5;
+export const MEDICAL_ATTACHMENT_URL_PATTERN =
+  /^\/uploads\/medical-[^/]+$/i;
 
 export function isMedicalLeave(leaveType) {
   return String(leaveType || "").trim() === MEDICAL_LEAVE_TYPE;
@@ -54,9 +57,62 @@ export const EMPTY_LEAVE_FORM = {
   endDate: "",
   leaveDays: "",
   reason: "",
-  attachmentUrl: "",
-  attachmentName: "",
+  attachments: [],
 };
+
+/**
+ * Normalize medical attachments from API / form into [{ url, name }].
+ * Supports legacy single URL strings and JSON arrays.
+ */
+export function parseMedicalAttachments(raw) {
+  if (raw == null) return [];
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item) => normalizeAttachmentItem(item))
+      .filter(Boolean);
+  }
+
+  const text = String(raw).trim();
+  if (!text) return [];
+
+  if (text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => normalizeAttachmentItem(item))
+          .filter(Boolean);
+      }
+    } catch {
+      /* legacy single URL */
+    }
+  }
+
+  if (MEDICAL_ATTACHMENT_URL_PATTERN.test(text)) {
+    return [{ url: text, name: "" }];
+  }
+
+  return [];
+}
+
+function normalizeAttachmentItem(item) {
+  if (typeof item === "string") {
+    const url = item.trim();
+    return MEDICAL_ATTACHMENT_URL_PATTERN.test(url)
+      ? { url, name: "" }
+      : null;
+  }
+  if (item && typeof item === "object") {
+    const url = String(item.url || "").trim();
+    if (!MEDICAL_ATTACHMENT_URL_PATTERN.test(url)) return null;
+    return {
+      url,
+      name: String(item.name || item.originalName || "").trim(),
+    };
+  }
+  return null;
+}
 
 export function attachmentFileLabel(url, fallbackName = "") {
   if (fallbackName) return fallbackName;
@@ -76,7 +132,7 @@ const LEAVE_STATUS = {
 
 export const LEAVE_STATUS_LABEL = {
   Pending: "Pending",
-  TeamLeadApproved: "Awaiting HR",
+  TeamLeadApproved: "Awaiting next",
   Approved: "Approved",
   Rejected: "Rejected",
   Cancelled: "Cancelled",
@@ -106,18 +162,79 @@ export function isRequesterAdmin(request) {
   return Boolean(request?.requesterIsAdmin);
 }
 
-/** HR may reject employee leave (not HR/Admin requesters — those go to Admin). */
-export function canHrRejectRequest(request) {
-  if (!request) return false;
-  if (isRequesterHr(request) || isRequesterAdmin(request)) return false;
-  if (request.status === "TeamLeadApproved") return true;
-  if (
-    request.status === "Pending" &&
-    request.departmentHeadId &&
-    request.departmentHeadId === request.employeeId
-  ) {
-    return true;
+export function hierarchyStepLabel(step) {
+  if (!step) return "Approver";
+  if (step.approverKind === "department_head") return "Dept Head";
+  if (step.approverKind === "role" && step.approverRole === "hr") return "HR";
+  if (step.approverKind === "role" && step.approverRole === "admin") {
+    return "Admin";
   }
+  if (step.approverKind === "employee") {
+    return (
+      step.approverEmployeeName ||
+      step.approverEmployeeId ||
+      "Named Approver"
+    );
+  }
+  return "Approver";
+}
+
+export function historyStepForHierarchyStep(step) {
+  if (!step) return "HigherAuthority";
+  if (step.approverKind === "department_head") return "TeamLead";
+  if (step.approverKind === "role" && step.approverRole === "hr") return "HR";
+  if (step.approverKind === "role" && step.approverRole === "admin") {
+    return "Admin";
+  }
+  return "HigherAuthority";
+}
+
+export function currentHierarchyStep(request) {
+  if (!request?.currentStep) return null;
+  return (
+    (request.hierarchySteps || []).find(
+      (step) => Number(step.stepOrder) === Number(request.currentStep),
+    ) || null
+  );
+}
+
+export function nextStepAfterCurrent(request) {
+  const steps = [...(request?.hierarchySteps || [])].sort(
+    (a, b) => Number(a.stepOrder) - Number(b.stepOrder),
+  );
+  const current = Number(request?.currentStep);
+  const idx = steps.findIndex((step) => Number(step.stepOrder) === current);
+  if (idx < 0 || idx >= steps.length - 1) return null;
+  return steps[idx + 1];
+}
+
+/** True when the signed-in user matches the request's current hierarchy step. */
+export function actorMatchesCurrentStep(request, { employeeId, role } = {}) {
+  if (!request || request.status !== "Pending") return false;
+  const step = currentHierarchyStep(request);
+  if (!step) return false;
+
+  if (step.approverKind === "department_head") {
+    return Boolean(
+      employeeId &&
+        request.departmentHeadId &&
+        String(employeeId) === String(request.departmentHeadId) &&
+        String(employeeId) !== String(request.employeeId || ""),
+    );
+  }
+
+  if (step.approverKind === "role") {
+    return Boolean(step.approverRole && role === step.approverRole);
+  }
+
+  if (step.approverKind === "employee") {
+    return Boolean(
+      employeeId &&
+        step.approverEmployeeId &&
+        String(employeeId) === String(step.approverEmployeeId),
+    );
+  }
+
   return false;
 }
 
@@ -140,47 +257,64 @@ export function mapApprovalHistoryEntry(entry) {
 
 /**
  * Multilevel approval steps for the leave details stepper.
- * state: completed | current | upcoming | rejected | cancelled
- * Always returns the full path; terminal outcomes mark the fail step.
+ * Prefer request.hierarchySteps when present; fall back to legacy paths.
  */
 export function buildLeaveApprovalSteps(request) {
   if (!request) return [];
 
   const status = request.status || "Pending";
-  const isHeadSelf =
-    Boolean(request.departmentHeadId) &&
-    request.departmentHeadId === request.employeeId;
+  const hierarchySteps = [...(request.hierarchySteps || [])].sort(
+    (a, b) => Number(a.stepOrder) - Number(b.stepOrder),
+  );
 
   let defs;
-  if (isRequesterAdmin(request)) {
+  if (hierarchySteps.length > 0) {
     defs = [
       { id: "submit", label: "Requested", historySteps: ["Submit"] },
-      {
-        id: "approver",
-        label: "Higher Auth",
-        historySteps: ["HigherAuthority", "Admin"],
-      },
-      { id: "done", label: "Approved", historySteps: [] },
-    ];
-  } else if (isRequesterHr(request)) {
-    defs = [
-      { id: "submit", label: "Requested", historySteps: ["Submit"] },
-      { id: "approver", label: "Admin", historySteps: ["Admin"] },
-      { id: "done", label: "Approved", historySteps: [] },
-    ];
-  } else if (isHeadSelf) {
-    defs = [
-      { id: "submit", label: "Requested", historySteps: ["Submit"] },
-      { id: "hr", label: "HR", historySteps: ["HR", "Admin"] },
+      ...hierarchySteps.map((step) => ({
+        id: `step-${step.stepOrder}`,
+        label: hierarchyStepLabel(step),
+        historySteps: [historyStepForHierarchyStep(step)],
+        stepOrder: Number(step.stepOrder),
+      })),
       { id: "done", label: "Approved", historySteps: [] },
     ];
   } else {
-    defs = [
-      { id: "submit", label: "Requested", historySteps: ["Submit"] },
-      { id: "teamLead", label: "Dept Head", historySteps: ["TeamLead"] },
-      { id: "hr", label: "HR", historySteps: ["HR", "Admin"] },
-      { id: "done", label: "Approved", historySteps: [] },
-    ];
+    // Legacy fallback for rows without a hierarchy snapshot.
+    const isHeadSelf =
+      Boolean(request.departmentHeadId) &&
+      request.departmentHeadId === request.employeeId;
+
+    if (isRequesterAdmin(request)) {
+      defs = [
+        { id: "submit", label: "Requested", historySteps: ["Submit"] },
+        {
+          id: "approver",
+          label: "Higher Auth",
+          historySteps: ["HigherAuthority", "Admin"],
+        },
+        { id: "done", label: "Approved", historySteps: [] },
+      ];
+    } else if (isRequesterHr(request)) {
+      defs = [
+        { id: "submit", label: "Requested", historySteps: ["Submit"] },
+        { id: "approver", label: "Admin", historySteps: ["Admin"] },
+        { id: "done", label: "Approved", historySteps: [] },
+      ];
+    } else if (isHeadSelf) {
+      defs = [
+        { id: "submit", label: "Requested", historySteps: ["Submit"] },
+        { id: "hr", label: "HR", historySteps: ["HR", "Admin"] },
+        { id: "done", label: "Approved", historySteps: [] },
+      ];
+    } else {
+      defs = [
+        { id: "submit", label: "Requested", historySteps: ["Submit"] },
+        { id: "teamLead", label: "Dept Head", historySteps: ["TeamLead"] },
+        { id: "hr", label: "HR", historySteps: ["HR", "Admin"] },
+        { id: "done", label: "Approved", historySteps: [] },
+      ];
+    }
   }
 
   const history = request.approvalHistory || [];
@@ -188,10 +322,16 @@ export function buildLeaveApprovalSteps(request) {
   let terminalState = null;
 
   if (status === "Pending") {
-    currentIndex = 1;
+    if (request.currentStep != null) {
+      const idx = defs.findIndex(
+        (step) => Number(step.stepOrder) === Number(request.currentStep),
+      );
+      currentIndex = idx >= 0 ? idx : 1;
+    } else {
+      currentIndex = 1;
+    }
   } else if (status === "TeamLeadApproved") {
-    currentIndex = defs.findIndex((step) => step.id === "hr");
-    if (currentIndex < 0) currentIndex = Math.min(2, defs.length - 1);
+    currentIndex = Math.min(2, defs.length - 1);
   } else if (status === "Approved") {
     currentIndex = defs.length - 1;
   } else if (status === "Rejected" || status === "Cancelled") {
@@ -211,11 +351,9 @@ export function buildLeaveApprovalSteps(request) {
         )
       : -1;
 
-    // Sender cancel → mark Requested as cancelled (only requester can cancel).
     if (failEntry?.step === "Cancel" || failEntry?.action === "Cancelled") {
       failIndex = 0;
     } else if (failIndex < 0) {
-      // Unknown reject → mark the step that was waiting (first approver).
       failIndex = 1;
     }
     currentIndex = failIndex;
@@ -255,11 +393,28 @@ export function buildLeaveApprovalSteps(request) {
   });
 }
 
+function pendingStatusLabel(request) {
+  const step = currentHierarchyStep(request);
+  if (step) return `Awaiting ${hierarchyStepLabel(step)}`;
+  if (isRequesterHr(request)) return "Awaiting Admin";
+  if (isRequesterAdmin(request)) return "Awaiting Higher Approval";
+  return LEAVE_STATUS_LABEL.Pending;
+}
+
 export function mapLeaveRequest(request) {
   const status = request.status || "Pending";
   const requesterIsHr = Boolean(request.requesterIsHr);
   const requesterIsAdmin = Boolean(request.requesterIsAdmin);
   const leaveDays = Number(request.leaveDays);
+  const hierarchySteps = request.hierarchySteps || [];
+  const currentStep =
+    request.currentStep === null || request.currentStep === undefined
+      ? null
+      : Number(request.currentStep);
+  const attachments = parseMedicalAttachments(
+    request.attachments ?? request.attachmentUrl,
+  );
+
   return {
     ...request,
     leaveDays: Number.isNaN(leaveDays) ? request.leaveDays : leaveDays,
@@ -268,15 +423,25 @@ export function mapLeaveRequest(request) {
       request.leaveDays,
       request.halfDaySession,
     ),
+    attachments,
+    attachmentUrl: attachments[0]?.url || "",
+    attachmentName: attachments[0]?.name || "",
     status,
     requesterIsHr,
     requesterIsAdmin,
+    hierarchyId: request.hierarchyId ?? null,
+    currentStep,
+    hierarchySteps,
     statusLabel:
-      status === "Pending" && requesterIsHr
-        ? "Awaiting Admin"
-        : status === "Pending" && requesterIsAdmin
-          ? "Awaiting Higher Approval"
-          : LEAVE_STATUS_LABEL[status] || status,
+      status === "Pending"
+        ? pendingStatusLabel({
+            ...request,
+            currentStep,
+            hierarchySteps,
+            requesterIsHr,
+            requesterIsAdmin,
+          })
+        : LEAVE_STATUS_LABEL[status] || status,
     statusClass: getStatusClass(LEAVE_STATUS, status, "Pending"),
     casualLeaveBalance: Number(request.casualLeaveBalance ?? 0),
     sickLeaveBalance: Number(request.sickLeaveBalance ?? 0),
@@ -285,45 +450,27 @@ export function mapLeaveRequest(request) {
   };
 }
 
-/** True when the signed-in employee is the requester's department head (not self). */
+/** @deprecated Prefer actorMatchesCurrentStep */
 export function isTeamLeadForRequest(request, employeeId) {
-  return Boolean(
-    employeeId &&
-      request?.departmentHeadId &&
-      employeeId === request.departmentHeadId &&
-      employeeId !== request.employeeId &&
-      !isRequesterHr(request) &&
-      !isRequesterAdmin(request),
-  );
+  return actorMatchesCurrentStep(request, {
+    employeeId,
+    role: "employee",
+  }) && currentHierarchyStep(request)?.approverKind === "department_head";
 }
 
-/**
- * HR final approve, or HR direct-approve when the requester is the department head.
- * HR leave is approved by Admin only.
- */
+/** @deprecated Prefer actorMatchesCurrentStep */
 export function canHrApproveRequest(request) {
-  if (!request || isRequesterHr(request) || isRequesterAdmin(request)) {
-    return false;
-  }
-  if (request.status === "TeamLeadApproved") return true;
-  if (
-    request.status === "Pending" &&
-    request.departmentHeadId &&
-    request.departmentHeadId === request.employeeId
-  ) {
-    return true;
-  }
-  return false;
+  return actorMatchesCurrentStep(request, { role: "hr" });
 }
 
-/** Admin-only approve for HR employees' leave requests. */
+/** @deprecated Prefer actorMatchesCurrentStep */
+export function canHrRejectRequest(request) {
+  return canHrApproveRequest(request);
+}
+
+/** @deprecated Prefer actorMatchesCurrentStep */
 export function canAdminApproveRequest(request) {
-  return Boolean(
-    request &&
-      isRequesterHr(request) &&
-      !isRequesterAdmin(request) &&
-      request.status === "Pending",
-  );
+  return actorMatchesCurrentStep(request, { role: "admin" });
 }
 
 export function canAdminRejectRequest(request) {
@@ -332,17 +479,7 @@ export function canAdminRejectRequest(request) {
 
 /** True when the signed-in user can approve or reject this leave request. */
 function canActOnLeaveApproval(request, { employeeId, role } = {}) {
-  if (!request) return false;
-  const asTeamLead = isTeamLeadForRequest(request, employeeId);
-  if (request.status === "Pending" && asTeamLead) return true;
-  if (role === "admin" && canAdminApproveRequest(request)) return true;
-  if (
-    role === "hr" &&
-    (canHrApproveRequest(request) || canHrRejectRequest(request))
-  ) {
-    return true;
-  }
-  return false;
+  return actorMatchesCurrentStep(request, { employeeId, role });
 }
 
 /** How many approval-queue rows still need this user's decision. */
@@ -355,10 +492,7 @@ export function countActionableLeaveApprovals(requests, userContext) {
 /** Whether this user may cancel the leave request in its current status. */
 export function canCancelLeaveRequest(request, { employeeId } = {}) {
   if (!request) return false;
-  const status = request.status;
-  if (status !== "Pending" && status !== "TeamLeadApproved") return false;
-
-  // Only the requester can cancel. HR uses Approve / Reject for employee leave.
+  if (request.status !== "Pending") return false;
   return Boolean(employeeId) && request.employeeId === employeeId;
 }
 
@@ -404,7 +538,9 @@ export function toLeavePayload(form) {
   }
 
   if (isMedicalLeave(form.leaveType)) {
-    payload.attachmentUrl = String(form.attachmentUrl || "").trim();
+    payload.attachments = parseMedicalAttachments(form.attachments).map(
+      ({ url, name }) => ({ url, name: name || "" }),
+    );
   }
 
   return payload;
@@ -477,12 +613,18 @@ export function validateLeaveForm(form, { gender } = {}) {
   if (!reason) fieldErrors.reason = "Leave reason is required";
 
   if (isMedicalLeave(leaveType)) {
-    const attachmentUrl = String(form?.attachmentUrl ?? "").trim();
-    if (!attachmentUrl) {
-      fieldErrors.attachmentUrl =
-        "Upload a medical certificate or supporting document";
-    } else if (!/^\/uploads\/medical-[^/]+$/i.test(attachmentUrl)) {
-      fieldErrors.attachmentUrl = "Upload a valid medical document";
+    const attachments = parseMedicalAttachments(form?.attachments);
+    if (!attachments.length) {
+      fieldErrors.attachments =
+        "Upload at least one medical certificate or supporting document";
+    } else if (attachments.length > MAX_MEDICAL_ATTACHMENTS) {
+      fieldErrors.attachments = `You can upload up to ${MAX_MEDICAL_ATTACHMENTS} documents`;
+    } else if (
+      attachments.some(
+        (item) => !MEDICAL_ATTACHMENT_URL_PATTERN.test(item.url),
+      )
+    ) {
+      fieldErrors.attachments = "Upload valid medical documents only";
     }
   }
 

@@ -11,6 +11,55 @@ export const NEW_EMPLOYEE_PERIODS = [
   { value: "year", label: "This year" },
 ];
 
+/** TailAdmin tone tokens for dashboard KPI cards (soft fill + icon). */
+export const METRIC_TONE_STYLES = {
+  brand: {
+    card: "border-brand-200 bg-brand-25",
+    iconWrap: "bg-brand-100",
+    icon: "text-brand-500",
+  },
+  success: {
+    card: "border-success-200 bg-success-25",
+    iconWrap: "bg-success-100",
+    icon: "text-success-500",
+  },
+  warning: {
+    card: "border-warning-200 bg-warning-25",
+    iconWrap: "bg-warning-100",
+    icon: "text-warning-500",
+  },
+  error: {
+    card: "border-error-200 bg-error-25",
+    iconWrap: "bg-error-100",
+    icon: "text-error-500",
+  },
+  info: {
+    card: "border-blue-light-200 bg-blue-light-25",
+    iconWrap: "bg-blue-light-100",
+    icon: "text-blue-light-500",
+  },
+};
+
+const METRIC_TONE_BY_ID = {
+  "total-employees": "brand",
+  "active-employees": "success",
+  "inactive-employees": "error",
+  "new-employees": "info",
+  "pending-leave": "warning",
+  "unread-messages": "brand",
+  "days-present": "success",
+  "leave-approved": "info",
+  "total-leave": "brand",
+  "casual-leave": "success",
+  "sick-leave": "warning",
+  "lop-days": "error",
+};
+
+export function getMetricToneStyles(metricId) {
+  const tone = METRIC_TONE_BY_ID[metricId] || "brand";
+  return METRIC_TONE_STYLES[tone];
+}
+
 const ACTIVITY_STATUS = {
   Completed: STATUS_TONE.success,
   Pending: STATUS_TONE.warning,

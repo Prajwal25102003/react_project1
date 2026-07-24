@@ -77,6 +77,9 @@ export const EMPTY_EMPLOYEE_FORM = {
   avatar: "",
   gmail: "",
   password: "",
+  // Optional paid leave quotas (casual + sick). Empty = 0; can be set later on edit.
+  casualLeaveBalance: "",
+  sickLeaveBalance: "",
 };
 
 const EMPLOYEE_STATUS = {
@@ -125,6 +128,16 @@ export function toEmployeeFormValues(employee) {
     gmail: employee.loginEmail || "",
     password: "",
     hasLoginAccount: Boolean(employee.hasLoginAccount),
+    casualLeaveBalance:
+      employee.casualLeaveBalance === undefined ||
+      employee.casualLeaveBalance === null
+        ? ""
+        : String(employee.casualLeaveBalance),
+    sickLeaveBalance:
+      employee.sickLeaveBalance === undefined ||
+      employee.sickLeaveBalance === null
+        ? ""
+        : String(employee.sickLeaveBalance),
   };
 }
 
@@ -153,6 +166,11 @@ export function toEmployeePayload(form, options = {}) {
     avatar: form.avatar.trim() || null,
   };
 
+  if (!isAdminAccount) {
+    payload.casualLeaveBalance = parseOptionalLeaveDays(form.casualLeaveBalance);
+    payload.sickLeaveBalance = parseOptionalLeaveDays(form.sickLeaveBalance);
+  }
+
   if (includeCredentials) {
     const gmail = String(form.gmail ?? "").trim();
     if (gmail) payload.loginEmail = gmail;
@@ -163,6 +181,15 @@ export function toEmployeePayload(form, options = {}) {
   }
 
   return payload;
+}
+
+/** Empty / blank → 0; otherwise a non-negative integer. */
+export function parseOptionalLeaveDays(raw) {
+  const value = String(raw ?? "").trim();
+  if (value === "") return 0;
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return 0;
+  return Math.floor(num);
 }
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -230,6 +257,26 @@ export function validateEmployeeForm(form, options = {}) {
 
   if (avatar && !avatar.startsWith("/") && !/^https?:\/\//i.test(avatar)) {
     fieldErrors.avatar = "Please select a valid image file";
+  }
+
+  if (!isAdminAccount) {
+    const casualRaw = String(form?.casualLeaveBalance ?? "").trim();
+    if (casualRaw !== "") {
+      const casual = Number(casualRaw);
+      if (!Number.isInteger(casual) || casual < 0) {
+        fieldErrors.casualLeaveBalance =
+          "Casual leave must be a whole number 0 or greater";
+      }
+    }
+
+    const sickRaw = String(form?.sickLeaveBalance ?? "").trim();
+    if (sickRaw !== "") {
+      const sick = Number(sickRaw);
+      if (!Number.isInteger(sick) || sick < 0) {
+        fieldErrors.sickLeaveBalance =
+          "Sick leave must be a whole number 0 or greater";
+      }
+    }
   }
 
   const credentialsVisible = !isEdit || canManageCredentials;

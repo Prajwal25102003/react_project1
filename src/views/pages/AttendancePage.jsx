@@ -142,10 +142,12 @@ function AttendancePage() {
               : (record) => [
                   {
                     label: "Edit",
+                    icon: "pencil",
                     to: `/attendance/${record.id}/edit`,
                   },
                   {
                     label: "Delete",
+                    icon: "trash",
                     tone: "danger",
                     onClick: () => openDeleteModal(record),
                   },

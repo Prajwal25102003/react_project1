@@ -31,6 +31,9 @@ const LeaveApprovalsPage = lazy(
 );
 const LeaveFormPage = lazy(() => import("./views/pages/LeaveFormPage.jsx"));
 const HolidaysPage = lazy(() => import("./views/pages/HolidaysPage.jsx"));
+const LeaveApprovalHierarchyPage = lazy(
+  () => import("./views/pages/LeaveApprovalHierarchyPage.jsx"),
+);
 const ProfilePage = lazy(() => import("./views/pages/ProfilePage.jsx"));
 const NotFoundPage = lazy(() => import("./views/pages/NotFoundPage.jsx"));
 const SignInPage = lazy(() => import("./views/pages/SignInPage.jsx"));
@@ -83,6 +86,13 @@ function AppRoutes() {
             >
               <Route path="attendance" element={<AttendancePage />} />
               <Route path="holidays" element={<HolidaysPage />} />
+            </Route>
+
+            <Route element={<RoleRoute roles={[ROLES.ADMIN]} />}>
+              <Route
+                path="leave-hierarchy"
+                element={<LeaveApprovalHierarchyPage />}
+              />
             </Route>
 
             <Route

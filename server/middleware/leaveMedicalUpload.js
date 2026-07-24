@@ -20,7 +20,7 @@ const storage = multer.diskStorage({
     const safeExt = ALLOWED_EXT.has(ext) ? ext : '.pdf'
     cb(
       null,
-      `medical-${Date.now()}-${Math.round(Math.random() * 1e6)}${safeExt}`,
+      `medical-${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`,
     )
   },
 })
