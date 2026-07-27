@@ -32,8 +32,10 @@ function CloseIcon() {
 /**
  * Full-width stacked unread notifications.
  * Latest on top; older cards sit behind with a thin layer peeking below.
+ * Clicking the front card opens/acknowledges it (closes the banner);
+ * the X only dismisses without navigating.
  */
-function DashboardNotifications({ messages = [], onDismiss }) {
+function DashboardNotifications({ messages = [], onDismiss, onOpen }) {
   const list = messages || [];
   const stack = list.slice(0, STACK_DEPTH);
   if (stack.length === 0) return null;
@@ -42,6 +44,7 @@ function DashboardNotifications({ messages = [], onDismiss }) {
   const front = stack[0];
   const peekCount = Math.max(0, stack.length - 1);
   const stackHeight = CARD_H + peekCount * PEEK_PX;
+  const isInteractive = Boolean(onOpen);
 
   return (
     <div
@@ -69,7 +72,28 @@ function DashboardNotifications({ messages = [], onDismiss }) {
             aria-hidden={!isFront}
           >
             <div
-              className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 shadow-theme-xs ${STACK_TONE}`}
+              role={isFront && isInteractive ? "button" : undefined}
+              tabIndex={isFront && isInteractive ? 0 : undefined}
+              onClick={
+                isFront && isInteractive
+                  ? () => onOpen?.(front)
+                  : undefined
+              }
+              onKeyDown={
+                isFront && isInteractive
+                  ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onOpen?.(front);
+                      }
+                    }
+                  : undefined
+              }
+              className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 shadow-theme-xs ${STACK_TONE}${
+                isFront && isInteractive
+                  ? " cursor-pointer transition hover:brightness-[0.98] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-error-500/30"
+                  : ""
+              }`}
             >
               {isFront ? (
                 <>

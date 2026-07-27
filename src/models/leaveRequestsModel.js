@@ -252,7 +252,50 @@ export function mapApprovalHistoryEntry(entry) {
   return {
     ...entry,
     stepLabel,
+    actorName: String(entry.actorName || "").trim() || "Unknown",
   };
+}
+
+/**
+ * Resolve display name for a tracker step (requester or approver).
+ */
+function resolveApprovalStepName(stepDef, request, history) {
+  if (stepDef.id === "submit") {
+    return String(request?.employeeName || "").trim() || null;
+  }
+
+  if (stepDef.id === "done") {
+    return null;
+  }
+
+  const historySteps = stepDef.historySteps || [];
+  if (historySteps.length > 0) {
+    const match = [...(history || [])]
+      .reverse()
+      .find((entry) => historySteps.includes(entry.step) && entry.actorName);
+    if (match?.actorName) {
+      return String(match.actorName).trim() || null;
+    }
+  }
+
+  if (stepDef.approverKind === "department_head") {
+    return String(request?.departmentHeadName || "").trim() || null;
+  }
+
+  if (stepDef.approverKind === "employee") {
+    return (
+      String(stepDef.approverEmployeeName || "").trim() ||
+      String(stepDef.approverEmployeeId || "").trim() ||
+      null
+    );
+  }
+
+  // Pending role steps: any matching login can act (show pool hint for Admin).
+  if (stepDef.approverKind === "role" && stepDef.approverRole === "admin") {
+    return "Any Admin";
+  }
+
+  return null;
 }
 
 /**
@@ -276,6 +319,10 @@ export function buildLeaveApprovalSteps(request) {
         label: hierarchyStepLabel(step),
         historySteps: [historyStepForHierarchyStep(step)],
         stepOrder: Number(step.stepOrder),
+        approverKind: step.approverKind,
+        approverRole: step.approverRole || "",
+        approverEmployeeName: step.approverEmployeeName,
+        approverEmployeeId: step.approverEmployeeId,
       })),
       { id: "done", label: "Approved", historySteps: [] },
     ];
@@ -304,14 +351,29 @@ export function buildLeaveApprovalSteps(request) {
     } else if (isHeadSelf) {
       defs = [
         { id: "submit", label: "Requested", historySteps: ["Submit"] },
-        { id: "hr", label: "HR", historySteps: ["HR", "Admin"] },
+        {
+          id: "hr",
+          label: "HR",
+          historySteps: ["HR", "Admin"],
+          approverKind: "role",
+        },
         { id: "done", label: "Approved", historySteps: [] },
       ];
     } else {
       defs = [
         { id: "submit", label: "Requested", historySteps: ["Submit"] },
-        { id: "teamLead", label: "Dept Head", historySteps: ["TeamLead"] },
-        { id: "hr", label: "HR", historySteps: ["HR", "Admin"] },
+        {
+          id: "teamLead",
+          label: "Dept Head",
+          historySteps: ["TeamLead"],
+          approverKind: "department_head",
+        },
+        {
+          id: "hr",
+          label: "HR",
+          historySteps: ["HR", "Admin"],
+          approverKind: "role",
+        },
         { id: "done", label: "Approved", historySteps: [] },
       ];
     }
@@ -385,9 +447,14 @@ export function buildLeaveApprovalSteps(request) {
       }
     }
 
+    if (step.id === "done" && status === "Approved") {
+      label = "Approved";
+    }
+
     return {
       id: step.id,
       label,
+      name: resolveApprovalStepName(step, request, history),
       state,
     };
   });

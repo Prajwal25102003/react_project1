@@ -9,21 +9,50 @@ function formatBalanceValue(value) {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
 }
 
+/** Soft tint shells — same palette as status pills / alert banners. */
+const STAT_TONE = {
+  brand: {
+    shell: "border-brand-500/20 bg-brand-50",
+    label: "text-brand-500/80",
+    value: "text-brand-500",
+  },
+  success: {
+    shell: "border-success-500/20 bg-success-50",
+    label: "text-success-700/80",
+    value: "text-success-700",
+  },
+  info: {
+    shell: "border-blue-light-500/20 bg-blue-light-50",
+    label: "text-blue-light-700/80",
+    value: "text-blue-light-700",
+  },
+  warning: {
+    shell: "border-warning-500/20 bg-warning-50",
+    label: "text-warning-700/80",
+    value: "text-warning-700",
+  },
+  error: {
+    shell: "border-error-500/20 bg-error-50",
+    label: "text-error-700/80",
+    value: "text-error-700",
+  },
+  default: {
+    shell: "border-gray-200 bg-white",
+    label: "text-gray-500",
+    value: "text-gray-800",
+  },
+};
+
 function Stat({ label, value, tone = "default" }) {
-  const valueClass =
-    tone === "warning"
-      ? "text-warning-700"
-      : tone === "error"
-        ? "text-error-700"
-        : tone === "brand"
-          ? "text-brand-500"
-          : "text-gray-800";
+  const colors = STAT_TONE[tone] || STAT_TONE.default;
 
   return (
-    <div className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-3">
-      <p className="truncate text-theme-xs text-gray-500">{label}</p>
+    <div
+      className={`min-w-0 rounded-xl border px-3 py-3 ${colors.shell}`}
+    >
+      <p className={`truncate text-theme-xs ${colors.label}`}>{label}</p>
       <p
-        className={`mt-1 break-words text-xl font-semibold leading-tight ${valueClass}`}
+        className={`mt-1 break-words text-xl font-semibold leading-tight ${colors.value}`}
       >
         {formatBalanceValue(value)}
       </p>
@@ -81,18 +110,26 @@ function LeaveBalancePanel({
           value={totalAvailable}
           tone={totalAvailable > 0 ? "brand" : "warning"}
         />
-        <Stat label="Casual left" value={normalized.casualLeaveBalance} />
-        <Stat label="Sick left" value={normalized.sickLeaveBalance} />
+        <Stat
+          label="Casual left"
+          value={normalized.casualLeaveBalance}
+          tone="success"
+        />
+        <Stat
+          label="Sick left"
+          value={normalized.sickLeaveBalance}
+          tone="info"
+        />
         <Stat
           label="LOP days"
           value={normalized.lopDays}
-          tone={normalized.lopDays > 0 ? "warning" : "default"}
+          tone="warning"
         />
         {showPending ? (
           <Stat
             label="Pending requests"
             value={normalized.pendingLeaveCount}
-            tone={normalized.pendingLeaveCount > 0 ? "warning" : "default"}
+            tone={normalized.pendingLeaveCount > 0 ? "error" : "default"}
           />
         ) : null}
       </div>

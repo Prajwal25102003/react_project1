@@ -4,7 +4,7 @@ import { useAuth } from "./authContext.jsx";
 import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
-import { HR_ADMIN_ROLES } from "../models/authModel.js";
+import { HR_ADMIN_ROLES, ROLES } from "../models/authModel.js";
 import { fetchDepartments } from "../services/departmentsService.js";
 import {
   createEmployee,
@@ -40,9 +40,14 @@ import { sanitizeIndianPhoneInput } from "../utils/indianPhone.js";
 
 export function useEmployees() {
   const toast = useToast();
+  const { user } = useAuth();
+  const isAdminUser = user?.role === ROLES.ADMIN;
   const loadEmployees = useMemo(
-    () => () => fetchEmployees({ excludeLoginRoles: ["admin"] }),
-    [],
+    () => () =>
+      fetchEmployees(
+        isAdminUser ? {} : { excludeLoginRoles: ["admin"] },
+      ),
+    [isAdminUser],
   );
   const { rows, loading, error, reload } = useListData(
     loadEmployees,
@@ -309,6 +314,60 @@ export function useEmployees() {
     }
   }
 
+  const adminCount = useMemo(
+    () =>
+      (rows || []).filter(
+        (employee) =>
+          employee.isAdminAccount || employee.loginRole === "admin",
+      ).length,
+    [rows],
+  );
+
+  function getEmployeeActions(employee) {
+    const isAdminAccount =
+      employee?.isAdminAccount || employee?.loginRole === "admin";
+
+    if (!isAdminAccount) {
+      return [
+        {
+          label: "Edit",
+          icon: "pencil",
+          to: `/employees/${employee.id}/edit`,
+        },
+        {
+          label: "Delete",
+          icon: "trash",
+          tone: "danger",
+          onClick: () => openDeleteModal(employee),
+        },
+      ];
+    }
+
+    if (!isAdminUser) return [];
+
+    const actions = [
+      {
+        label: "Edit",
+        icon: "pencil",
+        to: `/employees/${employee.id}/edit`,
+      },
+    ];
+
+    const isSelf =
+      Boolean(user?.employeeId) &&
+      String(user.employeeId) === String(employee.id);
+    if (!isSelf && adminCount > 1) {
+      actions.push({
+        label: "Delete",
+        icon: "trash",
+        tone: "danger",
+        onClick: () => openDeleteModal(employee),
+      });
+    }
+
+    return actions;
+  }
+
   return {
     employees: table.rows,
     loading,
@@ -325,6 +384,7 @@ export function useEmployees() {
     openDeleteModal,
     closeDeleteModal,
     confirmDelete,
+    getEmployeeActions,
     assignOpen,
     assignForm,
     assignFieldErrors,
@@ -352,6 +412,7 @@ export function useEmployeeForm(employeeId) {
   const toast = useToast();
   const isEdit = Boolean(employeeId);
   const canManageCredentials = HR_ADMIN_ROLES.includes(user?.role);
+  const canCreateAdmin = user?.role === ROLES.ADMIN;
   const showPasswordFields = !isEdit || canManageCredentials;
 
   const [form, setForm] = useState({ ...EMPTY_EMPLOYEE_FORM });
@@ -380,15 +441,16 @@ export function useEmployeeForm(employeeId) {
           ]);
           if (cancelled) return;
 
-          setDepartments(departmentRows);
-          if (employee.isAdminAccount) {
+          if (employee.isAdminAccount && user?.role !== ROLES.ADMIN) {
             toast.error(
               "Admin is a system manager and is not managed from Employees",
             );
             navigate("/employees", { replace: true });
             return;
           }
-          setIsAdminAccount(false);
+
+          setDepartments(departmentRows);
+          setIsAdminAccount(Boolean(employee.isAdminAccount));
           setForm(toEmployeeFormValues(employee));
         } else {
           const departmentRows = await fetchDepartments();
@@ -418,9 +480,38 @@ export function useEmployeeForm(employeeId) {
     return () => {
       cancelled = true;
     };
-  }, [employeeId, isEdit]);
+  }, [employeeId, isEdit, user?.role]);
 
   function updateField(field, value) {
+    if (field === "accountType" && !isEdit && canCreateAdmin) {
+      const nextIsAdmin = value === "admin";
+      setIsAdminAccount(nextIsAdmin);
+      setForm((current) => ({
+        ...current,
+        accountType: value,
+        departmentId: nextIsAdmin ? "" : current.departmentId || departments[0]?.id || "",
+        designation: nextIsAdmin
+          ? current.designation?.trim()
+            ? current.designation
+            : "System Administrator"
+          : current.designation === "System Administrator"
+            ? ""
+            : current.designation,
+        casualLeaveBalance: nextIsAdmin ? "" : current.casualLeaveBalance,
+        sickLeaveBalance: nextIsAdmin ? "" : current.sickLeaveBalance,
+      }));
+      setFieldErrors((current) => {
+        const next = { ...current };
+        delete next.accountType;
+        delete next.departmentId;
+        delete next.designation;
+        delete next.casualLeaveBalance;
+        delete next.sickLeaveBalance;
+        return next;
+      });
+      return;
+    }
+
     const nextValue =
       field === "phone" ? sanitizeIndianPhoneInput(value) : value;
     setForm((current) => ({ ...current, [field]: nextValue }));
@@ -499,10 +590,10 @@ export function useEmployeeForm(employeeId) {
 
       if (isEdit) {
         await updateEmployee(employeeId, payload);
-        toast.crudSuccess("Employee", "update");
+        toast.crudSuccess(isAdminAccount ? "Admin" : "Employee", "update");
       } else {
         await createEmployee(payload);
-        toast.crudSuccess("Employee", "create");
+        toast.crudSuccess(isAdminAccount ? "Admin" : "Employee", "create");
       }
 
       requestEmsRefresh();
@@ -524,6 +615,7 @@ export function useEmployeeForm(employeeId) {
     fieldErrors,
     departments,
     isAdminAccount,
+    canCreateAdmin,
     loading,
     saving,
     uploadingAvatar,

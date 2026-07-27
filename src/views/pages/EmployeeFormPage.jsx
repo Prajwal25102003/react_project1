@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
 import { useEmployeeForm } from "../../controllers/employeesController.js";
 import {
+  EMPLOYEE_ACCOUNT_TYPES,
   EMPLOYEE_GENDERS,
   EMPLOYEE_STATUSES,
   MIN_EMPLOYEE_PASSWORD_LENGTH,
@@ -19,6 +20,54 @@ import PasswordField from "../components/forms/PasswordField.jsx";
 import SelectField from "../components/forms/SelectField.jsx";
 import UserAvatar from "../components/UserAvatar.jsx";
 
+function ProfilePhotoField({
+  form,
+  fieldErrors,
+  uploadingAvatar,
+  saving,
+  onChange,
+  onClear,
+  nameFallback = "User",
+}) {
+  return (
+    <div>
+      <label className={LABEL_CLASS}>Profile photo</label>
+      <div className="flex flex-wrap items-center gap-4">
+        <UserAvatar
+          src={form.avatar}
+          name={form.name || nameFallback}
+          size="lg"
+        />
+        <div className="min-w-0 flex-1 space-y-2">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={onChange}
+            disabled={uploadingAvatar || saving}
+            className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600 disabled:opacity-60"
+          />
+          <p className="text-theme-xs text-gray-500">
+            {uploadingAvatar
+              ? "Uploading image…"
+              : "Optional. Without an image, name initials are shown. JPG, PNG, GIF, WEBP — max 2MB."}
+          </p>
+          {form.avatar ? (
+            <button
+              type="button"
+              onClick={onClear}
+              disabled={uploadingAvatar || saving}
+              className="text-theme-sm font-medium text-error-600 hover:text-error-700 disabled:opacity-60"
+            >
+              Remove image
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <FieldError message={fieldErrors.avatar} />
+    </div>
+  );
+}
+
 function EmployeeFormPage() {
   const { id } = useParams();
   const {
@@ -27,6 +76,7 @@ function EmployeeFormPage() {
     fieldErrors,
     departments,
     isAdminAccount,
+    canCreateAdmin,
     loading,
     saving,
     uploadingAvatar,
@@ -42,7 +92,11 @@ function EmployeeFormPage() {
     handleCancel,
   } = useEmployeeForm(id);
 
-  const pageName = isEdit ? "Edit Employee" : "Add Employee";
+  const pageName = isEdit
+    ? isAdminAccount
+      ? "Edit Admin"
+      : "Edit Employee"
+    : "Add Employee";
   const passwordRequired = !isEdit;
 
   return (
@@ -51,11 +105,21 @@ function EmployeeFormPage() {
 
       <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden sm:space-y-6">
         <PageCard
-          title={isEdit ? "Edit Employee" : "Create Employee"}
+          title={
+            isEdit
+              ? isAdminAccount
+                ? "Edit Admin"
+                : "Edit Employee"
+              : "Create Employee"
+          }
           subtitle={
             isEdit
-              ? "Update employee details in the directory."
-              : "Add a new employee and create their login for the employee dashboard."
+              ? isAdminAccount
+                ? "Update name, email, password, or profile photo."
+                : "Update employee details in the directory."
+              : canCreateAdmin
+                ? "Add a staff employee or another admin. Admins only need name, email, password, and photo."
+                : "Add a new employee and create their login for the employee dashboard."
           }
           bodyClassName="p-5 sm:p-6"
         >
@@ -81,95 +145,198 @@ function EmployeeFormPage() {
                 </div>
               ) : null}
 
-              <div className={FORM_GRID_CLASS}>
+              {!isEdit && canCreateAdmin ? (
                 <div>
                   <label className={LABEL_CLASS}>
-                    Full Name <RequiredMark />
-                  </label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(event) =>
-                      updateField("name", event.target.value)
-                    }
-                    className={
-                      fieldErrors.name ? INPUT_ERROR_CLASS : INPUT_CLASS
-                    }
-                    placeholder="Enter full name"
-                  />
-                  <FieldError message={fieldErrors.name} />
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>
-                    Email <RequiredMark />
-                  </label>
-                  <input
-                    type="text"
-                    value={form.email}
-                    onChange={(event) =>
-                      updateField("email", event.target.value)
-                    }
-                    className={
-                      fieldErrors.email ? INPUT_ERROR_CLASS : INPUT_CLASS
-                    }
-                    placeholder="name@gmail.com"
-                  />
-                  <p className="mt-1.5 text-theme-xs text-gray-500">
-                    Primary contact email.
-                  </p>
-                  <FieldError message={fieldErrors.email} />
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>
-                    Phone <RequiredMark />
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="tel"
-                    maxLength={10}
-                    value={form.phone}
-                    onChange={(event) =>
-                      updateField("phone", event.target.value)
-                    }
-                    className={
-                      fieldErrors.phone ? INPUT_ERROR_CLASS : INPUT_CLASS
-                    }
-                    placeholder="Enter 10-digit mobile number"
-                  />
-                  <FieldError message={fieldErrors.phone} />
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>
-                    Gender <RequiredMark />
+                    Account type <RequiredMark />
                   </label>
                   <SelectField
-                    value={form.gender}
-                    onChange={(nextValue) => updateField("gender", nextValue)}
-                    ariaLabel="Gender"
-                    hasError={Boolean(fieldErrors.gender)}
-                    options={EMPLOYEE_GENDERS.map((gender) => ({
-                      value: gender,
-                      label: gender,
-                    }))}
+                    value={form.accountType || "employee"}
+                    onChange={(nextValue) =>
+                      updateField("accountType", nextValue)
+                    }
+                    ariaLabel="Account type"
+                    options={EMPLOYEE_ACCOUNT_TYPES}
                   />
-                  <FieldError message={fieldErrors.gender} />
+                  <p className="mt-1.5 text-theme-xs text-gray-500">
+                    Choose Admin for a simple admin login with full EMS access.
+                  </p>
                 </div>
+              ) : null}
 
-                <div>
-                  <label className={LABEL_CLASS}>
-                    Department{" "}
-                    {isAdminAccount ? null : <RequiredMark />}
-                  </label>
-                  {isAdminAccount ? (
-                    <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-theme-sm text-gray-500">
-                      Not applicable — Admin is not assigned to a department
-                    </p>
-                  ) : (
-                    <>
+              {isAdminAccount ? (
+                <>
+                  <div className={FORM_GRID_CLASS}>
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Full name <RequiredMark />
+                      </label>
+                      <input
+                        type="text"
+                        value={form.name}
+                        onChange={(event) =>
+                          updateField("name", event.target.value)
+                        }
+                        className={
+                          fieldErrors.name ? INPUT_ERROR_CLASS : INPUT_CLASS
+                        }
+                        placeholder="Enter full name"
+                        autoComplete="name"
+                      />
+                      <FieldError message={fieldErrors.name} />
+                    </div>
+
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Email <RequiredMark />
+                      </label>
+                      <input
+                        type="email"
+                        value={form.email}
+                        onChange={(event) =>
+                          updateField("email", event.target.value)
+                        }
+                        className={
+                          fieldErrors.email ? INPUT_ERROR_CLASS : INPUT_CLASS
+                        }
+                        placeholder="admin@company.com"
+                        autoComplete="username"
+                      />
+                      <p className="mt-1.5 text-theme-xs text-gray-500">
+                        Used to sign in as admin.
+                      </p>
+                      <FieldError message={fieldErrors.email} />
+                    </div>
+
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Password{" "}
+                        {passwordRequired ? <RequiredMark /> : null}
+                      </label>
+                      <PasswordField
+                        value={form.password}
+                        onChange={(event) =>
+                          updateField("password", event.target.value)
+                        }
+                        showPassword={showPassword}
+                        onToggle={() =>
+                          setShowPassword((current) => !current)
+                        }
+                        className={
+                          fieldErrors.password
+                            ? INPUT_ERROR_CLASS
+                            : INPUT_CLASS
+                        }
+                        placeholder={
+                          isEdit
+                            ? "Leave blank to keep current password"
+                            : "Create a password"
+                        }
+                        autoComplete="new-password"
+                      />
+                      <p className="mt-1.5 text-theme-xs text-gray-500">
+                        At least {MIN_EMPLOYEE_PASSWORD_LENGTH} characters.
+                      </p>
+                      <FieldError message={fieldErrors.password} />
+                    </div>
+                  </div>
+
+                  <ProfilePhotoField
+                    form={form}
+                    fieldErrors={fieldErrors}
+                    uploadingAvatar={uploadingAvatar}
+                    saving={saving}
+                    onChange={handleAvatarChange}
+                    onClear={clearAvatar}
+                    nameFallback="Admin"
+                  />
+                </>
+              ) : (
+                <>
+                  <div className={FORM_GRID_CLASS}>
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Full Name <RequiredMark />
+                      </label>
+                      <input
+                        type="text"
+                        value={form.name}
+                        onChange={(event) =>
+                          updateField("name", event.target.value)
+                        }
+                        className={
+                          fieldErrors.name ? INPUT_ERROR_CLASS : INPUT_CLASS
+                        }
+                        placeholder="Enter full name"
+                      />
+                      <FieldError message={fieldErrors.name} />
+                    </div>
+
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Email <RequiredMark />
+                      </label>
+                      <input
+                        type="text"
+                        value={form.email}
+                        onChange={(event) =>
+                          updateField("email", event.target.value)
+                        }
+                        className={
+                          fieldErrors.email ? INPUT_ERROR_CLASS : INPUT_CLASS
+                        }
+                        placeholder="name@gmail.com"
+                      />
+                      <p className="mt-1.5 text-theme-xs text-gray-500">
+                        Primary contact email.
+                      </p>
+                      <FieldError message={fieldErrors.email} />
+                    </div>
+
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Phone <RequiredMark />
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        maxLength={10}
+                        value={form.phone}
+                        onChange={(event) =>
+                          updateField("phone", event.target.value)
+                        }
+                        className={
+                          fieldErrors.phone ? INPUT_ERROR_CLASS : INPUT_CLASS
+                        }
+                        placeholder="Enter 10-digit mobile number"
+                      />
+                      <FieldError message={fieldErrors.phone} />
+                    </div>
+
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Gender <RequiredMark />
+                      </label>
+                      <SelectField
+                        value={form.gender}
+                        onChange={(nextValue) =>
+                          updateField("gender", nextValue)
+                        }
+                        ariaLabel="Gender"
+                        hasError={Boolean(fieldErrors.gender)}
+                        options={EMPLOYEE_GENDERS.map((gender) => ({
+                          value: gender,
+                          label: gender,
+                        }))}
+                      />
+                      <FieldError message={fieldErrors.gender} />
+                    </div>
+
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Department <RequiredMark />
+                      </label>
                       <SelectField
                         value={form.departmentId}
                         onChange={(nextValue) =>
@@ -187,232 +354,220 @@ function EmployeeFormPage() {
                         ]}
                       />
                       <FieldError message={fieldErrors.departmentId} />
-                    </>
-                  )}
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>
-                    Designation <RequiredMark />
-                  </label>
-                  <input
-                    type="text"
-                    value={form.designation}
-                    onChange={(event) =>
-                      updateField("designation", event.target.value)
-                    }
-                    className={
-                      fieldErrors.designation ? INPUT_ERROR_CLASS : INPUT_CLASS
-                    }
-                    placeholder="Job title"
-                  />
-                  <FieldError message={fieldErrors.designation} />
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>
-                    Joining Date <RequiredMark />
-                  </label>
-                  <input
-                    type="date"
-                    value={form.joiningDate}
-                    onChange={(event) =>
-                      updateField("joiningDate", event.target.value)
-                    }
-                    className={
-                      fieldErrors.joiningDate ? INPUT_ERROR_CLASS : INPUT_CLASS
-                    }
-                  />
-                  <FieldError message={fieldErrors.joiningDate} />
-                  <p className="mt-1.5 text-theme-xs text-gray-500">
-                    Counts toward New Hires on the dashboard when it falls in
-                    the selected period.
-                  </p>
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>
-                    Status <RequiredMark />
-                  </label>
-                  <SelectField
-                    value={form.status}
-                    onChange={(nextValue) => updateField("status", nextValue)}
-                    ariaLabel="Status"
-                    hasError={Boolean(fieldErrors.status)}
-                    options={EMPLOYEE_STATUSES.map((status) => ({
-                      value: status,
-                      label: status,
-                    }))}
-                  />
-                  <FieldError message={fieldErrors.status} />
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>Avatar</label>
-                  <div className="flex flex-wrap items-center gap-4">
-                    <UserAvatar
-                      src={form.avatar}
-                      name={form.name || "Employee"}
-                      size="lg"
-                    />
-                    <div className="min-w-0 flex-1 space-y-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleAvatarChange}
-                        disabled={uploadingAvatar || saving}
-                        className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-500 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-600 disabled:opacity-60"
-                      />
-                      <p className="text-theme-xs text-gray-500">
-                        {uploadingAvatar
-                          ? "Uploading image…"
-                          : "Optional. Without an image, name initials are shown. JPG, PNG, GIF, WEBP — max 2MB."}
-                      </p>
-                      {form.avatar ? (
-                        <button
-                          type="button"
-                          onClick={clearAvatar}
-                          disabled={uploadingAvatar || saving}
-                          className="text-theme-sm font-medium text-error-600 hover:text-error-700 disabled:opacity-60"
-                        >
-                          Remove image
-                        </button>
-                      ) : null}
                     </div>
-                  </div>
-                  <FieldError message={fieldErrors.avatar} />
-                </div>
-              </div>
 
-              {!isAdminAccount ? (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
-                  <h3 className="text-theme-sm font-medium text-gray-800">
-                    Paid leave balances
-                  </h3>
-                  <p className="mt-1 text-theme-xs text-gray-500">
-                    Optional. Set casual and sick leave days for this employee
-                    now, or leave blank and add them later from Edit Employee.
-                    There is no automatic yearly leave grant.
-                  </p>
-                  <div className={`${FORM_GRID_CLASS} mt-4`}>
-                    <div>
-                      <label className={LABEL_CLASS} htmlFor="casual-leave">
-                        Casual leave (days)
-                      </label>
-                      <input
-                        id="casual-leave"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={form.casualLeaveBalance}
-                        onChange={(event) =>
-                          updateField("casualLeaveBalance", event.target.value)
-                        }
-                        className={
-                          fieldErrors.casualLeaveBalance
-                            ? INPUT_ERROR_CLASS
-                            : INPUT_CLASS
-                        }
-                        placeholder="e.g. 6"
-                      />
-                      <FieldError message={fieldErrors.casualLeaveBalance} />
-                    </div>
-                    <div>
-                      <label className={LABEL_CLASS} htmlFor="sick-leave">
-                        Sick leave (days)
-                      </label>
-                      <input
-                        id="sick-leave"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={form.sickLeaveBalance}
-                        onChange={(event) =>
-                          updateField("sickLeaveBalance", event.target.value)
-                        }
-                        className={
-                          fieldErrors.sickLeaveBalance
-                            ? INPUT_ERROR_CLASS
-                            : INPUT_CLASS
-                        }
-                        placeholder="e.g. 6"
-                      />
-                      <FieldError message={fieldErrors.sickLeaveBalance} />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {showPasswordFields ? (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
-                  <h3 className="text-theme-sm font-medium text-gray-800">
-                    {isEdit
-                      ? "Login credentials"
-                      : "Employee dashboard login"}
-                  </h3>
-                  <p className="mt-1 text-theme-xs text-gray-500">
-                    {isEdit
-                      ? canManageCredentials
-                        ? form.hasLoginAccount
-                          ? "Update Gmail or enter a new password to change login credentials. Leave password blank to keep the current password."
-                          : "This employee has no login yet. Add a Gmail and password to create their dashboard account."
-                        : null
-                      : "Only the Human Resources department head signs in to the HR dashboard. All other staff — including other HR employees — use the employee dashboard."}
-                  </p>
-
-                  <div className={`${FORM_GRID_CLASS} mt-4`}>
                     <div>
                       <label className={LABEL_CLASS}>
-                        Gmail {passwordRequired ? <RequiredMark /> : null}
+                        Designation <RequiredMark />
                       </label>
                       <input
                         type="text"
-                        value={form.gmail}
+                        value={form.designation}
                         onChange={(event) =>
-                          updateField("gmail", event.target.value)
+                          updateField("designation", event.target.value)
                         }
                         className={
-                          fieldErrors.gmail ? INPUT_ERROR_CLASS : INPUT_CLASS
+                          fieldErrors.designation
+                            ? INPUT_ERROR_CLASS
+                            : INPUT_CLASS
                         }
-                        placeholder="name@gmail.com"
-                        autoComplete="username"
+                        placeholder="Job title"
                       />
-                      <p className="mt-1.5 text-theme-xs text-gray-500">
-                        Login email for the employee dashboard.
-                      </p>
-                      <FieldError message={fieldErrors.gmail} />
+                      <FieldError message={fieldErrors.designation} />
                     </div>
 
                     <div>
                       <label className={LABEL_CLASS}>
-                        Password{" "}
-                        {passwordRequired ? <RequiredMark /> : null}
+                        Joining Date <RequiredMark />
                       </label>
-                      <PasswordField
-                        value={form.password}
+                      <input
+                        type="date"
+                        value={form.joiningDate}
                         onChange={(event) =>
-                          updateField("password", event.target.value)
+                          updateField("joiningDate", event.target.value)
                         }
-                        showPassword={showPassword}
-                        onToggle={() => setShowPassword((current) => !current)}
                         className={
-                          fieldErrors.password ? INPUT_ERROR_CLASS : INPUT_CLASS
+                          fieldErrors.joiningDate
+                            ? INPUT_ERROR_CLASS
+                            : INPUT_CLASS
                         }
-                        placeholder={
-                          isEdit && form.hasLoginAccount
-                            ? "Leave blank to keep current password"
-                            : "Create a password"
-                        }
-                        autoComplete="new-password"
                       />
+                      <FieldError message={fieldErrors.joiningDate} />
                       <p className="mt-1.5 text-theme-xs text-gray-500">
-                        At least {MIN_EMPLOYEE_PASSWORD_LENGTH} characters.
+                        Counts toward New Hires on the dashboard when it falls
+                        in the selected period.
                       </p>
-                      <FieldError message={fieldErrors.password} />
+                    </div>
+
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Status <RequiredMark />
+                      </label>
+                      <SelectField
+                        value={form.status}
+                        onChange={(nextValue) =>
+                          updateField("status", nextValue)
+                        }
+                        ariaLabel="Status"
+                        hasError={Boolean(fieldErrors.status)}
+                        options={EMPLOYEE_STATUSES.map((status) => ({
+                          value: status,
+                          label: status,
+                        }))}
+                      />
+                      <FieldError message={fieldErrors.status} />
+                    </div>
+
+                    <ProfilePhotoField
+                      form={form}
+                      fieldErrors={fieldErrors}
+                      uploadingAvatar={uploadingAvatar}
+                      saving={saving}
+                      onChange={handleAvatarChange}
+                      onClear={clearAvatar}
+                      nameFallback="Employee"
+                    />
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
+                    <h3 className="text-theme-sm font-medium text-gray-800">
+                      Paid leave balances
+                    </h3>
+                    <p className="mt-1 text-theme-xs text-gray-500">
+                      Optional. Set casual and sick leave days for this employee
+                      now, or leave blank and add them later from Edit Employee.
+                      There is no automatic yearly leave grant.
+                    </p>
+                    <div className={`${FORM_GRID_CLASS} mt-4`}>
+                      <div>
+                        <label className={LABEL_CLASS} htmlFor="casual-leave">
+                          Casual leave (days)
+                        </label>
+                        <input
+                          id="casual-leave"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={form.casualLeaveBalance}
+                          onChange={(event) =>
+                            updateField(
+                              "casualLeaveBalance",
+                              event.target.value,
+                            )
+                          }
+                          className={
+                            fieldErrors.casualLeaveBalance
+                              ? INPUT_ERROR_CLASS
+                              : INPUT_CLASS
+                          }
+                          placeholder="e.g. 6"
+                        />
+                        <FieldError message={fieldErrors.casualLeaveBalance} />
+                      </div>
+                      <div>
+                        <label className={LABEL_CLASS} htmlFor="sick-leave">
+                          Sick leave (days)
+                        </label>
+                        <input
+                          id="sick-leave"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={form.sickLeaveBalance}
+                          onChange={(event) =>
+                            updateField("sickLeaveBalance", event.target.value)
+                          }
+                          className={
+                            fieldErrors.sickLeaveBalance
+                              ? INPUT_ERROR_CLASS
+                              : INPUT_CLASS
+                          }
+                          placeholder="e.g. 6"
+                        />
+                        <FieldError message={fieldErrors.sickLeaveBalance} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : null}
+
+                  {showPasswordFields ? (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
+                      <h3 className="text-theme-sm font-medium text-gray-800">
+                        {isEdit
+                          ? "Login credentials"
+                          : "Employee dashboard login"}
+                      </h3>
+                      <p className="mt-1 text-theme-xs text-gray-500">
+                        {isEdit
+                          ? canManageCredentials
+                            ? form.hasLoginAccount
+                              ? "Update Gmail or enter a new password to change login credentials. Leave password blank to keep the current password."
+                              : "This employee has no login yet. Add a Gmail and password to create their dashboard account."
+                            : null
+                          : "Only the Human Resources department head signs in to the HR dashboard. All other staff — including other HR employees — use the employee dashboard."}
+                      </p>
+
+                      <div className={`${FORM_GRID_CLASS} mt-4`}>
+                        <div>
+                          <label className={LABEL_CLASS}>
+                            Gmail{" "}
+                            {passwordRequired ? <RequiredMark /> : null}
+                          </label>
+                          <input
+                            type="text"
+                            value={form.gmail}
+                            onChange={(event) =>
+                              updateField("gmail", event.target.value)
+                            }
+                            className={
+                              fieldErrors.gmail
+                                ? INPUT_ERROR_CLASS
+                                : INPUT_CLASS
+                            }
+                            placeholder="name@gmail.com"
+                            autoComplete="username"
+                          />
+                          <p className="mt-1.5 text-theme-xs text-gray-500">
+                            Login email for the employee dashboard.
+                          </p>
+                          <FieldError message={fieldErrors.gmail} />
+                        </div>
+
+                        <div>
+                          <label className={LABEL_CLASS}>
+                            Password{" "}
+                            {passwordRequired ? <RequiredMark /> : null}
+                          </label>
+                          <PasswordField
+                            value={form.password}
+                            onChange={(event) =>
+                              updateField("password", event.target.value)
+                            }
+                            showPassword={showPassword}
+                            onToggle={() =>
+                              setShowPassword((current) => !current)
+                            }
+                            className={
+                              fieldErrors.password
+                                ? INPUT_ERROR_CLASS
+                                : INPUT_CLASS
+                            }
+                            placeholder={
+                              isEdit && form.hasLoginAccount
+                                ? "Leave blank to keep current password"
+                                : "Create a password"
+                            }
+                            autoComplete="new-password"
+                          />
+                          <p className="mt-1.5 text-theme-xs text-gray-500">
+                            At least {MIN_EMPLOYEE_PASSWORD_LENGTH} characters.
+                          </p>
+                          <FieldError message={fieldErrors.password} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              )}
 
               {error ? (
                 <div className="rounded-xl border border-error-500 bg-error-50 p-4">
@@ -430,7 +585,9 @@ function EmployeeFormPage() {
                     ? "Saving…"
                     : isEdit
                       ? "Save Changes"
-                      : "Create Employee"}
+                      : isAdminAccount
+                        ? "Create Admin"
+                        : "Create Employee"}
                 </button>
                 <button
                   type="button"

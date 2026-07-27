@@ -14,7 +14,10 @@ export async function signIn(email, password) {
 
 export async function fetchCurrentUser() {
   const data = await fetchJson("/api/auth/me", "Failed to load session");
-  return data.user;
+  return {
+    user: data.user,
+    token: data.token || null,
+  };
 }
 
 export async function fetchAuthProfile() {

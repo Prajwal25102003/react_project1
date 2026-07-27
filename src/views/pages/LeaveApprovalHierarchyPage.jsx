@@ -10,7 +10,6 @@ function LeaveApprovalHierarchyPage() {
     loading,
     error,
     table,
-    employees,
     formOpen,
     editing,
     form,
@@ -81,7 +80,6 @@ function LeaveApprovalHierarchyPage() {
         fieldErrors={fieldErrors}
         error={formError}
         saving={saving}
-        employees={employees}
         onClose={closeFormModal}
         onChange={updateField}
         onStepChange={updateStep}

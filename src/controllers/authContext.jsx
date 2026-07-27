@@ -19,9 +19,14 @@ export function AuthProvider({ children }) {
     const activeToken = getStoredToken();
     if (!activeToken) return null;
 
-    const me = await fetchCurrentUser();
+    const { user: me, token: nextToken } = await fetchCurrentUser();
     setUser(me);
-    storeSession(activeToken, me);
+    if (nextToken) {
+      setToken(nextToken);
+      storeSession(nextToken, me);
+    } else {
+      storeSession(activeToken, me);
+    }
     return me;
   }, []);
 
@@ -35,10 +40,15 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const me = await fetchCurrentUser();
+        const { user: me, token: nextToken } = await fetchCurrentUser();
         if (!cancelled) {
           setUser(me);
-          storeSession(token, me);
+          if (nextToken) {
+            setToken(nextToken);
+            storeSession(nextToken, me);
+          } else {
+            storeSession(token, me);
+          }
         }
       } catch {
         if (!cancelled) {

@@ -91,8 +91,20 @@ function labelClass(state) {
 function LeaveApprovalStepper({ steps = [] }) {
   if (!steps.length) return null;
 
+  const columnClass =
+    steps.length <= 2
+      ? "grid-cols-2"
+      : steps.length === 3
+        ? "grid-cols-3"
+        : steps.length === 4
+          ? "grid-cols-4"
+          : "grid-cols-5";
+
   return (
-    <div className="w-full min-w-0 max-w-[340px]" aria-label="Approval progress">
+    <div
+      className="w-full min-w-0 max-w-[min(520px,100%)]"
+      aria-label="Approval progress"
+    >
       {/* Icons + connectors */}
       <div className="flex items-center px-1">
         {steps.map((step, index) => {
@@ -124,15 +136,7 @@ function LeaveApprovalStepper({ steps = [] }) {
       </div>
 
       {/* Labels in equal columns so text never overlaps */}
-      <ol
-        className={`mt-2.5 grid gap-x-1 ${
-          steps.length <= 2
-            ? "grid-cols-2"
-            : steps.length === 3
-              ? "grid-cols-3"
-              : "grid-cols-4"
-        }`}
-      >
+      <ol className={`mt-2.5 grid gap-x-1 ${columnClass}`}>
         {steps.map((step) => (
           <li key={`${step.id}-label`} className="min-w-0 text-center">
             <span
@@ -141,6 +145,14 @@ function LeaveApprovalStepper({ steps = [] }) {
             >
               {step.label}
             </span>
+            {step.name ? (
+              <span
+                className="mt-0.5 block truncate text-[10px] font-medium leading-tight text-gray-500 sm:text-theme-xs"
+                title={step.name}
+              >
+                {step.name}
+              </span>
+            ) : null}
           </li>
         ))}
       </ol>

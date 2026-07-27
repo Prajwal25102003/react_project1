@@ -412,6 +412,7 @@ export function useLeaveRequests() {
   return {
     canApproveLeaves,
     isAdmin,
+    isHr,
     isDepartmentHead,
     listScope,
     setListScope,

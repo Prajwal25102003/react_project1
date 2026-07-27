@@ -148,17 +148,48 @@ export async function findEmployeeById(id) {
   return mapEmployeeRow(result.rows[0])
 }
 
+/** Staff hire IDs start at EMP-1001 and stay in that sequence. */
+const EMPLOYEE_ID_FLOOR = 1000
+
+/**
+ * Next staff ID (EMP-1001+). Ignores admin-reserved IDs below the floor.
+ */
 export async function generateNextEmployeeId() {
   const result = await query(
     `SELECT COALESCE(
       MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)),
-      1000
+      $1
     ) AS max_num
     FROM employees
-    WHERE id ~ '^EMP-[0-9]+$'`,
+    WHERE id ~ '^EMP-[0-9]+$'
+      AND CAST(SUBSTRING(id FROM 5) AS INTEGER) > $1`,
+    [EMPLOYEE_ID_FLOOR],
   )
 
   const nextNum = Number(result.rows[0].max_num) + 1
+  return `EMP-${nextNum}`
+}
+
+/**
+ * Next admin profile ID in the reserved low range (EMP-1, EMP-2, … EMP-999).
+ * Keeps new admins out of the normal hire sequence.
+ */
+export async function generateNextAdminId() {
+  const result = await query(
+    `SELECT COALESCE(
+      MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)),
+      0
+    ) AS max_num
+    FROM employees
+    WHERE id ~ '^EMP-[0-9]+$'
+      AND CAST(SUBSTRING(id FROM 5) AS INTEGER) < $1`,
+    [EMPLOYEE_ID_FLOOR],
+  )
+
+  const nextNum = Number(result.rows[0].max_num) + 1
+  if (nextNum >= EMPLOYEE_ID_FLOOR) {
+    throw new Error('Admin ID range is full (EMP-1 … EMP-999)')
+  }
   return `EMP-${nextNum}`
 }
 

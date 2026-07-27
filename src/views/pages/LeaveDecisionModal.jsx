@@ -34,6 +34,14 @@ function LeaveDecisionModal({
   const stepLabel = hierarchyStepLabel(currentStep);
   const hasNextStep = Boolean(nextStepAfterCurrent(request));
   const skipsBalance = leaveTypeSkipsBalanceDeduction(request.leaveType);
+  const hierarchySteps = [...(request.hierarchySteps || [])].sort(
+    (a, b) => Number(a.stepOrder) - Number(b.stepOrder),
+  );
+  const isFirstApprovalStep =
+    hierarchySteps.length === 0 ||
+    Number(currentStep?.stepOrder) === Number(hierarchySteps[0]?.stepOrder);
+  const showBalancePanel =
+    isApprove && !skipsBalance && (isFirstApprovalStep || !hasNextStep);
 
   const title = isReject
     ? "Reject Leave Request"
@@ -64,7 +72,6 @@ function LeaveDecisionModal({
       onClose={onClose}
       title={title}
       description={description}
-      panelClassName="relative w-full max-w-[560px] rounded-3xl bg-white p-4 lg:p-11"
     >
       <form
         className="space-y-5 px-2"
@@ -112,12 +119,16 @@ function LeaveDecisionModal({
           </div>
         ) : null}
 
-        {isApprove && !hasNextStep ? (
+        {showBalancePanel ? (
           <LeaveBalancePanel
             balances={balances}
             leaveType={request.leaveType}
             leaveDays={request.leaveDays}
-            title="Balance impact on approval"
+            title={
+              hasNextStep
+                ? "Leave balance (before approval)"
+                : "Balance impact on approval"
+            }
           />
         ) : null}
 

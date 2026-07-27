@@ -20,9 +20,9 @@ function EmployeesPage() {
     deleteTarget,
     deleting,
     deleteError,
-    openDeleteModal,
     closeDeleteModal,
     confirmDelete,
+    getEmployeeActions,
     assignOpen,
     assignForm,
     assignFieldErrors,
@@ -93,24 +93,7 @@ function EmployeesPage() {
           onClearFilters={table.clearColumnFilters}
           onExportCsv={() => table.exportCsv("employees.csv")}
           onRowClick={openViewModal}
-          getActions={(employee) => {
-            if (employee.isAdminAccount || employee.loginRole === "admin") {
-              return [];
-            }
-            return [
-              {
-                label: "Edit",
-                icon: "pencil",
-                to: `/employees/${employee.id}/edit`,
-              },
-              {
-                label: "Delete",
-                icon: "trash",
-                tone: "danger",
-                onClick: () => openDeleteModal(employee),
-              },
-            ];
-          }}
+          getActions={getEmployeeActions}
           emptyMessage="No employees found."
         />
       </ListPageShell>

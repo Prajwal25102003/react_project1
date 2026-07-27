@@ -2,13 +2,11 @@ import {
   findAllHierarchiesWithSteps,
   findHierarchyByCategory,
   HIERARCHY_CATEGORIES,
-  APPROVER_KINDS,
   APPROVER_ROLES,
   replaceHierarchySteps,
   CATEGORY_LABELS,
 } from '../models/leaveApprovalHierarchyModel.js'
 import { refreshPendingStepOneHierarchySnapshots } from '../models/leaveRequestsModel.js'
-import { findEmployeeById } from '../models/employeesModel.js'
 import { formatDbError } from '../utils/formatDbError.js'
 
 function parseStepsPayload(body) {
@@ -27,22 +25,21 @@ function parseStepsPayload(body) {
 
   const steps = []
   const signatures = []
+  const allowedKinds = ['department_head', 'role']
 
   rawSteps.forEach((item, index) => {
     const kind = String(item?.approverKind ?? '').trim()
     const role = String(item?.approverRole ?? '').trim().toLowerCase()
-    const employeeId = String(item?.approverEmployeeId ?? '').trim()
     const stepOrder = index + 1
 
-    if (!APPROVER_KINDS.includes(kind)) {
+    if (!allowedKinds.includes(kind)) {
       errors.push(
-        `Step ${stepOrder}: approver kind must be department_head, role, or employee`,
+        `Step ${stepOrder}: approver kind must be department_head or role`,
       )
       return
     }
 
     let approverRole = null
-    let approverEmployeeId = null
 
     if (kind === 'role') {
       if (!APPROVER_ROLES.includes(role)) {
@@ -50,20 +47,10 @@ function parseStepsPayload(body) {
         return
       }
       approverRole = role
-    } else if (kind === 'employee') {
-      if (!employeeId) {
-        errors.push(`Step ${stepOrder}: employee is required`)
-        return
-      }
-      approverEmployeeId = employeeId
     }
 
     const signature =
-      kind === 'department_head'
-        ? 'department_head'
-        : kind === 'role'
-          ? `role:${approverRole}`
-          : `employee:${approverEmployeeId}`
+      kind === 'department_head' ? 'department_head' : `role:${approverRole}`
 
     if (signatures.length > 0 && signatures[signatures.length - 1] === signature) {
       errors.push(`Step ${stepOrder}: consecutive duplicate approvers are not allowed`)
@@ -74,7 +61,7 @@ function parseStepsPayload(body) {
       stepOrder,
       approverKind: kind,
       approverRole,
-      approverEmployeeId,
+      approverEmployeeId: null,
     })
   })
 
@@ -122,17 +109,6 @@ export async function updateLeaveApprovalHierarchy(req, res) {
     const { errors, name, steps } = parseStepsPayload(req.body)
     if (errors.length > 0) {
       return res.status(400).json({ message: errors.join('; ') })
-    }
-
-    for (const step of steps) {
-      if (step.approverKind === 'employee') {
-        const employee = await findEmployeeById(step.approverEmployeeId)
-        if (!employee) {
-          return res.status(400).json({
-            message: `Step ${step.stepOrder}: employee not found`,
-          })
-        }
-      }
     }
 
     const hierarchy = await replaceHierarchySteps(category, {

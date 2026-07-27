@@ -13,36 +13,40 @@ function ConfirmModal({
 }) {
   const buttonClass =
     confirmVariant === "primary"
-      ? "rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60"
-      : "rounded-lg bg-error-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-error-600 disabled:opacity-60";
+      ? "rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60"
+      : "rounded-lg bg-error-500 px-4 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-error-600 disabled:opacity-60";
 
   return (
     <ModalShell
       onClose={onClose}
-      title={title}
-      description={description}
-      panelClassName="relative w-full max-w-[500px] rounded-3xl bg-white p-4 lg:p-11"
+      panelClassName="relative mx-auto my-6 w-full max-w-[min(420px,calc(100vw-4rem))] rounded-3xl bg-white p-5 sm:p-6"
     >
-      <div className="px-2">
-        {error ? (
-          <p className="mb-4 text-center text-theme-sm text-error-600">
-            {error}
-          </p>
+      <div className="pr-8">
+        {title ? (
+          <h4 className="text-lg font-semibold text-gray-800 sm:text-xl">
+            {title}
+          </h4>
         ) : null}
-
-        {onConfirm ? (
-          <div className="flex items-center justify-center">
-            <button
-              type="button"
-              onClick={onConfirm}
-              disabled={confirming}
-              className={buttonClass}
-            >
-              {confirming ? confirmingLabel : confirmLabel}
-            </button>
-          </div>
+        {description ? (
+          <p className="mt-2 text-sm text-gray-500">{description}</p>
+        ) : null}
+        {error ? (
+          <p className="mt-3 text-theme-sm text-error-600">{error}</p>
         ) : null}
       </div>
+
+      {onConfirm ? (
+        <div className="mt-5 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={confirming}
+            className={buttonClass}
+          >
+            {confirming ? confirmingLabel : confirmLabel}
+          </button>
+        </div>
+      ) : null}
     </ModalShell>
   );
 }

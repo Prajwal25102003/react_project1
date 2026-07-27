@@ -2,6 +2,7 @@ import { getNameInitials } from "../../utils/nameInitials.js";
 import { cn } from "../../utils/cn.js";
 
 const SIZE_CLASS = {
+  xs: "h-8 w-8 text-[10px]",
   sm: "h-10 w-10 text-theme-sm",
   md: "h-11 w-11 text-theme-sm",
   lg: "h-16 w-16 text-lg",

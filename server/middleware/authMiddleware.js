@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken'
+import { findUserById, syncUserLoginRole } from '../models/authModel.js'
 
 function getJwtSecret() {
   const secret = String(process.env.JWT_SECRET || '').trim()
@@ -30,7 +31,7 @@ export function verifyAuthToken(token) {
   return jwt.verify(token, getJwtSecret())
 }
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || ''
   const [scheme, token] = header.split(' ')
 
@@ -40,12 +41,25 @@ export function requireAuth(req, res, next) {
 
   try {
     const payload = verifyAuthToken(token)
-    req.user = {
-      id: payload.sub,
+    const dbUser = await findUserById(payload.sub)
+    if (!dbUser) {
+      return res.status(401).json({ message: 'User not found' })
+    }
+
+    // Prefer live DB role so HR headship promotions apply without forcing re-login.
+    const user = await syncUserLoginRole(dbUser)
+    req.tokenClaims = {
       role: payload.role,
       employeeId: payload.employeeId || null,
       email: payload.email,
       name: payload.name,
+    }
+    req.user = {
+      id: user.id,
+      role: user.role,
+      employeeId: user.employeeId || null,
+      email: user.email,
+      name: user.name,
     }
     next()
   } catch {

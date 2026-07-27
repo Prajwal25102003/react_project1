@@ -39,6 +39,7 @@ function EmployeeDashboard({
   activities,
   unreadMessages,
   onDismissMessage,
+  onAcknowledgeMessage,
 }) {
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
@@ -52,6 +53,7 @@ function EmployeeDashboard({
         <DashboardNotifications
           messages={unreadMessages}
           onDismiss={onDismissMessage}
+          onOpen={onAcknowledgeMessage}
         />
       </div>
 
@@ -102,6 +104,7 @@ function OrgDashboard({
         <DashboardNotifications
           messages={unreadMessages}
           onDismiss={onDismissMessage}
+          onOpen={onAcknowledgeMessage}
         />
         <div className="ml-auto shrink-0 self-center">
           <PeriodTabs
@@ -173,6 +176,7 @@ function DashboardPage() {
         activities={dashboard.activities}
         unreadMessages={dashboard.unreadMessages}
         onDismissMessage={dashboard.dismissUnreadMessage}
+        onAcknowledgeMessage={dashboard.acknowledgeUnreadMessage}
       />
     );
   }

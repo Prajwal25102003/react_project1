@@ -10,6 +10,7 @@ const LEAVE_SELECT = `
   e.name AS "employeeName",
   e.department_id AS "departmentId",
   d.head_employee_id AS "departmentHeadId",
+  head.name AS "departmentHeadName",
   e.casual_leave_balance AS "casualLeaveBalance",
   e.sick_leave_balance AS "sickLeaveBalance",
   e.lop_days AS "lopDays",
@@ -43,6 +44,7 @@ const LEAVE_FROM = `
   FROM leave_requests lr
   INNER JOIN employees e ON e.id = lr.employee_id
   LEFT JOIN departments d ON d.id = e.department_id
+  LEFT JOIN employees head ON head.id = d.head_employee_id
 `
 
 const HISTORY_SELECT = `

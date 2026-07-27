@@ -16,9 +16,8 @@ function UnreadMessagesModal({ open, messages, onClose, onMessageClick }) {
           ? `${count} message${count === 1 ? "" : "s"} — click to view details`
           : "You are all caught up"
       }
-      panelClassName="relative mx-auto w-full min-w-0 max-w-[min(560px,calc(100vw-2.5rem))] rounded-3xl bg-white p-5 lg:p-8"
     >
-      <div className="no-scrollbar max-h-[min(60vh,480px)] overflow-y-auto">
+      <div className="no-scrollbar max-h-[min(58vh,520px)] overflow-y-auto">
         {count === 0 ? (
           <p className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-8 text-center text-theme-sm text-gray-500">
             No unread messages right now.

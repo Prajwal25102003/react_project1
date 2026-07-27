@@ -1,6 +1,7 @@
 import {
   findUserByEmail,
   findUserById,
+  syncUserLoginRole,
   toPublicUser,
   verifyPassword,
 } from '../models/authModel.js'
@@ -56,7 +57,8 @@ export async function signInHandler(req, res) {
       return res.status(401).json({ message: 'Invalid email or password' })
     }
 
-    const publicUser = await toPublicUserWithAvatar(user)
+    const syncedUser = await syncUserLoginRole(user)
+    const publicUser = await toPublicUserWithAvatar(syncedUser)
     const token = signAuthToken(publicUser)
 
     res.json({ token, user: publicUser })
@@ -71,7 +73,18 @@ export async function getMeHandler(req, res) {
     if (!user) {
       return res.status(401).json({ message: 'User not found' })
     }
-    res.json({ user: await toPublicUserWithAvatar(user) })
+    const syncedUser = await syncUserLoginRole(user)
+    const publicUser = await toPublicUserWithAvatar(syncedUser)
+    const claims = req.tokenClaims || {}
+    const needsNewToken =
+      syncedUser.role !== claims.role ||
+      String(syncedUser.employeeId || '') !== String(claims.employeeId || '') ||
+      syncedUser.email !== claims.email
+
+    res.json({
+      user: publicUser,
+      token: needsNewToken ? signAuthToken(publicUser) : undefined,
+    })
   } catch (error) {
     res.status(500).json({ message: formatDbError(error) })
   }

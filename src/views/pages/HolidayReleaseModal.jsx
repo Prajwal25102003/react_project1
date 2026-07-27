@@ -38,7 +38,7 @@ function HolidayReleaseModal({
       onClose={onClose}
       title="Release Holiday Calendar"
       description="Select a year from the current year through 2030 that has not been released yet. Holidays are fetched from the India holiday calendar for that year — edit the list, then release once."
-      panelClassName="relative mx-auto flex w-full min-w-0 max-w-[min(960px,calc(100vw-2rem))] flex-col rounded-3xl bg-white p-5 lg:p-8"
+      panelClassName="relative mx-auto my-6 flex max-h-[calc(100vh-6rem)] w-full min-w-0 max-w-[min(720px,calc(100vw-4rem))] flex-col overflow-hidden rounded-3xl bg-white p-5 sm:p-6"
     >
       <form
         onSubmit={onSubmit}
@@ -79,7 +79,7 @@ function HolidayReleaseModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-gray-200">
-          <div className="max-h-[min(48vh,420px)] overflow-auto">
+          <div className="max-h-[min(42vh,380px)] overflow-auto">
             <table className="w-full table-fixed border-collapse text-left">
               <colgroup>
                 <col className="w-[24%]" />
