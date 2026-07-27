@@ -68,12 +68,15 @@ function RecentActivitiesTable({
   title = "Recent Activities",
   compact = false,
   onActivityClick,
+  onMarkAllAsRead,
 }) {
   const navigate = useNavigate();
   const needsScroll = activities.length > VISIBLE_ACTIVITY_ROWS;
   // Compact rows: title + clamped description
   const scrollMaxClass = compact ? "max-h-[18rem]" : "max-h-[22rem]";
   const cardScrollMaxClass = compact ? "max-h-[22rem]" : "max-h-[26rem]";
+  const hasUnread = (activities || []).some((activity) => activity.isNew);
+  const showMarkAsRead = Boolean(onMarkAllAsRead) && hasUnread;
 
   function handleActivityClick(activity) {
     if (onActivityClick) {
@@ -96,15 +99,32 @@ function RecentActivitiesTable({
           : "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 sm:px-6"
       }
     >
-      <h3
+      <div
         className={
           compact
-            ? "mb-2 shrink-0 text-base font-semibold text-gray-800"
-            : "mb-4 shrink-0 text-lg font-semibold text-gray-800"
+            ? "mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2"
+            : "mb-4 flex shrink-0 flex-wrap items-center justify-between gap-2"
         }
       >
-        {title}
-      </h3>
+        <h3
+          className={
+            compact
+              ? "text-base font-semibold text-gray-800"
+              : "text-lg font-semibold text-gray-800"
+          }
+        >
+          {title}
+        </h3>
+        {showMarkAsRead ? (
+          <button
+            type="button"
+            onClick={onMarkAllAsRead}
+            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800"
+          >
+            Mark as read
+          </button>
+        ) : null}
+      </div>
 
       {activities.length === 0 ? (
         <p className="py-6 text-theme-sm text-gray-500">No recent activity.</p>
