@@ -15,7 +15,6 @@ import {
   validateReleaseRows,
 } from "../models/holidayCalendarModel.js";
 import {
-  markNotificationsSeen,
   withNotificationSeenState,
 } from "../models/headerModel.js";
 import {
@@ -41,6 +40,7 @@ import {
 } from "../services/holidaysService.js";
 import { fetchNotifications } from "../services/notificationsService.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
+import { markFeedItemSeen } from "../utils/feedSeenState.js";
 import { requestNotificationsRefresh } from "../utils/notificationsRefresh.js";
 
 const MONTH_NAMES = [
@@ -202,7 +202,7 @@ export function useHolidays() {
         }
 
         const ids = changes.map((item) => item.id);
-        markNotificationsSeen(seenUserKey, ids, {
+        markFeedItemSeen(seenUserKey, ids, {
           retainOnlyIds: withSeen.map((item) => String(item.id)),
         });
         holidayChangesAckedRef.current = true;

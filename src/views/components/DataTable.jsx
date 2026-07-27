@@ -18,6 +18,9 @@ import UserAvatar from "./UserAvatar.jsx";
 const TOOLBAR_BTN =
   "inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
 
+const TOOLBAR_BTN_ACTIVE =
+  "inline-flex items-center justify-center rounded-lg border border-brand-500 bg-brand-50 px-3 py-2 text-theme-sm font-medium text-brand-500 shadow-theme-xs hover:bg-brand-50";
+
 /** Keep outer table edge gap equal to the gap between columns. */
 function cellPadClass({ dense, fitWidth, vertical, columnIndex, columnCount }) {
   if (dense) {
@@ -449,6 +452,29 @@ function DataTable({
                     onColumnFilterChange?.(filter.id, nextValue)
                   }
                 />
+              );
+            }
+
+            if (filter.type === "toggle") {
+              const activeValue = filter.activeValue ?? "true";
+              const isActive =
+                String(columnFilters[filter.id] || "") === String(activeValue);
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() =>
+                    onColumnFilterChange?.(
+                      filter.id,
+                      isActive ? "" : activeValue,
+                    )
+                  }
+                  aria-pressed={isActive}
+                  aria-label={filter.label}
+                  className={isActive ? TOOLBAR_BTN_ACTIVE : TOOLBAR_BTN}
+                >
+                  {filter.label}
+                </button>
               );
             }
 

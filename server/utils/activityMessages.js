@@ -5,6 +5,7 @@
  */
 
 import {
+  formatActorLabel,
   formatApproverLabel,
   formatDisplayDate,
   formatLeaveRangeText,
@@ -418,6 +419,47 @@ function attendanceCopy({ isSubject, subjectName, status, date, checkIn }) {
   }
 }
 
+/**
+ * Admin access granted. Actor sees "you"; others see the actor name.
+ * Subject (new admin) sees "You were granted…".
+ */
+function adminAddedCopy({ isActor, isSubject, subjectName, actorRole, actorName }) {
+  const byLabel = formatActorLabel({ role: actorRole, name: actorName })
+  if (isActor) {
+    return {
+      title: 'You Added Admin',
+      description: `You granted admin access to ${subjectName}.`,
+    }
+  }
+  if (isSubject) {
+    return {
+      title: 'Admin Access Granted',
+      description: `You were granted admin access by ${byLabel}.`,
+    }
+  }
+  return {
+    title: 'Admin Added',
+    description: `${subjectName} was granted admin access by ${byLabel}.`,
+  }
+}
+
+/**
+ * Admin access removed (profile kept). Actor sees "you removed…"; others see the name.
+ */
+function adminRemovedCopy({ isActor, subjectName, actorRole, actorName }) {
+  const byLabel = formatActorLabel({ role: actorRole, name: actorName })
+  if (isActor) {
+    return {
+      title: 'You Removed Admin',
+      description: `You removed admin access for ${subjectName}.`,
+    }
+  }
+  return {
+    title: 'Admin Removed',
+    description: `${subjectName}'s admin access was removed by ${byLabel}.`,
+  }
+}
+
 /** Map legacy Sent/Received leave titles to descriptive ones. */
 function legacyLeaveTitle(title, status) {
   const lower = String(title || '').toLowerCase()
@@ -537,6 +579,27 @@ export function personalizeActivityMessage(row, viewer = {}) {
       status: meta.attendanceStatus || row.status || 'Present',
       date: meta.attendanceDate || '',
       checkIn: meta.checkIn || '',
+    }))
+  } else if (
+    eventType === 'admin.added' ||
+    String(row.title || '').toLowerCase() === 'admin added'
+  ) {
+    ;({ title, description } = adminAddedCopy({
+      isActor,
+      isSubject,
+      subjectName,
+      actorRole,
+      actorName,
+    }))
+  } else if (
+    eventType === 'admin.removed' ||
+    String(row.title || '').toLowerCase() === 'admin removed'
+  ) {
+    ;({ title, description } = adminRemovedCopy({
+      isActor,
+      subjectName,
+      actorRole,
+      actorName,
     }))
   } else if (
     row.audience === 'self' ||

@@ -5,7 +5,7 @@ import StatusPill from "../components/StatusPill.jsx";
 const VISIBLE_ACTIVITY_ROWS = 5;
 
 function ActivityCard({ activity, onClick }) {
-  const isClickable = Boolean(activity.href);
+  const isClickable = Boolean(onClick);
 
   return (
     <article
@@ -67,6 +67,7 @@ function RecentActivitiesTable({
   activities,
   title = "Recent Activities",
   compact = false,
+  onActivityClick,
 }) {
   const navigate = useNavigate();
   const needsScroll = activities.length > VISIBLE_ACTIVITY_ROWS;
@@ -75,10 +76,17 @@ function RecentActivitiesTable({
   const cardScrollMaxClass = compact ? "max-h-[22rem]" : "max-h-[26rem]";
 
   function handleActivityClick(activity) {
+    if (onActivityClick) {
+      onActivityClick(activity);
+      return;
+    }
     if (activity.href) {
       navigate(activity.href);
     }
   }
+
+  const isRowInteractive = (activity) =>
+    Boolean(onActivityClick) || Boolean(activity.href);
 
   return (
     <div
@@ -113,7 +121,9 @@ function RecentActivitiesTable({
               <ActivityCard
                 key={activity.id}
                 activity={activity}
-                onClick={handleActivityClick}
+                onClick={
+                  isRowInteractive(activity) ? handleActivityClick : undefined
+                }
               />
             ))}
           </div>
@@ -161,7 +171,7 @@ function RecentActivitiesTable({
 
               <tbody className="divide-y divide-gray-100">
                 {activities.map((activity) => {
-                  const isClickable = Boolean(activity.href);
+                  const isClickable = isRowInteractive(activity);
                   return (
                     <tr
                       key={activity.id}

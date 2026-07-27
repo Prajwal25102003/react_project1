@@ -1,5 +1,5 @@
 import { DATE_PERIOD_FILTER_OPTIONS } from "./datePickerModel.js";
-import { LEAVE_TYPES } from "./leaveRequestsModel.js";
+import { LEAVE_TYPE_FILTER_OPTIONS } from "./leaveRequestsModel.js";
 
 export const LEAVE_REQUEST_SEARCH_KEYS = [
   "employeeId",
@@ -40,7 +40,10 @@ export const LEAVE_REQUEST_COLUMN_FILTERS = [
   {
     id: "leaveType",
     label: "Leave Type",
-    options: LEAVE_TYPES.map((value) => ({ value, label: value })),
+    options: LEAVE_TYPE_FILTER_OPTIONS.map((value) => ({
+      value,
+      label: value,
+    })),
   },
 ];
 

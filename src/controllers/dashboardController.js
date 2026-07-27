@@ -4,19 +4,16 @@ import { useAuth } from "./authContext.jsx";
 import { fetchDashboard } from "../services/dashboardService.js";
 import { fetchNotifications } from "../services/notificationsService.js";
 import {
-  markActivitiesSeen,
   withActivitySeenState,
   withOrgUnreadMessagesMetric,
 } from "../models/dashboardModel.js";
-import {
-  markNotificationsSeen,
-  withNotificationSeenState,
-} from "../models/headerModel.js";
+import { withNotificationSeenState } from "../models/headerModel.js";
 import { DASHBOARD_REFRESH_EVENT } from "../utils/dashboardRefresh.js";
 import {
   NOTIFICATIONS_REFRESH_EVENT,
   requestNotificationsRefresh,
 } from "../utils/notificationsRefresh.js";
+import { markFeedItemSeen } from "../utils/feedSeenState.js";
 
 const DASHBOARD_STALE_MS = 60_000;
 
@@ -104,7 +101,7 @@ export function useDashboard() {
 
           return {
             ...nextDashboard,
-            activities: activities,
+            activities,
             departments: nextDashboard.departments,
           };
         });
@@ -175,30 +172,6 @@ export function useDashboard() {
     };
   }, [loadDashboard]);
 
-  useEffect(() => {
-    if (!seenUserKey) return undefined;
-    if (!data.activities?.length) return undefined;
-
-    const unreadIds = data.activities
-      .filter((activity) => activity.isNew)
-      .map((activity) => activity.id);
-    if (unreadIds.length === 0) return undefined;
-
-    const retainIds = data.activities.map((activity) => activity.id);
-    const timer = window.setTimeout(() => {
-      markActivitiesSeen(seenUserKey, unreadIds, { retainOnlyIds: retainIds });
-      setData((current) => ({
-        ...current,
-        activities: (current.activities || []).map((activity) => ({
-          ...activity,
-          isNew: false,
-        })),
-      }));
-    }, 1200);
-
-    return () => window.clearTimeout(timer);
-  }, [data.activities, seenUserKey]);
-
   const openUnreadMessages = useCallback(() => {
     setMessagesPreview(data.unreadMessages || []);
     setMessagesOpen(true);
@@ -214,7 +187,7 @@ export function useDashboard() {
       const id = message?.id;
       if (!seenUserKey || !id) return;
 
-      markNotificationsSeen(seenUserKey, [id]);
+      markFeedItemSeen(seenUserKey, [id]);
       setMessagesPreview((current) =>
         (current || []).filter((item) => String(item.id) !== String(id)),
       );
@@ -222,14 +195,20 @@ export function useDashboard() {
         const remaining = (current.unreadMessages || []).filter(
           (item) => String(item.id) !== String(id),
         );
-        return withOrgUnreadMessagesMetric(
-          current,
-          remaining.map((item) => ({ ...item, isNew: true })),
-        );
+        return {
+          ...withOrgUnreadMessagesMetric(
+            current,
+            remaining.map((item) => ({ ...item, isNew: true })),
+          ),
+          activities: (current.activities || []).map((activity) =>
+            String(activity.id) === String(id)
+              ? { ...activity, isNew: false }
+              : activity,
+          ),
+        };
       });
       requestNotificationsRefresh();
 
-      // Stack X = dismiss only; modal row click may navigate to the module.
       if (options.navigate !== false && message.href) {
         setMessagesOpen(false);
         navigate(message.href);
@@ -241,6 +220,35 @@ export function useDashboard() {
   const dismissUnreadMessage = useCallback(
     (message) => acknowledgeUnreadMessage(message, { navigate: false }),
     [acknowledgeUnreadMessage],
+  );
+
+  const acknowledgeActivity = useCallback(
+    (activity) => {
+      const id = activity?.id;
+      if (!seenUserKey || !id) return;
+
+      markFeedItemSeen(seenUserKey, [id]);
+      setData((current) => {
+        const remaining = (current.unreadMessages || []).filter(
+          (item) => String(item.id) !== String(id),
+        );
+        return {
+          ...withOrgUnreadMessagesMetric(
+            current,
+            remaining.map((item) => ({ ...item, isNew: true })),
+          ),
+          activities: (current.activities || []).map((item) =>
+            String(item.id) === String(id) ? { ...item, isNew: false } : item,
+          ),
+        };
+      });
+      requestNotificationsRefresh();
+
+      if (activity.href) {
+        navigate(activity.href);
+      }
+    },
+    [seenUserKey, navigate],
   );
 
   const handleMetricAction = useCallback(
@@ -264,6 +272,7 @@ export function useDashboard() {
     closeUnreadMessages,
     acknowledgeUnreadMessage,
     dismissUnreadMessage,
+    acknowledgeActivity,
     handleMetricAction,
   };
 }

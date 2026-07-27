@@ -6,9 +6,9 @@ import { query } from '../config/db.js'
  * - Casual Leave → casual → sick → LOP
  * - Maternity Leave → paid (2 weeks before + 24 weeks after delivery); no sick/casual/LOP change
  * - Work from Home → attendance exception; no sick/casual/LOP change
- * - Loss of Pay / other → LOP
- * LOP is applied only after both casual and sick paid quotas are exhausted
- * (except when the leave type is explicitly Loss of Pay).
+ * LOP is never selected by the employee — it applies only after
+ * casual and sick paid quotas are exhausted.
+ * Legacy "Loss of Pay" rows still deduct entirely as LOP on approval.
  */
 export function computeLeaveDeduction(
   { casualLeaveBalance = 0, sickLeaveBalance = 0, lopDays = 0 },
@@ -65,8 +65,21 @@ export function computeLeaveDeduction(
     fromLop = remaining
     lop += remaining
     remaining = 0
+  } else if (type === 'Loss of Pay') {
+    // Legacy requests submitted before LOP was removed as a leave type
+    fromLop = remaining
+    lop += remaining
+    remaining = 0
   } else {
-    // Loss of Pay and any other type without a paid quota → LOP
+    // Any other paid leave type: casual → sick → LOP
+    fromCasual = Math.min(casual, remaining)
+    casual -= fromCasual
+    remaining -= fromCasual
+
+    fromSick = Math.min(sick, remaining)
+    sick -= fromSick
+    remaining -= fromSick
+
     fromLop = remaining
     lop += remaining
     remaining = 0

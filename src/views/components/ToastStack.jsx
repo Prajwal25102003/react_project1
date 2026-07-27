@@ -8,15 +8,6 @@ import {
 const PEEK_PX = 4;
 const CARD_H = 44; // h-11 — matches dashboard notification stack
 
-const CLOSE_HOVER = {
-  success: "hover:bg-white/70 hover:text-success-700 focus-visible:ring-success-500/30 text-success-500/70",
-  error:
-    "hover:bg-white/70 hover:text-error-700 focus-visible:ring-error-500/30 text-error-500/70",
-  warning:
-    "hover:bg-white/70 hover:text-warning-700 focus-visible:ring-warning-500/30 text-warning-500/70",
-  info: "hover:bg-white/70 hover:text-blue-light-700 focus-visible:ring-blue-light-500/30 text-blue-light-500/70",
-};
-
 const BADGE_TEXT = {
   success: "text-success-700",
   error: "text-error-700",
@@ -72,27 +63,6 @@ function InfoIcon() {
   );
 }
 
-function CloseIcon() {
-  return (
-    <svg
-      className="fill-current"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M6.21967 7.28131C5.92678 6.98841 5.92678 6.51354 6.21967 6.22065C6.51256 5.92775 6.98744 5.92775 7.28033 6.22065L11.999 10.9393L16.7176 6.22078C17.0105 5.92789 17.4854 5.92788 17.7782 6.22078C18.0711 6.51367 18.0711 6.98855 17.7782 7.28144L13.0597 12L17.7782 16.7186C18.0711 17.0115 18.0711 17.4863 17.7782 17.7792C17.4854 18.0721 17.0105 18.0721 16.7176 17.7792L11.999 13.0607L7.28033 17.7794C6.98744 18.0722 6.51256 18.0722 6.21967 17.7794C5.92678 17.4865 5.92678 17.0116 6.21967 16.7187L10.9384 12L6.21967 7.28131Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
 function ToastIcon({ tone }) {
   if (tone === "success") return <SuccessIcon />;
   if (tone === "error") return <ErrorIcon />;
@@ -103,8 +73,10 @@ function ToastIcon({ tone }) {
 /**
  * Stacked toast alert banners — same peek stack as dashboard notifications.
  * Latest on top; older cards sit behind with a thin layer peeking below.
+ * Auto-dismisses on a timer (no manual close control).
+ * Width fits the message so layout stays balanced without a dismiss button.
  */
-function ToastStack({ toasts = [], onDismiss }) {
+function ToastStack({ toasts = [] }) {
   const list = toasts || [];
   const stack = list.slice(0, TOAST_STACK_DEPTH);
   if (stack.length === 0) return null;
@@ -117,12 +89,12 @@ function ToastStack({ toasts = [], onDismiss }) {
 
   return (
     <div
-      className="pointer-events-none fixed top-4 right-4 z-[100000] w-[min(100%-2rem,22rem)]"
+      className="pointer-events-none fixed top-4 right-4 z-[100000]"
       style={{ height: `${stackHeight}px` }}
       aria-live="polite"
       aria-relevant="additions"
     >
-      <div className="relative h-full w-full">
+      <div className="relative h-full">
         {stack.map((toast, depth) => {
           const isFront = depth === 0;
           const tone = toast.tone || "info";
@@ -131,12 +103,11 @@ function ToastStack({ toasts = [], onDismiss }) {
           return (
             <div
               key={toast.id}
-              className={`absolute transition-all duration-300 ease-out ${
+              className={`absolute right-0 transition-all duration-300 ease-out ${
                 isFront ? "pointer-events-auto" : "pointer-events-none"
               }`}
               style={{
                 top: `${depth * PEEK_PX}px`,
-                left: isFront ? 0 : `${depth * 2}px`,
                 right: isFront ? 0 : `${depth * 2}px`,
                 zIndex: TOAST_STACK_DEPTH - depth,
                 height: `${CARD_H}px`,
@@ -144,40 +115,29 @@ function ToastStack({ toasts = [], onDismiss }) {
               aria-hidden={!isFront}
             >
               <div
-                className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 shadow-theme-xs ${TOAST_SHELL[tone]}`}
+                className={`inline-flex h-11 max-w-[min(100vw-2rem,22rem)] items-center gap-2.5 rounded-xl border py-0 pl-3.5 pr-4 shadow-theme-xs ${TOAST_SHELL[tone]}`}
                 role={isFront ? "status" : undefined}
               >
                 {isFront ? (
                   <>
-                    <div className={`shrink-0 ${TOAST_ICON[tone]}`}>
+                    <div
+                      className={`inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center ${TOAST_ICON[tone]}`}
+                    >
                       <ToastIcon tone={tone} />
                     </div>
                     <p
-                      className={`min-w-0 flex-1 truncate text-theme-sm font-medium ${TOAST_TEXT[tone]}`}
+                      className={`max-w-[18rem] truncate text-theme-sm leading-5 font-medium ${TOAST_TEXT[tone]}`}
                     >
                       {message}
                     </p>
 
                     {remaining > 0 ? (
                       <span
-                        className={`shrink-0 rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-medium ${BADGE_TEXT[frontTone]}`}
+                        className={`shrink-0 rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] leading-none font-medium ${BADGE_TEXT[frontTone]}`}
                       >
                         +{remaining}
                       </span>
                     ) : null}
-
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onDismiss?.(front.id);
-                      }}
-                      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-hidden focus-visible:ring-2 ${CLOSE_HOVER[tone]}`}
-                      aria-label="Dismiss notification"
-                    >
-                      <CloseIcon />
-                    </button>
                   </>
                 ) : (
                   <span className="sr-only">{message}</span>

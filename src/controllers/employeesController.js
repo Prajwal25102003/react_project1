@@ -99,6 +99,16 @@ export function useEmployees() {
   const filterDefs = useMemo(
     () => [
       ...EMPLOYEE_COLUMN_FILTERS,
+      ...(isAdminUser
+        ? [
+            {
+              id: "isAdminAccount",
+              label: "Admin",
+              type: "toggle",
+              activeValue: "true",
+            },
+          ]
+        : []),
       ...(departmentFilterOptions.length
         ? [
             {
@@ -109,7 +119,7 @@ export function useEmployees() {
           ]
         : []),
     ],
-    [departmentFilterOptions],
+    [departmentFilterOptions, isAdminUser],
   );
 
   const assignableEmployees = useMemo(
