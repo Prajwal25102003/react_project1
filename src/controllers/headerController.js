@@ -3,14 +3,12 @@ import { useNavigate } from "react-router-dom";
 import {
   getUserMenuItems,
   mapHeaderUser,
-  markNotificationsSeen,
   withNotificationSeenState,
 } from "../models/headerModel.js";
 import { fetchNotifications } from "../services/notificationsService.js";
-import {
-  NOTIFICATIONS_REFRESH_EVENT,
-  requestNotificationsRefresh,
-} from "../utils/notificationsRefresh.js";
+import { NOTIFICATIONS_REFRESH_EVENT } from "../utils/notificationsRefresh.js";
+import { requestDashboardRefresh } from "../utils/dashboardRefresh.js";
+import { markFeedItemSeen } from "../utils/feedSeenState.js";
 import { useAuth } from "./authContext.jsx";
 
 const NOTIFICATIONS_POLL_MS = 60_000;
@@ -140,25 +138,26 @@ export function useHeader() {
       const id = notification?.id;
       if (!seenUserKey || !id) return;
 
-      markNotificationsSeen(seenUserKey, [id]);
+      markFeedItemSeen(seenUserKey, [id]);
       setNotifications((current) =>
         current.map((item) =>
           String(item.id) === String(id) ? { ...item, isNew: false } : item,
         ),
       );
-      requestNotificationsRefresh();
+      requestDashboardRefresh();
 
-      // Navigate to the relevant leave (or other) page and open that item's modal
       if (options.navigate !== false && notification.href) {
         setNotificationsOpen(false);
-        // Force a navigation even when already on leave-requests
         navigate(notification.href, { replace: false });
       }
     },
     [seenUserKey, navigate],
   );
 
-  const hasUnread = notifications.some((item) => item.isNew);
+  const hasUnread = notifications.some(
+    (item) =>
+      item.isNew && String(item.direction || "").toLowerCase() === "received",
+  );
 
   return {
     menuToggle,

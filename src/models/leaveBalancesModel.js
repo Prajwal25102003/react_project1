@@ -35,9 +35,8 @@ export function totalLeavesAvailable(source = {}) {
  * Casual → casual → sick → LOP
  * Maternity → paid separately (no sick/casual/LOP change)
  * Work from Home → no sick/casual/LOP change
- * Loss of Pay / other → LOP
- * LOP only after both casual and sick paid quotas are used up
- * (except when the leave type is explicitly Loss of Pay).
+ * LOP is never a selectable leave type — it is applied only after
+ * casual and sick paid quotas are exhausted.
  */
 export function previewLeaveDeduction(balances, leaveType, leaveDays) {
   const current = normalizeLeaveBalances(balances);
@@ -100,17 +99,14 @@ export function previewLeaveDeduction(balances, leaveType, leaveDays) {
     fromLop = remaining;
     lop += remaining;
     remaining = 0;
-  } else if (type === "Casual Leave") {
+  } else {
+    // Casual Leave (and any other paid leave type)
     fromCasual = Math.min(casual, remaining);
     casual -= fromCasual;
     remaining -= fromCasual;
     fromSick = Math.min(sick, remaining);
     sick -= fromSick;
     remaining -= fromSick;
-    fromLop = remaining;
-    lop += remaining;
-    remaining = 0;
-  } else {
     fromLop = remaining;
     lop += remaining;
     remaining = 0;

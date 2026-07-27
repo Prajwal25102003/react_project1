@@ -46,6 +46,17 @@ export function filterByColumns(rows, columnFilters = {}) {
         return isJoiningInHiredPeriod(getCellValue(row, "joiningDate"), filter);
       }
 
+      // Employees page Admin toggle — show only admin accounts.
+      if (key === "isAdminAccount") {
+        const isAdmin =
+          Boolean(row.isAdminAccount) ||
+          String(row.loginRole || "").toLowerCase() === "admin";
+        if (filter === "true" || filter === "1" || filter === "admin") {
+          return isAdmin;
+        }
+        return !isAdmin;
+      }
+
       // Leave ranges: match when the period overlaps [startDate, endDate].
       if (
         key === "startDate" &&

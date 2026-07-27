@@ -90,8 +90,8 @@ const { getSeenIds: getSeenActivityIds, markSeen: markActivitiesSeen, pruneSeenT
 export { getSeenActivityIds, markActivitiesSeen };
 
 /**
- * Latest N activities always display. Unseen → isNew; after viewing they stay
- * in the limited list without the new highlight.
+ * Latest N activities always display. Unseen → isNew until the user
+ * interacts with that item (banner, header notification, or activity row).
  */
 export function withActivitySeenState(activities, userKey) {
   const list = activities || [];

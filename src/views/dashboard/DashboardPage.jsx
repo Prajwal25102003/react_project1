@@ -40,6 +40,7 @@ function EmployeeDashboard({
   unreadMessages,
   onDismissMessage,
   onAcknowledgeMessage,
+  onAcknowledgeActivity,
 }) {
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
@@ -71,6 +72,7 @@ function EmployeeDashboard({
           <RecentActivitiesTable
             activities={activities}
             title="My Recent Activity"
+            onActivityClick={onAcknowledgeActivity}
           />
         </div>
       </div>
@@ -91,6 +93,7 @@ function OrgDashboard({
   onCloseMessages,
   onAcknowledgeMessage,
   onDismissMessage,
+  onAcknowledgeActivity,
 }) {
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
@@ -126,7 +129,10 @@ function OrgDashboard({
         </div>
 
         <div className="col-span-12 lg:col-span-7">
-          <RecentActivitiesTable activities={activities} />
+          <RecentActivitiesTable
+            activities={activities}
+            onActivityClick={onAcknowledgeActivity}
+          />
         </div>
       </div>
 
@@ -177,6 +183,7 @@ function DashboardPage() {
         unreadMessages={dashboard.unreadMessages}
         onDismissMessage={dashboard.dismissUnreadMessage}
         onAcknowledgeMessage={dashboard.acknowledgeUnreadMessage}
+        onAcknowledgeActivity={dashboard.acknowledgeActivity}
       />
     );
   }
@@ -195,6 +202,7 @@ function DashboardPage() {
       onCloseMessages={dashboard.closeUnreadMessages}
       onAcknowledgeMessage={dashboard.acknowledgeUnreadMessage}
       onDismissMessage={dashboard.dismissUnreadMessage}
+      onAcknowledgeActivity={dashboard.acknowledgeActivity}
     />
   );
 }

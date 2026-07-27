@@ -51,7 +51,7 @@ function LeaveFormPage() {
       <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden sm:space-y-6">
         <PageCard
           title="Create Leave Request"
-          subtitle="Submit a new leave request for approval. Paid leave uses your casual and sick balances; LOP applies only after both are finished. Maternity is a separate paid entitlement for female employees. Work from home does not reduce leave balances. Medical leave requires a supporting document. Half-day leave counts as 0.5 day."
+          subtitle="Submit a new leave request for approval. Paid leave uses your casual and sick balances; LOP is applied automatically only after both are finished — it is not a selectable leave type. Maternity is a separate paid entitlement for female employees. Work from home does not reduce leave balances. Medical leave requires a supporting document. Half-day leave counts as 0.5 day."
           bodyClassName="p-5 sm:p-6"
         >
           {loading ? (

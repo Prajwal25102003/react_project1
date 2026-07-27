@@ -54,7 +54,6 @@ const LEAVE_TYPES = new Set([
   'Maternity Leave',
   'Medical Leave',
   'Work from Home',
-  'Loss of Pay',
 ])
 
 function formatLeaveRange(startDate, endDate) {
@@ -154,7 +153,7 @@ function parseLeavePayload(body) {
   if (!leaveType) errors.push('Leave type is required')
   else if (!LEAVE_TYPES.has(leaveType)) {
     errors.push(
-      'Leave type must be Sick Leave, Casual Leave, Maternity Leave, Medical Leave, Work from Home, or Loss of Pay',
+      'Leave type must be Sick Leave, Casual Leave, Maternity Leave, Medical Leave, or Work from Home',
     )
   }
   if (!reason) errors.push('Leave reason is required')

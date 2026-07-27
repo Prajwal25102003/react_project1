@@ -402,6 +402,7 @@ export async function createEmployeeHandler(req, res) {
         : `${created.name} joined the ${created.department} Department as ${created.designation}. Added by ${actorLabel}.`,
       category: 'Employees',
       status: 'Added',
+      eventType: wantsAdmin ? 'admin.added' : 'employee.added',
       subjectEmployeeId: created.id,
       actorEmployeeId: req.user?.employeeId || null,
       meta: {
@@ -683,9 +684,10 @@ export async function deleteEmployeeHandler(req, res) {
       const actorLabel = formatActorLabel(actorFromUser(req.user))
       await createRecentActivity({
         title: 'Admin Removed',
-        description: `${existing.name} admin access was removed by ${actorLabel}.`,
+        description: `${existing.name}'s admin access was removed by ${actorLabel}.`,
         category: 'Employees',
         status: 'Removed',
+        eventType: 'admin.removed',
         subjectEmployeeId: existing.id,
         actorEmployeeId: req.user?.employeeId || null,
         meta: {

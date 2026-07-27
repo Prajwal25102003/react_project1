@@ -12,8 +12,10 @@ export const LEAVE_TYPES = [
   "Maternity Leave",
   "Medical Leave",
   "Work from Home",
-  "Loss of Pay",
 ];
+
+/** Includes legacy Loss of Pay rows for list filters only — not selectable on the form. */
+export const LEAVE_TYPE_FILTER_OPTIONS = [...LEAVE_TYPES, "Loss of Pay"];
 
 export const MEDICAL_LEAVE_TYPE = "Medical Leave";
 export const WORK_FROM_HOME_TYPE = "Work from Home";
