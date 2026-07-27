@@ -36,7 +36,7 @@ const ANCHORS = [
   {
     id: 'EMP-1002',
     name: 'Siddharth Menon',
-    email: 'siddharthmenon@company.in',
+    email: 'hr@company.com',
     phone: '+91 98765 41002',
     gender: 'Male',
     departmentId: 'DEP-02',

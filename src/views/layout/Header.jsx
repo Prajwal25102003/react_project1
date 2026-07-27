@@ -165,9 +165,9 @@ function Header({
               </button>
 
               {notificationsOpen ? (
-                <div className="shadow-theme-lg absolute left-0 z-99999 mt-[17px] flex max-h-[min(480px,calc(100vh-8rem))] w-[min(361px,calc(100vw-2.5rem))] flex-col rounded-2xl border border-gray-200 bg-white p-3 lg:left-auto lg:right-0 lg:h-[480px] lg:max-h-none lg:w-[361px]">
-                  <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-3">
-                    <h5 className="text-lg font-semibold text-gray-800">
+                <div className="shadow-theme-lg absolute left-0 z-99999 mt-[17px] flex w-[min(361px,calc(100vw-2.5rem))] flex-col rounded-2xl border border-gray-200 bg-white p-2.5 lg:left-auto lg:right-0 lg:w-[361px]">
+                  <div className="mb-2 flex shrink-0 items-center justify-between border-b border-gray-100 pb-2">
+                    <h5 className="text-base font-semibold text-gray-800">
                       Notification
                     </h5>
                     <button
@@ -194,7 +194,7 @@ function Header({
                     </button>
                   </div>
 
-                  <ul className="custom-scrollbar flex h-auto flex-col overflow-y-auto">
+                  <ul className="custom-scrollbar flex max-h-[22.5rem] flex-col overflow-y-auto">
                     {notificationsLoading ? (
                       <li className="px-4.5 py-8 text-center">
                         <p className="text-theme-sm text-gray-500">
@@ -219,17 +219,17 @@ function Header({
                               onClick={() =>
                                 onAcknowledgeNotification?.(notification)
                               }
-                              className={`flex w-full gap-3 rounded-lg border-b border-gray-100 px-4.5 py-3 text-left transition hover:bg-gray-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/20 focus-visible:ring-inset ${
+                              className={`flex w-full gap-2.5 rounded-lg border-b border-gray-100 px-3 py-2 text-left transition hover:bg-gray-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/20 focus-visible:ring-inset ${
                                 notification.isNew ? "bg-brand-50/60" : ""
                               }`}
                             >
-                              <span className="relative z-1 block h-10 w-full max-w-10 shrink-0 rounded-full">
+                              <span className="relative z-1 mt-0.5 block h-8 w-8 shrink-0 rounded-full">
                                 <UserAvatar
                                   name={notification.title}
-                                  size="sm"
+                                  size="xs"
                                 />
                                 <span
-                                  className={`absolute right-0 bottom-0 z-10 h-2.5 w-2.5 rounded-full border-[1.5px] border-white ${
+                                  className={`absolute right-0 bottom-0 z-10 h-2 w-2 rounded-full border-[1.5px] border-white ${
                                     notificationDotTone(notification.status) ===
                                     "error"
                                       ? "bg-error-500"
@@ -246,33 +246,30 @@ function Header({
                                 />
                               </span>
                               <span className="block min-w-0 flex-1">
-                                <span className="mb-1.5 flex items-start justify-between gap-2">
-                                  <span className="text-theme-sm block text-gray-500">
-                                    <span className="font-medium text-gray-800">
+                                <span className="mb-0.5 flex items-start justify-between gap-2">
+                                  <span className="block min-w-0 text-theme-xs text-gray-500">
+                                    <span className="block truncate font-medium text-gray-800">
                                       {notification.title}
                                     </span>
                                     {notification.description ? (
-                                      <>
-                                        <br />
-                                        <span className="text-theme-xs text-gray-500">
-                                          {notification.description}
-                                        </span>
-                                      </>
+                                      <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-gray-500">
+                                        {notification.description}
+                                      </span>
                                     ) : null}
                                   </span>
                                   {notification.isNew ? (
-                                    <span className="mt-0.5 shrink-0 rounded-full bg-success-500 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+                                    <span className="mt-0.5 shrink-0 rounded-full bg-success-500 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
                                       New
                                     </span>
                                   ) : null}
                                 </span>
-                                <span className="text-theme-xs flex flex-wrap items-center gap-2 text-gray-500">
+                                <span className="flex flex-wrap items-center gap-1.5 text-[11px] leading-none text-gray-400">
                                   <span>{notification.category}</span>
-                                  <span className="h-1 w-1 rounded-full bg-gray-400" />
+                                  <span className="h-0.5 w-0.5 rounded-full bg-gray-300" />
                                   <span>{notification.time}</span>
                                   {notification.status ? (
                                     <>
-                                      <span className="h-1 w-1 rounded-full bg-gray-400" />
+                                      <span className="h-0.5 w-0.5 rounded-full bg-gray-300" />
                                       <StatusPill
                                         label={notification.status}
                                         statusClass={notification.statusClass}

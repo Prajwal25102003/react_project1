@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
@@ -6,7 +6,6 @@ import {
   fetchLeaveApprovalHierarchies,
   updateLeaveApprovalHierarchy,
 } from "../services/leaveApprovalHierarchyService.js";
-import { fetchEmployees } from "../services/employeesService.js";
 import {
   applyApproverType,
   emptyHierarchyStep,
@@ -34,29 +33,12 @@ export function useLeaveApprovalHierarchy() {
     initialVisibleColumnIds: LEAVE_HIERARCHY_COLUMNS.map((col) => col.id),
   });
 
-  const [employees, setEmployees] = useState([]);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: "", steps: [emptyHierarchyStep()] });
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadEmployees() {
-      try {
-        const list = await fetchEmployees();
-        if (!cancelled) setEmployees(list || []);
-      } catch {
-        if (!cancelled) setEmployees([]);
-      }
-    }
-    loadEmployees();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   function openEditModal(hierarchy) {
     setEditing(hierarchy);
@@ -169,7 +151,7 @@ export function useLeaveApprovalHierarchy() {
 
   const displayRows = (table.rows || []).map((row) => ({
     ...row,
-    stepsSummary: formatStepsSummary(row.steps, employees),
+    stepsSummary: formatStepsSummary(row.steps),
   }));
 
   return {
@@ -178,7 +160,6 @@ export function useLeaveApprovalHierarchy() {
     error,
     reload,
     table,
-    employees,
     formOpen,
     editing,
     form,

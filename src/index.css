@@ -1,4 +1,4 @@
-﻿@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap")
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap")
 layer(base);
 
 @import "tailwindcss";
@@ -12,6 +12,13 @@ body,
   margin: 0;
   max-width: 100%;
   overflow-x: hidden;
+}
+
+/* Modal is portaled outside #root; blur the page it opened over */
+#root.app-modal-open {
+  filter: blur(8px);
+  pointer-events: none;
+  user-select: none;
 }
 
 @theme {

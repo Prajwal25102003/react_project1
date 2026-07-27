@@ -8,6 +8,10 @@ import {
 
 export const EMPLOYEE_GENDERS = ["Male", "Female"];
 export const EMPLOYEE_STATUSES = ["Active", "Inactive"];
+export const EMPLOYEE_ACCOUNT_TYPES = [
+  { value: "employee", label: "Employee" },
+  { value: "admin", label: "Admin" },
+];
 export const EMPLOYEE_HIRED_PERIODS = ["month", "quarter", "year"];
 export const MIN_EMPLOYEE_PASSWORD_LENGTH = 8;
 
@@ -64,6 +68,7 @@ export function defaultJoiningDate() {
 }
 
 export const EMPTY_EMPLOYEE_FORM = {
+  accountType: "employee",
   name: "",
   email: "",
   phone: "",
@@ -92,7 +97,7 @@ export function mapEmployee(employee) {
   return {
     ...employee,
     isAdminAccount,
-    department: isAdminAccount ? "" : employee.department || "",
+    department: isAdminAccount ? "Admin" : employee.department || "",
     departmentId: isAdminAccount ? "" : employee.departmentId || "",
     casualLeaveBalance: isAdminAccount
       ? 0
@@ -111,9 +116,13 @@ export function mapEmployee(employee) {
 export function toEmployeeFormValues(employee) {
   if (!employee) return { ...EMPTY_EMPLOYEE_FORM };
 
+  const isAdmin = employee.loginRole === "admin";
   return {
+    accountType: isAdmin ? "admin" : "employee",
     name: employee.name || "",
-    email: employee.email || "",
+    email: isAdmin
+      ? employee.loginEmail || employee.email || ""
+      : employee.email || "",
     phone: toIndianPhoneInputValue(employee.phone),
     gender: employee.gender || "Male",
     departmentId: employee.departmentId || "",
@@ -143,7 +152,7 @@ export function toEmployeeFormValues(employee) {
 
 /**
  * @param {object} form
- * @param {{ includeCredentials?: boolean, includePassword?: boolean }} [options]
+ * @param {{ includeCredentials?: boolean, includePassword?: boolean, isAdminAccount?: boolean }} [options]
  */
 export function toEmployeePayload(form, options = {}) {
   const {
@@ -151,6 +160,24 @@ export function toEmployeePayload(form, options = {}) {
     includePassword = false,
     isAdminAccount = false,
   } = options;
+
+  if (isAdminAccount) {
+    const email = String(form.email ?? "").trim();
+    const payload = {
+      accountType: "admin",
+      name: String(form.name ?? "").trim(),
+      email,
+      avatar: String(form.avatar ?? "").trim() || null,
+    };
+    if (includeCredentials && email) {
+      payload.loginEmail = email;
+    }
+    if (includePassword && form.password) {
+      payload.password = form.password;
+    }
+    return payload;
+  }
+
   // Salary is kept in the DB but hidden in UI until Payroll is added.
   const salaryValue = Number(form.salary);
   const payload = {
@@ -158,18 +185,15 @@ export function toEmployeePayload(form, options = {}) {
     email: form.email.trim(),
     phone: normalizeIndianPhone(form.phone) || form.phone.trim(),
     gender: form.gender,
-    departmentId: isAdminAccount ? null : form.departmentId,
+    departmentId: form.departmentId,
     designation: form.designation.trim(),
     joiningDate: form.joiningDate,
     salary: Number.isNaN(salaryValue) ? 0 : salaryValue,
     status: form.status,
     avatar: form.avatar.trim() || null,
+    casualLeaveBalance: parseOptionalLeaveDays(form.casualLeaveBalance),
+    sickLeaveBalance: parseOptionalLeaveDays(form.sickLeaveBalance),
   };
-
-  if (!isAdminAccount) {
-    payload.casualLeaveBalance = parseOptionalLeaveDays(form.casualLeaveBalance);
-    payload.sickLeaveBalance = parseOptionalLeaveDays(form.sickLeaveBalance);
-  }
 
   if (includeCredentials) {
     const gmail = String(form.gmail ?? "").trim();
@@ -225,6 +249,33 @@ export function validateEmployeeForm(form, options = {}) {
   else if (name.length < 2)
     fieldErrors.name = "Full name must be at least 2 characters";
 
+  if (isAdminAccount) {
+    if (!email) fieldErrors.email = "Email is required";
+    else if (!EMAIL_PATTERN.test(email))
+      fieldErrors.email = "Enter a valid email address";
+
+    if (avatar && !avatar.startsWith("/") && !/^https?:\/\//i.test(avatar)) {
+      fieldErrors.avatar = "Please select a valid image file";
+    }
+
+    if (!isEdit && !password) {
+      fieldErrors.password = "Password is required";
+    } else if (
+      password &&
+      password.length < MIN_EMPLOYEE_PASSWORD_LENGTH
+    ) {
+      fieldErrors.password = `Password must be at least ${MIN_EMPLOYEE_PASSWORD_LENGTH} characters`;
+    }
+
+    const keys = Object.keys(fieldErrors);
+    if (keys.length === 0) return { ok: true, fieldErrors: {} };
+    return {
+      ok: false,
+      fieldErrors,
+      message: "Please fix the highlighted fields and try again.",
+    };
+  }
+
   if (!email) fieldErrors.email = "Email is required";
   else if (!EMAIL_PATTERN.test(email))
     fieldErrors.email = "Enter a valid email address";
@@ -239,7 +290,7 @@ export function validateEmployeeForm(form, options = {}) {
     fieldErrors.gender = "Select a valid gender";
   }
 
-  if (!isAdminAccount && !departmentId) {
+  if (!departmentId) {
     fieldErrors.departmentId = "Department is required";
   }
 
@@ -259,23 +310,21 @@ export function validateEmployeeForm(form, options = {}) {
     fieldErrors.avatar = "Please select a valid image file";
   }
 
-  if (!isAdminAccount) {
-    const casualRaw = String(form?.casualLeaveBalance ?? "").trim();
-    if (casualRaw !== "") {
-      const casual = Number(casualRaw);
-      if (!Number.isInteger(casual) || casual < 0) {
-        fieldErrors.casualLeaveBalance =
-          "Casual leave must be a whole number 0 or greater";
-      }
+  const casualRaw = String(form?.casualLeaveBalance ?? "").trim();
+  if (casualRaw !== "") {
+    const casual = Number(casualRaw);
+    if (!Number.isInteger(casual) || casual < 0) {
+      fieldErrors.casualLeaveBalance =
+        "Casual leave must be a whole number 0 or greater";
     }
+  }
 
-    const sickRaw = String(form?.sickLeaveBalance ?? "").trim();
-    if (sickRaw !== "") {
-      const sick = Number(sickRaw);
-      if (!Number.isInteger(sick) || sick < 0) {
-        fieldErrors.sickLeaveBalance =
-          "Sick leave must be a whole number 0 or greater";
-      }
+  const sickRaw = String(form?.sickLeaveBalance ?? "").trim();
+  if (sickRaw !== "") {
+    const sick = Number(sickRaw);
+    if (!Number.isInteger(sick) || sick < 0) {
+      fieldErrors.sickLeaveBalance =
+        "Sick leave must be a whole number 0 or greater";
     }
   }
 

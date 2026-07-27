@@ -31,6 +31,8 @@ export function useHeader() {
   const seenUserKey =
     authUser?.id || authUser?.email || authUser?.employeeId || "";
 
+  // Header dropdown shows all notifications (sent + received).
+  // Received-only filtering is banner-only via getUnreadMessages.
   const loadNotifications = useCallback(async ({ silent = false } = {}) => {
     if (!authUser) {
       setNotifications([]);

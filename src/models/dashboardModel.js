@@ -106,12 +106,15 @@ export function withActivitySeenState(activities, userKey) {
 }
 
 /**
- * Banner / unread-messages KPI: only notifications the user received.
- * Outbound / self-sent actions (form submits, approvals you made) stay out.
+ * Banner + Unread Messages KPI only.
+ * Received unread items — not sent/outbound actions.
+ * Header notifications and Recent Activities stay unfiltered (sent + received).
  */
 export function getUnreadMessages(notifications) {
   return (notifications || []).filter(
-    (item) => item.isNew && String(item.direction || "") !== "sent",
+    (item) =>
+      item.isNew &&
+      String(item.direction || "").toLowerCase() === "received",
   );
 }
 
@@ -127,6 +130,12 @@ export function bannerNotificationTitle(message) {
 
   if (direction === "received") {
     if (category === "leave") {
+      if (/approval needed/i.test(original)) {
+        return `Leave Approval Needed${lopSuffix}`;
+      }
+      if (/in progress|forwarded/i.test(original)) {
+        return `Leave Request In Progress${lopSuffix}`;
+      }
       if (status === "Pending") return `Leave Request Received${lopSuffix}`;
       if (status === "Approved" || status === "TeamLeadApproved") {
         return `Leave Request Approved${lopSuffix}`;
@@ -166,8 +175,8 @@ export function buildUnreadMessagesMetric(notifications) {
 }
 
 /**
- * Attach received unread notifications for banner display.
- * Org dashboards also get the Unread Messages KPI.
+ * Attach received-only unread list for the dashboard banner (and org KPI).
+ * Does not filter header notifications or recent activities.
  */
 export function withOrgUnreadMessagesMetric(dashboard, notifications) {
   if (!dashboard) return dashboard;

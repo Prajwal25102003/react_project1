@@ -2,7 +2,7 @@
  * Ensures users table exists and upserts login accounts.
  * Password for all users: 12345678
  *
- * - One user per employee
+ * - One user per employee (HR head login email is hr@company.com)
  * - HR login role only for the Human Resources department head
  * - Demo accounts: hr@company.com, admin@company.com, arjuntejas@company.com
  *

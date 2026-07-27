@@ -38,7 +38,7 @@ function AssignLeavesModal({
       onClose={onClose}
       title="Assign Leaves"
       description="Set or add casual and sick leave for all staff, a department, or selected people. Admin is never updated."
-      panelClassName="relative mx-auto flex max-h-[calc(100vh-2.5rem)] w-full min-w-0 max-w-[min(720px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl bg-white p-5 lg:p-8"
+      panelClassName="relative mx-auto my-6 flex max-h-[calc(100vh-6rem)] w-full min-w-0 max-w-[min(600px,calc(100vw-4rem))] flex-col overflow-hidden rounded-3xl bg-white p-5 sm:p-6"
     >
       <form
         onSubmit={onSubmit}

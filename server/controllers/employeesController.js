@@ -1,15 +1,21 @@
 import {
   createEmployeeUser,
   findUserByEmployeeId,
+  findUsersByEmployeeId,
   hashPassword,
   syncDepartmentEmployeeLoginRoles,
   updateEmployeeUserCredentials,
 } from '../models/authModel.js'
 import {
+  createAdminUser,
+  deleteAdminUser,
+} from '../models/adminUsersModel.js'
+import {
   createEmployee,
   deleteEmployeeById,
   findAllEmployees,
   findEmployeeById,
+  generateNextAdminId,
   generateNextEmployeeId,
   updateEmployee,
 } from '../models/employeesModel.js'
@@ -55,21 +61,66 @@ function parsePassword(body, { required }) {
 }
 
 function parseLoginEmail(body, { required }) {
-  const loginEmail = String(body?.loginEmail ?? body?.gmail ?? '')
+  const loginEmail = String(body?.loginEmail ?? body?.gmail ?? body?.email ?? '')
     .trim()
     .toLowerCase()
   const errors = []
 
   if (!loginEmail) {
-    if (required) errors.push('Gmail is required for employee login')
+    if (required) errors.push('Email is required for login')
     return { errors, loginEmail: null }
   }
 
   if (!isValidEmail(loginEmail)) {
-    errors.push('Gmail is invalid')
+    errors.push('Email is invalid')
   }
 
   return { errors, loginEmail }
+}
+
+/** Minimal admin profile — name, email, optional photo. Other DB fields use defaults. */
+function parseAdminPayload(body, { previous = null } = {}) {
+  const errors = []
+  const name = String(body?.name ?? '').trim()
+  const email = String(body?.email ?? body?.loginEmail ?? body?.gmail ?? '')
+    .trim()
+    .toLowerCase()
+  const avatarRaw = body?.avatar
+  const avatar =
+    avatarRaw === null || avatarRaw === undefined || avatarRaw === ''
+      ? null
+      : String(avatarRaw).trim()
+
+  if (!name) errors.push('Name is required')
+  if (!email) errors.push('Email is required')
+  else if (!isValidEmail(email)) errors.push('Email is invalid')
+
+  const today = new Date().toISOString().slice(0, 10)
+  const phoneSource =
+    previous?.phone ||
+    String(body?.phone ?? '').trim() ||
+    '9999999999'
+  const normalizedPhone =
+    normalizeIndianPhone(phoneSource) || '+91 99999 99999'
+
+  return {
+    errors,
+    employee: {
+      name,
+      email,
+      phone: normalizedPhone,
+      gender: previous?.gender || 'Male',
+      departmentId: null,
+      designation: previous?.designation || 'System Administrator',
+      joiningDate: previous?.joiningDate || today,
+      salary: 0,
+      status: previous?.status || 'Active',
+      avatar,
+      casualLeaveBalance: 0,
+      sickLeaveBalance: 0,
+    },
+    loginEmail: email,
+  }
 }
 
 function parseEmployeePayload(body, { requireDepartment = true } = {}) {
@@ -199,8 +250,9 @@ export async function getEmployees(req, res) {
       .map((role) => role.trim().toLowerCase())
       .filter(Boolean)
 
-    // Admin is a system manager, not an employee — never list in Employees module.
-    if (!excludeLoginRoles.includes('admin')) {
+    // HR (and others) never see admin system accounts in Employees.
+    // Admins can list other admins so they can manage them here.
+    if (req.user?.role !== 'admin' && !excludeLoginRoles.includes('admin')) {
       excludeLoginRoles.push('admin')
     }
 
@@ -220,7 +272,7 @@ export async function getEmployeeById(req, res) {
       return res.status(404).json({ message: 'Employee not found' })
     }
 
-    if (employee.loginRole === 'admin') {
+    if (employee.loginRole === 'admin' && req.user?.role !== 'admin') {
       return res.status(404).json({
         message: 'Admin is a system manager and is not listed as an employee',
       })
@@ -245,45 +297,98 @@ export async function createEmployeeHandler(req, res) {
   const client = await pool.connect()
 
   try {
-    const { errors, employee } = parseEmployeePayload(req.body)
-    const { errors: loginEmailErrors, loginEmail } = parseLoginEmail(req.body, {
-      required: true,
-    })
-    const { errors: passwordErrors, password } = parsePassword(req.body, {
-      required: true,
-    })
-    const allErrors = [...errors, ...loginEmailErrors, ...passwordErrors]
+    const wantsAdmin =
+      String(req.body?.accountType ?? req.body?.role ?? '')
+        .trim()
+        .toLowerCase() === 'admin'
+
+    if (wantsAdmin && req.user?.role !== 'admin') {
+      return res.status(403).json({
+        message: 'Only an admin can create another admin account',
+      })
+    }
+
+    let employee
+    let loginEmail
+    let password
+    let allErrors = []
+
+    if (wantsAdmin) {
+      const parsed = parseAdminPayload(req.body)
+      const { errors: passwordErrors, password: nextPassword } = parsePassword(
+        req.body,
+        { required: true },
+      )
+      allErrors = [...parsed.errors, ...passwordErrors]
+      employee = parsed.employee
+      loginEmail = parsed.loginEmail
+      password = nextPassword
+    } else {
+      const { errors, employee: nextEmployee } = parseEmployeePayload(req.body)
+      const { errors: loginEmailErrors, loginEmail: nextLoginEmail } =
+        parseLoginEmail(req.body, { required: true })
+      const { errors: passwordErrors, password: nextPassword } = parsePassword(
+        req.body,
+        { required: true },
+      )
+      allErrors = [...errors, ...loginEmailErrors, ...passwordErrors]
+      employee = nextEmployee
+      loginEmail = nextLoginEmail
+      password = nextPassword
+    }
+
     if (allErrors.length > 0) {
       return res.status(400).json({ message: allErrors.join('; ') })
     }
 
-    const department = await findDepartmentById(employee.departmentId)
-    if (!department) {
-      return res.status(400).json({ message: 'Department not found' })
+    let department = null
+    let loginRole = wantsAdmin ? 'admin' : 'employee'
+
+    if (!wantsAdmin) {
+      department = await findDepartmentById(employee.departmentId)
+      if (!department) {
+        return res.status(400).json({ message: 'Department not found' })
+      }
     }
 
-    const id = await generateNextEmployeeId()
-    const loginRole = loginRoleForEmployee({
-      departmentName: department.name,
-      employeeId: id,
-      headEmployeeId: department.headEmployeeId,
-    })
+    const id = wantsAdmin
+      ? await generateNextAdminId()
+      : await generateNextEmployeeId()
+    if (!wantsAdmin) {
+      loginRole = loginRoleForEmployee({
+        departmentName: department.name,
+        employeeId: id,
+        headEmployeeId: department.headEmployeeId,
+      })
+    }
 
     const passwordHash = await hashPassword(password)
 
     await client.query('BEGIN')
 
     await createEmployee({ ...employee, id }, client)
-    await createEmployeeUser(
-      {
-        email: loginEmail,
-        name: employee.name,
-        employeeId: id,
-        passwordHash,
-        role: loginRole,
-      },
-      client,
-    )
+    if (wantsAdmin) {
+      await createAdminUser(
+        {
+          email: loginEmail,
+          name: employee.name,
+          employeeId: id,
+          passwordHash,
+        },
+        client,
+      )
+    } else {
+      await createEmployeeUser(
+        {
+          email: loginEmail,
+          name: employee.name,
+          employeeId: id,
+          passwordHash,
+          role: loginRole,
+        },
+        client,
+      )
+    }
 
     await client.query('COMMIT')
 
@@ -291,8 +396,10 @@ export async function createEmployeeHandler(req, res) {
 
     const actorLabel = formatActorLabel(actorFromUser(req.user))
     await createRecentActivity({
-      title: 'New Employee Added',
-      description: `${created.name} joined the ${created.department} Department as ${created.designation}. Added by ${actorLabel}.`,
+      title: wantsAdmin ? 'Admin Added' : 'New Employee Added',
+      description: wantsAdmin
+        ? `${created.name} was granted admin access by ${actorLabel}.`
+        : `${created.name} joined the ${created.department} Department as ${created.designation}. Added by ${actorLabel}.`,
       category: 'Employees',
       status: 'Added',
       subjectEmployeeId: created.id,
@@ -338,50 +445,73 @@ export async function updateEmployeeHandler(req, res) {
     }
 
     const isAdminAccount = previous.loginRole === 'admin'
-    if (isAdminAccount) {
+    if (isAdminAccount && req.user?.role !== 'admin') {
       return res.status(403).json({
         message:
           'Admin is a system manager and cannot be edited from Employees',
       })
     }
 
-    const { errors, employee } = parseEmployeePayload(req.body, {
-      requireDepartment: true,
-    })
-
     const manageLogin = canManageLogin(req.user?.role)
-    const { errors: loginEmailErrors, loginEmail } = parseLoginEmail(req.body, {
-      required: false,
-    })
-    const { errors: passwordErrors, password } = parsePassword(req.body, {
-      required: false,
-    })
+    let employee
+    let loginEmail = null
+    let password = null
+    let allErrors = []
 
-    if (!manageLogin && (password || loginEmail)) {
-      return res.status(403).json({
-        message: 'Only HR and Admin can manage employee login credentials',
+    if (isAdminAccount) {
+      const parsed = parseAdminPayload(req.body, { previous })
+      const { errors: passwordErrors, password: nextPassword } = parsePassword(
+        req.body,
+        { required: false },
+      )
+      allErrors = [...parsed.errors, ...passwordErrors]
+      employee = parsed.employee
+      loginEmail = parsed.loginEmail
+      password = nextPassword
+    } else {
+      const { errors, employee: nextEmployee } = parseEmployeePayload(req.body, {
+        requireDepartment: true,
       })
+      const { errors: loginEmailErrors, loginEmail: nextLoginEmail } =
+        parseLoginEmail(req.body, { required: false })
+      const { errors: passwordErrors, password: nextPassword } = parsePassword(
+        req.body,
+        { required: false },
+      )
+
+      if (!manageLogin && (nextPassword || nextLoginEmail)) {
+        return res.status(403).json({
+          message: 'Only HR and Admin can manage employee login credentials',
+        })
+      }
+
+      allErrors = [
+        ...errors,
+        ...(manageLogin ? loginEmailErrors : []),
+        ...(manageLogin ? passwordErrors : []),
+      ]
+      employee = nextEmployee
+      loginEmail = nextLoginEmail
+      password = nextPassword
     }
 
-    const allErrors = [
-      ...errors,
-      ...(manageLogin ? loginEmailErrors : []),
-      ...(manageLogin ? passwordErrors : []),
-    ]
     if (allErrors.length > 0) {
       return res.status(400).json({ message: allErrors.join('; ') })
     }
 
-    let department = await findDepartmentById(employee.departmentId)
-    if (!department) {
-      return res.status(400).json({ message: 'Department not found' })
+    let department = null
+    let loginRole = 'employee'
+    if (!isAdminAccount) {
+      department = await findDepartmentById(employee.departmentId)
+      if (!department) {
+        return res.status(400).json({ message: 'Department not found' })
+      }
+      loginRole = loginRoleForEmployee({
+        departmentName: department.name,
+        employeeId: req.params.id,
+        headEmployeeId: department.headEmployeeId,
+      })
     }
-
-    const loginRole = loginRoleForEmployee({
-      departmentName: department.name,
-      employeeId: req.params.id,
-      headEmployeeId: department.headEmployeeId,
-    })
 
     const updated = await updateEmployee(req.params.id, employee)
     if (!updated) {
@@ -410,13 +540,22 @@ export async function updateEmployeeHandler(req, res) {
 
       await updateEmployeeUserCredentials(updated.id, credentialUpdate)
     } else if (manageLogin && loginEmail && password) {
-      await createEmployeeUser({
-        email: loginEmail,
-        name: employee.name,
-        employeeId: updated.id,
-        passwordHash: await hashPassword(password),
-        role: loginRole,
-      })
+      if (isAdminAccount) {
+        await createAdminUser({
+          email: loginEmail,
+          name: employee.name,
+          employeeId: updated.id,
+          passwordHash: await hashPassword(password),
+        })
+      } else {
+        await createEmployeeUser({
+          email: loginEmail,
+          name: employee.name,
+          employeeId: updated.id,
+          passwordHash: await hashPassword(password),
+          role: loginRole,
+        })
+      }
     } else if (manageLogin && (loginEmail || password)) {
       return res.status(400).json({
         message:
@@ -424,15 +563,16 @@ export async function updateEmployeeHandler(req, res) {
       })
     }
 
-    await syncDepartmentEmployeeLoginRoles(department)
-    if (
-      department &&
-      previous.departmentId &&
-      previous.departmentId !== department.id
-    ) {
-      const previousDept = await findDepartmentById(previous.departmentId)
-      if (previousDept) {
-        await syncDepartmentEmployeeLoginRoles(previousDept)
+    if (!isAdminAccount && department) {
+      await syncDepartmentEmployeeLoginRoles(department)
+      if (
+        previous.departmentId &&
+        previous.departmentId !== department.id
+      ) {
+        const previousDept = await findDepartmentById(previous.departmentId)
+        if (previousDept) {
+          await syncDepartmentEmployeeLoginRoles(previousDept)
+        }
       }
     }
 
@@ -510,10 +650,52 @@ export async function deleteEmployeeHandler(req, res) {
     }
 
     if (existing.loginRole === 'admin') {
-      return res.status(403).json({
-        message:
-          'Admin is a system manager and cannot be deleted from Employees',
+      if (req.user?.role !== 'admin') {
+        return res.status(403).json({
+          message:
+            'Admin is a system manager and cannot be deleted from Employees',
+        })
+      }
+
+      const linked = await findUsersByEmployeeId(existing.id)
+      const adminUser = linked.find((user) => user.role === 'admin')
+      if (!adminUser) {
+        return res.status(404).json({ message: 'Admin account not found' })
+      }
+
+      const result = await deleteAdminUser(adminUser.id, {
+        actorUserId: req.user?.id,
       })
+      if (!result.ok) {
+        if (result.reason === 'self') {
+          return res.status(400).json({
+            message: 'You cannot remove your own admin account',
+          })
+        }
+        if (result.reason === 'last_admin') {
+          return res.status(400).json({
+            message: 'At least one admin account must remain',
+          })
+        }
+        return res.status(400).json({ message: 'Unable to remove admin' })
+      }
+
+      const actorLabel = formatActorLabel(actorFromUser(req.user))
+      await createRecentActivity({
+        title: 'Admin Removed',
+        description: `${existing.name} admin access was removed by ${actorLabel}.`,
+        category: 'Employees',
+        status: 'Removed',
+        subjectEmployeeId: existing.id,
+        actorEmployeeId: req.user?.employeeId || null,
+        meta: {
+          subjectName: existing.name,
+          actorName: req.user?.name || null,
+          actorRole: req.user?.role || null,
+        },
+      })
+
+      return res.json({ message: 'Admin removed' })
     }
 
     const deleted = await deleteEmployeeById(req.params.id)

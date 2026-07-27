@@ -61,6 +61,22 @@ function formatLeaveRange(startDate, endDate) {
   return formatDisplayRange(startDate, endDate)
 }
 
+/** Snapshot of who should act next — used for notification targeting. */
+function approverMetaFromStep(
+  step,
+  { departmentHeadId = null, requesterEmployeeId = null } = {},
+) {
+  if (!step) return null
+  return {
+    approverKind: step.approverKind,
+    approverRole: step.approverRole || null,
+    approverEmployeeId: step.approverEmployeeId || null,
+    departmentHeadId: departmentHeadId || null,
+    requesterEmployeeId: requesterEmployeeId || null,
+    stepLabel: stepDisplayLabel(step),
+  }
+}
+
 function countLeaveDays(startDate, endDate) {
   const start = new Date(`${startDate}T00:00:00`)
   const end = new Date(`${endDate}T00:00:00`)
@@ -84,6 +100,27 @@ function actorFromRequest(req) {
     actorName: req.user?.name || req.user?.email || 'Unknown',
     actorRole: req.user?.role || 'employee',
   }
+}
+
+/**
+ * Prefer linked employee profile name so multi-admin approvals show who acted.
+ */
+async function resolveActorFromRequest(req) {
+  const base = actorFromRequest(req)
+  const employeeId = base.actorEmployeeId
+  if (!employeeId) return base
+
+  try {
+    const employee = await findEmployeeById(employeeId)
+    const employeeName = String(employee?.name || '').trim()
+    if (employeeName) {
+      return { ...base, actorName: employeeName }
+    }
+  } catch {
+    // Keep login display name / email fallback.
+  }
+
+  return base
 }
 
 function actorCanActOnRequest(request, { role, employeeId, departmentHeadId }) {
@@ -440,9 +477,13 @@ export async function createLeaveRequestHandler(req, res) {
       employeeId: leaveRequest.employeeId,
       departmentHeadId,
     })
+    const currentApproverStep = findStepByOrder(
+      hierarchy.steps,
+      leaveRequest.currentStep,
+    )
 
     const id = await generateNextLeaveRequestId()
-    const actor = actorFromRequest(req)
+    const actor = await resolveActorFromRequest(req)
     const created = await createLeaveRequest({ ...leaveRequest, id })
 
     await createLeaveApprovalHistoryEntry({
@@ -483,6 +524,10 @@ export async function createLeaveRequestHandler(req, res) {
         fromSick: allocation.fromSick || 0,
         fromLop: allocation.fromLop || 0,
         willUseLop: Number(allocation.fromLop || 0) > 0,
+        currentApprover: approverMetaFromStep(currentApproverStep, {
+          departmentHeadId,
+          requesterEmployeeId: created.employeeId,
+        }),
       },
     })
 
@@ -649,7 +694,7 @@ export async function updateLeaveRequestStatusHandler(req, res) {
         }
       } else {
         finalStatus = 'Pending'
-        activityTitle = 'Leave Request Approved'
+        activityTitle = 'Leave Approval Needed'
         activityStatus = 'Pending'
 
         leaveRequest = await updateLeaveRequestStatus(
@@ -667,7 +712,7 @@ export async function updateLeaveRequestStatusHandler(req, res) {
       })
     }
 
-    const actor = actorFromRequest(req)
+    const actor = await resolveActorFromRequest(req)
     await createLeaveApprovalHistoryEntry({
       leaveRequestId: leaveRequest.id,
       step: historyStep,
@@ -687,9 +732,16 @@ export async function updateLeaveRequestStatusHandler(req, res) {
       stepLabel,
     })
     const decisionVerb = historyAction === 'Approved' ? 'approved' : 'rejected'
-    const decisionDescription = remarks
-      ? `${leaveRequest.employeeName}'s ${leaveRequest.leaveType} request (${decisionRange}) was ${decisionVerb} by ${approverLabel}. Remarks: ${remarks}`
-      : `${leaveRequest.employeeName}'s ${leaveRequest.leaveType} request (${decisionRange}) was ${decisionVerb} by ${approverLabel}.`
+    const nextApproverStep =
+      finalStatus === 'Pending'
+        ? findStepByOrder(existing.hierarchySteps, leaveRequest.currentStep)
+        : null
+    const awaitsNext = Boolean(nextApproverStep)
+    const decisionDescription = awaitsNext
+      ? `${leaveRequest.employeeName}'s ${leaveRequest.leaveType} request (${decisionRange}) was ${decisionVerb} by ${approverLabel} and is awaiting ${stepDisplayLabel(nextApproverStep)}.`
+      : remarks
+        ? `${leaveRequest.employeeName}'s ${leaveRequest.leaveType} request (${decisionRange}) was ${decisionVerb} by ${approverLabel}. Remarks: ${remarks}`
+        : `${leaveRequest.employeeName}'s ${leaveRequest.leaveType} request (${decisionRange}) was ${decisionVerb} by ${approverLabel}.`
 
     await createRecentActivity({
       title: activityTitle,
@@ -709,6 +761,11 @@ export async function updateLeaveRequestStatusHandler(req, res) {
         actorName: actor.actorName,
         stepLabel,
         finalStatus,
+        awaitsNext,
+        nextApprover: approverMetaFromStep(nextApproverStep, {
+          departmentHeadId: deptContext.departmentHeadId,
+          requesterEmployeeId: leaveRequest.employeeId,
+        }),
         fromCasual: deductionAllocation?.fromCasual || 0,
         fromSick: deductionAllocation?.fromSick || 0,
         fromLop: deductionAllocation?.fromLop || 0,
@@ -781,7 +838,7 @@ export async function cancelLeaveRequestHandler(req, res) {
       })
     }
 
-    const actor = actorFromRequest(req)
+    const actor = await resolveActorFromRequest(req)
     await createLeaveApprovalHistoryEntry({
       leaveRequestId: leaveRequest.id,
       step: 'Cancel',

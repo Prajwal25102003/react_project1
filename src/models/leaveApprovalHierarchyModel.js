@@ -30,7 +30,6 @@ export const APPROVER_KIND_OPTIONS = [
   { value: "department_head", label: "Team Lead" },
   { value: "hr", label: "HR" },
   { value: "admin", label: "Admin" },
-  { value: "employee", label: "Specific employee" },
 ];
 
 /** Select value for a step (flattens role + approverRole into hr|admin). */
@@ -38,22 +37,18 @@ export function approverTypeSelectValue(step) {
   if (step?.approverKind === "role") {
     return step.approverRole === "admin" ? "admin" : "hr";
   }
-  return step?.approverKind || "hr";
+  if (step?.approverKind === "department_head") return "department_head";
+  return "hr";
 }
 
 /** Apply a flat approver-type select value onto a step. */
 export function applyApproverType(step, value) {
-  const next = { ...step };
+  const next = { ...step, approverEmployeeId: "" };
   if (value === "hr" || value === "admin") {
     next.approverKind = "role";
     next.approverRole = value;
-    next.approverEmployeeId = "";
   } else if (value === "department_head") {
     next.approverKind = "department_head";
-    next.approverRole = "";
-    next.approverEmployeeId = "";
-  } else if (value === "employee") {
-    next.approverKind = "employee";
     next.approverRole = "";
   }
   return next;
@@ -99,7 +94,7 @@ export function mapHierarchy(hierarchy) {
   };
 }
 
-export function formatStepLabel(step, employees = []) {
+export function formatStepLabel(step) {
   if (!step) return "—";
   if (step.approverKind === "department_head") return "Team Lead";
   if (step.approverKind === "role") {
@@ -108,27 +103,29 @@ export function formatStepLabel(step, employees = []) {
     return step.approverRole || "Role";
   }
   if (step.approverKind === "employee") {
-    if (step.approverEmployeeName) return step.approverEmployeeName;
-    const match = (employees || []).find(
-      (employee) => employee.id === step.approverEmployeeId,
-    );
-    return match?.name || step.approverEmployeeId || "Employee";
+    return step.approverEmployeeName || step.approverEmployeeId || "Employee";
   }
   return "—";
 }
 
-export function formatStepsSummary(steps, employees = []) {
+export function formatStepsSummary(steps) {
   if (!steps?.length) return "No steps";
-  return steps.map((step) => formatStepLabel(step, employees)).join(" → ");
+  return steps.map((step) => formatStepLabel(step)).join(" → ");
 }
 
 export function stepsToForm(steps) {
   if (!steps?.length) return [emptyHierarchyStep()];
-  return steps.map((step) => ({
-    approverKind: step.approverKind || "role",
-    approverRole: step.approverRole || "hr",
-    approverEmployeeId: step.approverEmployeeId || "",
-  }));
+  return steps.map((step) => {
+    // Legacy named-employee steps are not editable — default to HR.
+    if (step.approverKind === "employee") {
+      return emptyHierarchyStep();
+    }
+    return {
+      approverKind: step.approverKind || "role",
+      approverRole: step.approverRole || "hr",
+      approverEmployeeId: "",
+    };
+  });
 }
 
 export function validateHierarchyForm({ name, steps }) {
@@ -149,7 +146,7 @@ export function validateHierarchyForm({ name, steps }) {
   steps.forEach((step, index) => {
     const key = `step-${index}`;
     const kind = String(step?.approverKind || "").trim();
-    if (!["department_head", "role", "employee"].includes(kind)) {
+    if (!["department_head", "role"].includes(kind)) {
       fieldErrors[key] = "Select a valid approver type";
       return;
     }
@@ -160,13 +157,6 @@ export function validateHierarchyForm({ name, steps }) {
         return;
       }
       signatures.push(`role:${role}`);
-    } else if (kind === "employee") {
-      const employeeId = String(step?.approverEmployeeId || "").trim();
-      if (!employeeId) {
-        fieldErrors[key] = "Select an employee";
-        return;
-      }
-      signatures.push(`employee:${employeeId}`);
     } else {
       signatures.push("department_head");
     }
@@ -193,19 +183,12 @@ export function toHierarchyPayload({ name, steps }) {
   return {
     name: String(name || "").trim(),
     steps: (steps || []).map((step) => {
-      const kind = step.approverKind;
-      if (kind === "department_head") {
+      if (step.approverKind === "department_head") {
         return { approverKind: "department_head" };
       }
-      if (kind === "role") {
-        return {
-          approverKind: "role",
-          approverRole: step.approverRole,
-        };
-      }
       return {
-        approverKind: "employee",
-        approverEmployeeId: step.approverEmployeeId,
+        approverKind: "role",
+        approverRole: step.approverRole,
       };
     }),
   };

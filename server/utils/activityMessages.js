@@ -1,6 +1,7 @@
 /**
  * Personalize activity/notification copy for the viewing user.
- * Titles stay descriptive; direction (sent/received) is for navigation only.
+ * Titles stay descriptive. Direction (sent/received) labels items for
+ * navigation and banner filtering — lists still show both directions.
  */
 
 import {
@@ -32,15 +33,30 @@ function startsWithViewerName(description, viewerName) {
 }
 
 /**
+ * True when the viewing user performed the action.
+ * Prefer employee id; fall back to meta.actorName for accounts without employeeId (e.g. admin).
+ */
+function isViewerActor(row, viewer = {}) {
+  const viewerId = viewer.employeeId || null
+  const actorId = row.actorEmployeeId || null
+  if (sameId(viewerId, actorId)) return true
+
+  const meta = parseMeta(row.meta)
+  const actorName = String(meta.actorName || '').trim().toLowerCase()
+  const viewerName = String(viewer.name || '').trim().toLowerCase()
+  return Boolean(actorName && viewerName && actorName === viewerName)
+}
+
+/**
  * @returns {'sent' | 'received' | null}
  */
 export function resolveActivityDirection(row, viewer = {}) {
   const viewerId = viewer.employeeId || null
   const eventType = row.eventType || ''
   const subjectId = row.subjectEmployeeId || null
-  const actorId = row.actorEmployeeId || null
   const isSubject = sameId(viewerId, subjectId)
-  const isActor = sameId(viewerId, actorId)
+  const isActor = isViewerActor(row, viewer)
+  const meta = parseMeta(row.meta)
   const isPersonalSelf =
     row.audience === 'self' ||
     (String(row.id || '').startsWith('leave-') && sameId(viewerId, subjectId)) ||
@@ -53,10 +69,35 @@ export function resolveActivityDirection(row, viewer = {}) {
       eventType === 'leave.auto_approved'
     ) {
       if (isSubject || isActor) return 'sent'
+      // Banner only for the current approver when meta is present.
+      if (eventType === 'leave.submitted') {
+        if (meta.currentApprover) {
+          return viewerMatchesApproverStep(meta.currentApprover, viewer)
+            ? 'received'
+            : null
+        }
+        return 'received'
+      }
       return 'received'
     }
     if (eventType.includes('approved') || eventType.includes('rejected')) {
       if (isActor) return 'sent'
+      const awaitsNext =
+        Boolean(meta.awaitsNext) || meta.finalStatus === 'Pending'
+      if (awaitsNext && eventType.includes('approved')) {
+        if (meta.nextApprover) {
+          if (viewerMatchesApproverStep(meta.nextApprover, viewer)) {
+            return 'received'
+          }
+          if (isSubject) return 'received'
+          return null
+        }
+        // Legacy mid-chain rows (before nextApprover meta): HR/Admin still receive.
+        if (isSubject || viewer.role === 'hr' || viewer.role === 'admin') {
+          return 'received'
+        }
+        return null
+      }
       return 'received'
     }
   }
@@ -159,8 +200,31 @@ function leaveAllocationNote(
     : ` On approval this will use ${parts.join(', ')}.`
 }
 
+function viewerMatchesApproverStep(stepMeta, viewer = {}) {
+  if (!stepMeta?.approverKind) return false
+  if (stepMeta.approverKind === 'role') {
+    return Boolean(
+      stepMeta.approverRole && viewer.role === stepMeta.approverRole,
+    )
+  }
+  if (stepMeta.approverKind === 'employee') {
+    return sameId(viewer.employeeId, stepMeta.approverEmployeeId)
+  }
+  if (stepMeta.approverKind === 'department_head') {
+    return Boolean(
+      viewer.employeeId &&
+        stepMeta.departmentHeadId &&
+        sameId(viewer.employeeId, stepMeta.departmentHeadId) &&
+        !sameId(viewer.employeeId, stepMeta.requesterEmployeeId),
+    )
+  }
+  return false
+}
+
 function leaveSubmittedCopy({
   isSubject,
+  isCurrentApprover,
+  currentStepLabel,
   subjectName,
   leaveType,
   range,
@@ -176,9 +240,16 @@ function leaveSubmittedCopy({
       description: `Your ${leaveType} request${period} has been submitted for approval.${allocation}`,
     }
   }
+  if (isCurrentApprover) {
+    return {
+      title: 'Leave Approval Needed',
+      description: `${leaveType} request from ${subjectName}${period} is awaiting your review.${allocation}`,
+    }
+  }
+  const awaiting = currentStepLabel ? ` awaiting ${currentStepLabel}` : ' for approval'
   return {
     title: 'Leave Request Submitted',
-    description: `${leaveType} request from ${subjectName}${period} is awaiting your review.${allocation}`,
+    description: `${leaveType} request from ${subjectName}${period} was submitted and is${awaiting}.${allocation}`,
   }
 }
 
@@ -213,6 +284,8 @@ function leaveAutoApprovedCopy({ isSubject, subjectName, leaveType, range }) {
 function leaveDecisionCopy({
   isActor,
   isSubject,
+  isNextApprover,
+  nextStepLabel,
   subjectName,
   leaveType,
   range,
@@ -221,12 +294,12 @@ function leaveDecisionCopy({
   actorName,
   stepLabel,
   approved,
+  awaitsNext,
   fromCasual = 0,
   fromSick = 0,
   fromLop = 0,
 }) {
   const outcome = approved ? 'approved' : 'rejected'
-  const title = approved ? 'Leave Request Approved' : 'Leave Request Rejected'
   const period = range ? ` for ${range}` : ''
   const hasApprover = Boolean(actorRole || actorName || stepLabel)
   const byLabel = hasApprover
@@ -238,12 +311,42 @@ function leaveDecisionCopy({
     : ''
   const byClause = byLabel ? ` by ${byLabel}` : ''
   const remarkSuffix = remarks ? ` Remarks: ${remarks}` : ''
-  const allocation = approved
-    ? leaveAllocationNote(
-        { fromCasual, fromSick, fromLop },
-        { past: true },
-      )
-    : ''
+  const nextLabel = nextStepLabel || 'the next approver'
+  const allocation =
+    approved && !awaitsNext
+      ? leaveAllocationNote(
+          { fromCasual, fromSick, fromLop },
+          { past: true },
+        )
+      : ''
+
+  // Mid-chain: previous step approved, now waiting on the next approver.
+  if (approved && awaitsNext) {
+    if (isNextApprover) {
+      return {
+        title: 'Leave Approval Needed',
+        description: `${leaveType} request from ${subjectName}${period} is awaiting your review after approval${byClause}.${remarkSuffix}`,
+      }
+    }
+    if (isActor) {
+      return {
+        title: 'Leave Request Forwarded',
+        description: `You approved the ${leaveType} request from ${subjectName}${period}. It is now awaiting ${nextLabel}.${remarkSuffix}`,
+      }
+    }
+    if (isSubject) {
+      return {
+        title: 'Leave Request In Progress',
+        description: `Your ${leaveType} request${period} was approved${byClause} and is now awaiting ${nextLabel}.${remarkSuffix}`,
+      }
+    }
+    return {
+      title: 'Leave Request In Progress',
+      description: `${leaveType} request from ${subjectName}${period} was approved${byClause} and is awaiting ${nextLabel}.${remarkSuffix}`,
+    }
+  }
+
+  const title = approved ? 'Leave Request Approved' : 'Leave Request Rejected'
 
   if (isActor) {
     return {
@@ -354,10 +457,15 @@ export function personalizeActivityMessage(row, viewer = {}) {
   const meta = parseMeta(row.meta)
   const viewerId = viewer.employeeId || null
   const subjectId = row.subjectEmployeeId || null
-  const actorId = row.actorEmployeeId || null
   const isSubject = sameId(viewerId, subjectId)
-  const isActor = sameId(viewerId, actorId)
+  const isActor = isViewerActor(row, viewer)
   const direction = resolveActivityDirection(row, viewer)
+  const isCurrentApprover = viewerMatchesApproverStep(
+    meta.currentApprover,
+    viewer,
+  )
+  const isNextApprover = viewerMatchesApproverStep(meta.nextApprover, viewer)
+  const awaitsNext = Boolean(meta.awaitsNext) || meta.finalStatus === 'Pending'
 
   const subjectName = meta.subjectName || 'Employee'
   const leaveType = meta.leaveType || 'Leave'
@@ -366,6 +474,10 @@ export function personalizeActivityMessage(row, viewer = {}) {
   const actorRole = meta.actorRole || row.actorRole || ''
   const actorName = meta.actorName || ''
   const stepLabel = meta.stepLabel || ''
+  const currentStepLabel =
+    meta.currentApprover?.stepLabel || meta.currentStepLabel || ''
+  const nextStepLabel =
+    meta.nextApprover?.stepLabel || meta.nextStepLabel || ''
 
   let title = row.title || ''
   let description = row.description || ''
@@ -373,6 +485,8 @@ export function personalizeActivityMessage(row, viewer = {}) {
   if (eventType === 'leave.submitted' && range) {
     ;({ title, description } = leaveSubmittedCopy({
       isSubject: isSubject || isActor,
+      isCurrentApprover,
+      currentStepLabel,
       subjectName,
       leaveType,
       range,
@@ -401,6 +515,8 @@ export function personalizeActivityMessage(row, viewer = {}) {
     ;({ title, description } = leaveDecisionCopy({
       isActor,
       isSubject,
+      isNextApprover,
+      nextStepLabel,
       subjectName,
       leaveType,
       range,
@@ -409,6 +525,7 @@ export function personalizeActivityMessage(row, viewer = {}) {
       actorName,
       stepLabel,
       approved: eventType === 'leave.approved',
+      awaitsNext: eventType === 'leave.approved' && awaitsNext,
       fromCasual: meta.fromCasual || 0,
       fromSick: meta.fromSick || 0,
       fromLop: meta.fromLop || 0,

@@ -29,9 +29,8 @@ function EmployeeViewModal({ employee, onClose }) {
       onClose={onClose}
       title="Employee Details"
       description={`${employee.id || "Employee"}${employee.name ? ` · ${employee.name}` : ""}`}
-      panelClassName="relative mx-auto w-full min-w-0 max-w-[min(720px,calc(100vw-2.5rem))] rounded-3xl bg-white p-5 lg:p-8"
     >
-      <div className="no-scrollbar max-h-[min(70vh,640px)] space-y-4 overflow-y-auto px-1">
+      <div className="no-scrollbar max-h-[min(58vh,520px)] space-y-4 overflow-y-auto px-1">
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
           <UserAvatar src={employee.avatar} name={employee.name || ""} size="lg" />
           <div className="min-w-0">
@@ -52,14 +51,24 @@ function EmployeeViewModal({ employee, onClose }) {
 
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           <DetailItem label="Employee ID">{employee.id || "—"}</DetailItem>
-          <DetailItem label="Email">{employee.email || "—"}</DetailItem>
-          <DetailItem label="Phone">{employee.phone || "—"}</DetailItem>
-          <DetailItem label="Gender">{employee.gender || "—"}</DetailItem>
-          <DetailItem label="Department">
-            {isAdminAccount ? "—" : employee.department || "—"}
-          </DetailItem>
-          <DetailItem label="Designation">{employee.designation || "—"}</DetailItem>
-          <DetailItem label="Joining Date">{employee.joiningDate || "—"}</DetailItem>
+          <DetailItem label="Email">{employee.loginEmail || employee.email || "—"}</DetailItem>
+          {isAdminAccount ? (
+            <DetailItem label="Role">Admin</DetailItem>
+          ) : (
+            <>
+              <DetailItem label="Phone">{employee.phone || "—"}</DetailItem>
+              <DetailItem label="Gender">{employee.gender || "—"}</DetailItem>
+              <DetailItem label="Department">
+                {employee.department || "—"}
+              </DetailItem>
+              <DetailItem label="Designation">
+                {employee.designation || "—"}
+              </DetailItem>
+              <DetailItem label="Joining Date">
+                {employee.joiningDate || "—"}
+              </DetailItem>
+            </>
+          )}
           <DetailItem label="Status">
             <StatusPill
               label={employee.status}

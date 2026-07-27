@@ -69,6 +69,18 @@ export async function findUserByEmployeeId(employeeId) {
   return mapUser(result.rows[0])
 }
 
+export async function findUsersByEmployeeId(employeeId) {
+  if (!employeeId) return []
+  const result = await query(
+    `SELECT id, email, password_hash, role, employee_id, name
+     FROM users
+     WHERE employee_id = $1
+     ORDER BY id ASC`,
+    [employeeId],
+  )
+  return result.rows.map(mapUser)
+}
+
 /**
  * Create a login account linked to an employee directory row.
  * Pass an optional `client` to run inside an existing transaction.
@@ -92,32 +104,99 @@ export async function createEmployeeUser(
  * Update login email / password / display name for an employee-linked user.
  * Only provided fields are updated. Admin role is never downgraded.
  * Password hash is unchanged when passwordHash is omitted.
+ * When role is provided, every non-admin login linked to this employee is updated
+ * so duplicate emails (e.g. hr@… and name@…) stay in sync.
  */
 export async function updateEmployeeUserCredentials(
   employeeId,
   { email, name, passwordHash, role },
 ) {
-  const existing = await findUserByEmployeeId(employeeId)
-  if (!existing) return null
+  const linked = await findUsersByEmployeeId(employeeId)
+  if (linked.length === 0) return null
 
-  const nextEmail = email !== undefined ? email : existing.email
-  const nextName = name !== undefined ? name : existing.name
+  const primary =
+    linked.find((user) => user.role === 'admin') ||
+    linked.find((user) => user.role === 'hr') ||
+    linked[0]
+
+  const nextEmail = email !== undefined ? email : primary.email
+  const nextName = name !== undefined ? name : primary.name
   const nextHash =
-    passwordHash !== undefined ? passwordHash : existing.passwordHash
+    passwordHash !== undefined ? passwordHash : primary.passwordHash
 
-  let nextRole = existing.role
-  if (role !== undefined && existing.role !== 'admin') {
+  let nextRole = primary.role
+  if (role !== undefined && primary.role !== 'admin') {
     nextRole = role === 'hr' ? 'hr' : 'employee'
   }
 
+  // Primary account: full credential update.
   const result = await query(
     `UPDATE users
      SET email = $2, name = $3, password_hash = $4, role = $5
      WHERE id = $1
      RETURNING id, email, password_hash, role, employee_id, name`,
-    [existing.id, nextEmail, nextName, nextHash, nextRole],
+    [primary.id, nextEmail, nextName, nextHash, nextRole],
   )
+
+  // Keep duplicate logins for the same employee on the same role.
+  if (role !== undefined) {
+    for (const user of linked) {
+      if (user.id === primary.id || user.role === 'admin') continue
+      await query(
+        `UPDATE users
+         SET role = $2, name = COALESCE($3, name)
+         WHERE id = $1`,
+        [user.id, nextRole, name !== undefined ? nextName : null],
+      )
+    }
+  }
+
   return mapUser(result.rows[0])
+}
+
+/**
+ * Recompute and persist the correct employee/hr role for one login account
+ * (and sibling logins linked to the same employee). Admin accounts unchanged.
+ */
+export async function syncUserLoginRole(user) {
+  if (!user?.id || !user.employeeId || user.role === 'admin') {
+    return user
+  }
+
+  const result = await query(
+    `SELECT
+       e.id AS "employeeId",
+       d.name AS "departmentName",
+       d.head_employee_id AS "headEmployeeId"
+     FROM employees e
+     LEFT JOIN departments d ON d.id = e.department_id
+     WHERE e.id = $1`,
+    [user.employeeId],
+  )
+  const row = result.rows[0]
+  if (!row) return user
+
+  const nextRole = loginRoleForEmployee({
+    departmentName: row.departmentName,
+    employeeId: row.employeeId,
+    headEmployeeId: row.headEmployeeId,
+  })
+
+  if (user.role === nextRole) {
+    // Still sync sibling duplicate accounts that may be out of date.
+    const siblings = await findUsersByEmployeeId(user.employeeId)
+    for (const sibling of siblings) {
+      if (sibling.role === 'admin' || sibling.role === nextRole) continue
+      await query(`UPDATE users SET role = $2 WHERE id = $1`, [
+        sibling.id,
+        nextRole,
+      ])
+    }
+    return user.role === nextRole ? user : { ...user, role: nextRole }
+  }
+
+  await updateEmployeeUserCredentials(user.employeeId, { role: nextRole })
+  return { ...user, role: nextRole }
 }
 
 /**

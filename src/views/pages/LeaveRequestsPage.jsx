@@ -46,6 +46,7 @@ function LeaveRequestsPage() {
     filterDefs,
     canRequestLeave,
     isAdmin,
+    isHr,
     isDepartmentHead,
     decisionTarget,
     decisionStatus,
@@ -77,7 +78,7 @@ function LeaveRequestsPage() {
     : listScope === "mine"
       ? "No personal leave requests found."
       : listScope === "employees"
-        ? isDepartmentHead
+        ? isDepartmentHead && !isHr
           ? "No team leave requests found."
           : "No employee leave requests found."
         : "No leave requests found.";
@@ -87,16 +88,18 @@ function LeaveRequestsPage() {
     : listScope === "mine"
       ? "Search my leave requests…"
       : listScope === "employees"
-        ? isDepartmentHead
+        ? isDepartmentHead && !isHr
           ? "Search team leave requests…"
           : "Search employee leave requests…"
         : "Search leave requests…";
 
   const pageName = isAdmin
     ? "HR Leave Approvals"
-    : isDepartmentHead
-      ? "Leave Approvals"
-      : "Leave Requests";
+    : isHr
+      ? "Leave Requests"
+      : isDepartmentHead
+        ? "Leave Approvals"
+        : "Leave Requests";
 
   return (
     <>

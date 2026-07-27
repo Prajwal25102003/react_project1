@@ -22,7 +22,6 @@ function LeaveCancelModal({
       onClose={onClose}
       title="Cancel Leave Request"
       description={`Cancel ${request.leaveType} for ${request.employeeId} (${request.startDate} to ${request.endDate}).`}
-      panelClassName="relative w-full max-w-[500px] rounded-3xl bg-white p-4 lg:p-11"
     >
       <form
         className="space-y-5 px-2"

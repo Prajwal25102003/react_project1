@@ -47,10 +47,7 @@ function LeaveViewModal({ request, direction = null, onClose }) {
     direction === "sent" ? "Sent" : direction === "received" ? "Received" : null;
 
   return (
-    <ModalShell
-      onClose={onClose}
-      panelClassName="relative mx-auto w-full min-w-0 max-w-[min(720px,calc(100vw-2.5rem))] rounded-3xl bg-white p-5 lg:p-8"
-    >
+    <ModalShell onClose={onClose}>
       <div className="mb-5 pr-10 sm:mb-6 lg:mb-7">
         <div className="min-w-0 px-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -79,7 +76,7 @@ function LeaveViewModal({ request, direction = null, onClose }) {
         </div>
       </div>
 
-      <div className="no-scrollbar max-h-[min(70vh,640px)] space-y-4 overflow-y-auto px-1">
+      <div className="no-scrollbar max-h-[min(58vh,520px)] space-y-4 overflow-y-auto px-1">
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           <DetailItem label="Employee ID">{request.employeeId || "—"}</DetailItem>
           <DetailItem label="Leave Type">{request.leaveType || "—"}</DetailItem>
