@@ -93,7 +93,9 @@ function DepartmentFormPage() {
                 </div>
 
                 <div>
-                  <label className={LABEL_CLASS}>Department Head</label>
+                  <label className={LABEL_CLASS}>
+                    Department Head (Team Lead / HR)
+                  </label>
                   {isEdit ? (
                     <>
                       <SelectField
@@ -108,7 +110,8 @@ function DepartmentFormPage() {
                       />
                       <p className="mt-1.5 text-theme-xs text-gray-500">
                         Only employees in this department can be selected as
-                        head.
+                        head. Non-HR heads become Team Leads; the Human
+                        Resources head becomes HR.
                         {candidates.length === 0
                           ? " Add employees to this department first."
                           : ""}

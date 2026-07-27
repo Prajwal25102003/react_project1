@@ -121,6 +121,14 @@ export function previewLeaveDeduction(balances, leaveType, leaveDays) {
   if (fromCasual) parts.push(`${fromCasual} casual`);
   if (fromLop) parts.push(`${fromLop} LOP (loss of pay)`);
 
+  let summary = "No paid leave will be deducted.";
+  if (fromLop && !fromCasual && !fromSick) {
+    summary =
+      "Paid leave balance is insufficient. This request will be applied as Loss of Pay (LOP) on approval.";
+  } else if (parts.length > 0) {
+    summary = `On approval this will use: ${parts.join(", ")}.`;
+  }
+
   return {
     ...current,
     after: {
@@ -132,9 +140,6 @@ export function previewLeaveDeduction(balances, leaveType, leaveDays) {
     fromCasual,
     fromLop,
     willUseLop: fromLop > 0,
-    summary:
-      parts.length > 0
-        ? `On approval this will use: ${parts.join(", ")}.`
-        : "No paid leave will be deducted.",
+    summary,
   };
 }

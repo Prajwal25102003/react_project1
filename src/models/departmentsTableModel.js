@@ -25,7 +25,7 @@ export const DEPARTMENT_COLUMNS = [
   },
   {
     id: "head",
-    header: "Department Head",
+    header: "Head (TL / HR)",
     accessor: "head",
     type: "text",
     sortable: true,

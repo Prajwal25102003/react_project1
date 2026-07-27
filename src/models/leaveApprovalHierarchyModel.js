@@ -8,26 +8,26 @@ export const HIERARCHY_CATEGORIES = [
 
 export const CATEGORY_LABELS = {
   employee: "Employee Leave",
-  department_head: "Department Head Leave",
+  department_head: "Team Lead Leave",
   hr: "HR Leave",
 };
 
 export const CATEGORY_APPLIES_TO = {
   employee: "Employees",
-  department_head: "Department heads(TL)",
+  department_head: "Team leads (non-HR department heads)",
   hr: "Human Resources department head only",
 };
 
 export const CATEGORY_DESCRIPTIONS = {
-  employee: "Everyone who is not a department head uses this chain.",
+  employee: "Everyone who is not a department head / team lead uses this chain.",
   department_head:
-    "Department heads outside Human Resources. The HR department head uses HR leave instead.",
-  hr: "Only the single Human Resources department head. Other HR staff are employees.",
+    "Team leads — department heads outside Human Resources. The HR department head uses HR leave instead.",
+  hr: "Only the Human Resources department head (HR). Other HR staff are employees.",
 };
 
 /** Form select values — HR/Admin map to backend `role` + `approverRole`. */
 export const APPROVER_KIND_OPTIONS = [
-  { value: "department_head", label: "Department Head" },
+  { value: "department_head", label: "Team Lead" },
   { value: "hr", label: "HR" },
   { value: "admin", label: "Admin" },
   { value: "employee", label: "Specific employee" },
@@ -101,7 +101,7 @@ export function mapHierarchy(hierarchy) {
 
 export function formatStepLabel(step, employees = []) {
   if (!step) return "—";
-  if (step.approverKind === "department_head") return "Department Head";
+  if (step.approverKind === "department_head") return "Team Lead";
   if (step.approverKind === "role") {
     if (step.approverRole === "hr") return "HR";
     if (step.approverRole === "admin") return "Admin";

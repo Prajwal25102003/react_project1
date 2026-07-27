@@ -47,6 +47,8 @@ export function mapActivityRows(rows, viewer = null) {
       eventType: row.eventType || null,
       leaveRequestId:
         meta?.leaveRequestId || leaveIdFromActivityId(row.id) || null,
+      fromLop: Number(meta?.fromLop || 0) || 0,
+      willUseLop: Boolean(meta?.willUseLop) || Number(meta?.fromLop || 0) > 0,
     }
   })
 }

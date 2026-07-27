@@ -32,14 +32,27 @@ function PeriodTabs({ value, onChange }) {
   );
 }
 
-function EmployeeDashboard({ primaryMetrics, secondaryMetrics, chartTwo, activities }) {
+function EmployeeDashboard({
+  primaryMetrics,
+  secondaryMetrics,
+  chartTwo,
+  activities,
+  unreadMessages,
+  onDismissMessage,
+}) {
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-800">My Dashboard</h2>
-        <p className="mt-0.5 text-theme-sm text-gray-500">
-          Your attendance and leave at a glance
-        </p>
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 shrink-0">
+          <h2 className="text-xl font-semibold text-gray-800">My Dashboard</h2>
+          <p className="mt-0.5 text-theme-sm text-gray-500">
+            Your attendance and leave at a glance
+          </p>
+        </div>
+        <DashboardNotifications
+          messages={unreadMessages}
+          onDismiss={onDismissMessage}
+        />
       </div>
 
       <MetricCards metrics={primaryMetrics} columns={3} />
@@ -158,6 +171,8 @@ function DashboardPage() {
         secondaryMetrics={dashboard.secondaryMetrics}
         chartTwo={dashboard.chartTwo}
         activities={dashboard.activities}
+        unreadMessages={dashboard.unreadMessages}
+        onDismissMessage={dashboard.dismissUnreadMessage}
       />
     );
   }

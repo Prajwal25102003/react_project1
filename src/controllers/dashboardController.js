@@ -74,16 +74,14 @@ export function useDashboard() {
         );
 
         let nextDashboard = dashboard;
-        if (dashboard.variant === "org") {
-          try {
-            const items = withNotificationSeenState(
-              await fetchNotifications(),
-              seenUserKey,
-            );
-            nextDashboard = withOrgUnreadMessagesMetric(dashboard, items);
-          } catch {
-            nextDashboard = withOrgUnreadMessagesMetric(dashboard, []);
-          }
+        try {
+          const items = withNotificationSeenState(
+            await fetchNotifications(),
+            seenUserKey,
+          );
+          nextDashboard = withOrgUnreadMessagesMetric(dashboard, items);
+        } catch {
+          nextDashboard = withOrgUnreadMessagesMetric(dashboard, []);
         }
 
         setData((current) => {
@@ -97,12 +95,17 @@ export function useDashboard() {
             };
           }
 
+          if (metricsOnly) {
+            return {
+              ...current,
+              unreadMessages: nextDashboard.unreadMessages,
+            };
+          }
+
           return {
             ...nextDashboard,
-            activities: metricsOnly ? current.activities : activities,
-            departments: metricsOnly
-              ? current.departments
-              : nextDashboard.departments,
+            activities: activities,
+            departments: nextDashboard.departments,
           };
         });
         hasLoadedRef.current = true;
