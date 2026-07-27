@@ -15,7 +15,11 @@ import {
 } from '../models/leaveRequestsModel.js'
 import { findEmployeeById } from '../models/employeesModel.js'
 import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
-import { deductEmployeeLeaveBalances } from '../models/leaveBalancesModel.js'
+import {
+  computeLeaveDeduction,
+  deductEmployeeLeaveBalances,
+  getEmployeeLeaveBalances,
+} from '../models/leaveBalancesModel.js'
 import {
   actorMatchesStep,
   findActiveHierarchyByCategory,
@@ -451,6 +455,15 @@ export async function createLeaveRequestHandler(req, res) {
     })
 
     const submitRange = formatLeaveRange(created.startDate, created.endDate)
+    const balances = await getEmployeeLeaveBalances(created.employeeId)
+    const allocation = balances
+      ? computeLeaveDeduction(
+          balances,
+          created.leaveType,
+          created.leaveDays,
+        )
+      : { fromCasual: 0, fromSick: 0, fromLop: 0 }
+
     await createRecentActivity({
       title: 'Leave Request Submitted',
       description: `${created.employeeName} submitted a ${created.leaveType} request (${submitRange}).`,
@@ -466,6 +479,10 @@ export async function createLeaveRequestHandler(req, res) {
         range: submitRange,
         actorName: actor.actorName,
         actorRole: actor.actorRole,
+        fromCasual: allocation.fromCasual || 0,
+        fromSick: allocation.fromSick || 0,
+        fromLop: allocation.fromLop || 0,
+        willUseLop: Number(allocation.fromLop || 0) > 0,
       },
     })
 
@@ -576,6 +593,7 @@ export async function updateLeaveRequestStatusHandler(req, res) {
     let historyAction = ''
     let activityStatus = status
     let finalStatus = status
+    let deductionAllocation = null
 
     if (isReject) {
       finalStatus = 'Rejected'
@@ -616,7 +634,7 @@ export async function updateLeaveRequestStatusHandler(req, res) {
               message: 'Leave request status could not be updated',
             })
           }
-          await deductEmployeeLeaveBalances(
+          deductionAllocation = await deductEmployeeLeaveBalances(
             leaveRequest.employeeId,
             leaveRequest.leaveType,
             leaveRequest.leaveDays,
@@ -691,6 +709,10 @@ export async function updateLeaveRequestStatusHandler(req, res) {
         actorName: actor.actorName,
         stepLabel,
         finalStatus,
+        fromCasual: deductionAllocation?.fromCasual || 0,
+        fromSick: deductionAllocation?.fromSick || 0,
+        fromLop: deductionAllocation?.fromLop || 0,
+        willUseLop: Number(deductionAllocation?.fromLop || 0) > 0,
       },
     })
 

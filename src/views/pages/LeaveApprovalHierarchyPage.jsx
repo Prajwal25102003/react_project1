@@ -32,7 +32,7 @@ function LeaveApprovalHierarchyPage() {
       <ListPageShell
         pageName="Leave Approval Hierarchy"
         title="Approval chains"
-        subtitle="HR leave applies only to the Human Resources department head. Everyone else uses the employee or department-head chains."
+        subtitle="Human Resources head = HR. Other department heads = Team Leads. Everyone else uses the employee chain."
         loading={loading}
         error={error}
         loadingLabel="Loading leave hierarchies…"

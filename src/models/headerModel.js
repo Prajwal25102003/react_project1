@@ -112,6 +112,8 @@ export function mapNotifications(notifications) {
       audience: notification.audience || null,
       direction: notification.direction || null,
       leaveRequestId: notification.leaveRequestId || null,
+      fromLop: Number(notification.fromLop || 0) || 0,
+      willUseLop: Boolean(notification.willUseLop),
       statusClass: getStatusClass(
         NOTIFICATION_STATUS,
         notification.status,

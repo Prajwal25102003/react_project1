@@ -1,3 +1,5 @@
+import { bannerNotificationTitle } from "../../models/dashboardModel.js";
+
 const STACK_DEPTH = 3;
 const PEEK_PX = 4;
 const CARD_H = 44; // h-11
@@ -72,7 +74,7 @@ function DashboardNotifications({ messages = [], onDismiss }) {
               {isFront ? (
                 <>
                   <p className="min-w-0 flex-1 truncate text-theme-sm font-medium">
-                    {message.title || "Notification"}
+                    {bannerNotificationTitle(message)}
                     {message.description ? (
                       <span className="font-normal opacity-80">
                         {" "}
@@ -101,7 +103,9 @@ function DashboardNotifications({ messages = [], onDismiss }) {
                   </button>
                 </>
               ) : (
-                <span className="sr-only">{message.title || "Notification"}</span>
+                <span className="sr-only">
+                  {bannerNotificationTitle(message)}
+                </span>
               )}
             </div>
           </div>

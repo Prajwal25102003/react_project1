@@ -1,3 +1,4 @@
+import { bannerNotificationTitle } from "../../models/dashboardModel.js";
 import ModalShell from "../components/ModalShell.jsx";
 import StatusPill from "../components/StatusPill.jsx";
 
@@ -33,7 +34,7 @@ function UnreadMessagesModal({ open, messages, onClose, onMessageClick }) {
                 >
                   <div className="min-w-0">
                     <p className="text-theme-sm font-medium text-gray-800">
-                      {message.title || "Notification"}
+                      {bannerNotificationTitle(message)}
                     </p>
                     {message.description ? (
                       <p className="mt-1 text-theme-xs text-gray-500">

@@ -61,6 +61,9 @@ export function resolveActivityDirection(row, viewer = {}) {
     }
   }
 
+  // Sender / actor of any action — never treat as a received banner notification.
+  if (isActor) return 'sent'
+
   if (eventType === 'attendance.marked') {
     return 'received'
   }
@@ -109,45 +112,101 @@ export function resolveActivityDirection(row, viewer = {}) {
     }
   }
 
+  // Org / module events the viewer did not perform → received.
+  const category = String(row.category || '')
+  if (
+    eventType ||
+    category === 'Holidays' ||
+    category === 'Employees' ||
+    category === 'Departments' ||
+    category === 'Attendance' ||
+    category === 'Leave'
+  ) {
+    return 'received'
+  }
+
   return null
 }
 
-function leaveSubmittedCopy({ isSubject, subjectName, leaveType, range }) {
+function formatDayCount(value) {
+  const n = Math.round(Number(value) * 10) / 10
+  if (!n) return ''
+  return `${n} ${n === 1 ? 'day' : 'days'}`
+}
+
+/** Professional note about paid leave vs LOP allocation. */
+function leaveAllocationNote(
+  { fromCasual = 0, fromSick = 0, fromLop = 0 } = {},
+  { past = false } = {},
+) {
+  const casual = Number(fromCasual) || 0
+  const sick = Number(fromSick) || 0
+  const lop = Number(fromLop) || 0
+  if (!casual && !sick && !lop) return ''
+
+  if (lop && !casual && !sick) {
+    return past
+      ? ' This leave was applied as Loss of Pay (LOP) because paid leave balance was insufficient.'
+      : ' This request will be applied as Loss of Pay (LOP) because paid leave balance is insufficient.'
+  }
+
+  const parts = []
+  if (casual) parts.push(`${formatDayCount(casual)} casual`)
+  if (sick) parts.push(`${formatDayCount(sick)} sick`)
+  if (lop) parts.push(`${formatDayCount(lop)} LOP`)
+  return past
+    ? ` Balance used: ${parts.join(', ')}.`
+    : ` On approval this will use ${parts.join(', ')}.`
+}
+
+function leaveSubmittedCopy({
+  isSubject,
+  subjectName,
+  leaveType,
+  range,
+  fromCasual = 0,
+  fromSick = 0,
+  fromLop = 0,
+}) {
+  const period = range ? ` for ${range}` : ''
+  const allocation = leaveAllocationNote({ fromCasual, fromSick, fromLop })
   if (isSubject) {
     return {
       title: 'Leave Request Submitted',
-      description: `You submitted a ${leaveType} request (${range}).`,
+      description: `Your ${leaveType} request${period} has been submitted for approval.${allocation}`,
     }
   }
   return {
     title: 'Leave Request Submitted',
-    description: `${subjectName} submitted a ${leaveType} request (${range}).`,
+    description: `${leaveType} request from ${subjectName}${period} is awaiting your review.${allocation}`,
   }
 }
 
 function leaveCancelledCopy({ isSubject, subjectName, leaveType, range }) {
+  const period = range ? ` for ${range}` : ''
   if (isSubject) {
     return {
       title: 'Leave Request Cancelled',
-      description: `You cancelled your ${leaveType} request (${range}).`,
+      description: `You cancelled your ${leaveType} request${period}.`,
     }
   }
   return {
     title: 'Leave Request Cancelled',
-    description: `${subjectName} cancelled a ${leaveType} request (${range}).`,
+    description: `${leaveType} request from ${subjectName}${period} has been cancelled.`,
   }
 }
 
 function leaveAutoApprovedCopy({ isSubject, subjectName, leaveType, range }) {
+  const period = range ? ` for ${range}` : ''
   if (isSubject) {
     return {
       title: 'Leave Request Auto-Approved',
-      description: `Your ${leaveType} request (${range}) was approved automatically by the system.`,
+      description: `Your ${leaveType} request${period} was approved automatically.`,
     }
   }
   return {
     title: 'Leave Request Auto-Approved',
-    description: `${subjectName}'s ${leaveType} request (${range}) was approved automatically by the system.`,
+    description: `${leaveType} request from ${subjectName}${period} was approved automatically.`,
   }
 }
 
@@ -162,9 +221,13 @@ function leaveDecisionCopy({
   actorName,
   stepLabel,
   approved,
+  fromCasual = 0,
+  fromSick = 0,
+  fromLop = 0,
 }) {
-  const verb = approved ? 'approved' : 'rejected'
+  const outcome = approved ? 'approved' : 'rejected'
   const title = approved ? 'Leave Request Approved' : 'Leave Request Rejected'
+  const period = range ? ` for ${range}` : ''
   const hasApprover = Boolean(actorRole || actorName || stepLabel)
   const byLabel = hasApprover
     ? formatApproverLabel({
@@ -175,24 +238,30 @@ function leaveDecisionCopy({
     : ''
   const byClause = byLabel ? ` by ${byLabel}` : ''
   const remarkSuffix = remarks ? ` Remarks: ${remarks}` : ''
+  const allocation = approved
+    ? leaveAllocationNote(
+        { fromCasual, fromSick, fromLop },
+        { past: true },
+      )
+    : ''
 
   if (isActor) {
     return {
       title,
-      description: `You ${verb} ${subjectName}'s ${leaveType} request (${range}).${remarkSuffix}`,
+      description: `You ${outcome} the ${leaveType} request from ${subjectName}${period}.${remarkSuffix}${allocation}`,
     }
   }
 
   if (isSubject) {
     return {
       title,
-      description: `Your ${leaveType} request (${range}) has been ${verb}${byClause}.${remarkSuffix}`,
+      description: `Your ${leaveType} request${period} has been ${outcome}${byClause}.${remarkSuffix}${allocation}`,
     }
   }
 
   return {
     title,
-    description: `${subjectName}'s ${leaveType} request (${range}) was ${verb}${byClause}.${remarkSuffix}`,
+    description: `${leaveType} request from ${subjectName}${period} has been ${outcome}${byClause}.${remarkSuffix}${allocation}`,
   }
 }
 
@@ -307,6 +376,9 @@ export function personalizeActivityMessage(row, viewer = {}) {
       subjectName,
       leaveType,
       range,
+      fromCasual: meta.fromCasual || 0,
+      fromSick: meta.fromSick || 0,
+      fromLop: meta.fromLop || 0,
     }))
   } else if (eventType === 'leave.cancelled' && range) {
     ;({ title, description } = leaveCancelledCopy({
@@ -337,6 +409,9 @@ export function personalizeActivityMessage(row, viewer = {}) {
       actorName,
       stepLabel,
       approved: eventType === 'leave.approved',
+      fromCasual: meta.fromCasual || 0,
+      fromSick: meta.fromSick || 0,
+      fromLop: meta.fromLop || 0,
     }))
   } else if (eventType === 'attendance.marked') {
     ;({ title, description } = attendanceCopy({

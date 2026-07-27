@@ -105,8 +105,51 @@ export function withActivitySeenState(activities, userKey) {
   }));
 }
 
+/**
+ * Banner / unread-messages KPI: only notifications the user received.
+ * Outbound / self-sent actions (form submits, approvals you made) stay out.
+ */
 export function getUnreadMessages(notifications) {
-  return (notifications || []).filter((item) => item.isNew);
+  return (notifications || []).filter(
+    (item) => item.isNew && String(item.direction || "") !== "sent",
+  );
+}
+
+/** Professional banner title for unread / received notifications. */
+export function bannerNotificationTitle(message) {
+  const direction = String(message?.direction || "").toLowerCase();
+  const category = String(message?.category || "").toLowerCase();
+  const status = String(message?.status || "");
+  const original = String(message?.title || "").trim();
+  const usesLop =
+    Boolean(message?.willUseLop) || Number(message?.fromLop || 0) > 0;
+  const lopSuffix = usesLop ? " · Includes LOP" : "";
+
+  if (direction === "received") {
+    if (category === "leave") {
+      if (status === "Pending") return `Leave Request Received${lopSuffix}`;
+      if (status === "Approved" || status === "TeamLeadApproved") {
+        return `Leave Request Approved${lopSuffix}`;
+      }
+      if (status === "Rejected") return "Leave Request Rejected";
+      if (status === "Cancelled") return "Leave Request Cancelled";
+      return original || "Leave Update Received";
+    }
+    if (category === "attendance") return "Attendance Update Received";
+    if (category === "holidays") return "Holiday Calendar Updated";
+    if (category === "employees") return "Employee Record Updated";
+    if (category === "departments") return "Department Updated";
+    return original || "Notification Received";
+  }
+
+  if (direction === "sent") {
+    if (category === "leave" && status === "Pending") {
+      return `Leave Request Sent${lopSuffix}`;
+    }
+    return original || "Notification Sent";
+  }
+
+  return original || "Notification";
 }
 
 export function buildUnreadMessagesMetric(notifications) {
@@ -122,9 +165,18 @@ export function buildUnreadMessagesMetric(notifications) {
   };
 }
 
-/** Append / replace the Unread Messages KPI for admin/HR org dashboards. */
+/**
+ * Attach received unread notifications for banner display.
+ * Org dashboards also get the Unread Messages KPI.
+ */
 export function withOrgUnreadMessagesMetric(dashboard, notifications) {
-  if (!dashboard || dashboard.variant !== "org") return dashboard;
+  if (!dashboard) return dashboard;
+
+  const unreadMessages = getUnreadMessages(notifications);
+
+  if (dashboard.variant !== "org") {
+    return { ...dashboard, unreadMessages };
+  }
 
   const unreadMetric = buildUnreadMessagesMetric(notifications);
   const withoutUnread = (dashboard.primaryMetrics || []).filter(
@@ -136,7 +188,7 @@ export function withOrgUnreadMessagesMetric(dashboard, notifications) {
     ...dashboard,
     primaryMetrics: metrics,
     metrics,
-    unreadMessages: getUnreadMessages(notifications),
+    unreadMessages,
   };
 }
 

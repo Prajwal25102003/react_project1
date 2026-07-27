@@ -158,9 +158,9 @@ function LeaveHierarchyFormModal({
                     {step.approverKind === "department_head" ? (
                       <div className="flex items-end">
                         <p className="pb-3 text-theme-sm text-gray-500">
-                          Uses the requester&apos;s current department head. If
-                          the head is reassigned, the new head approves pending
-                          requests at this step.
+                          Uses the requester&apos;s current team lead
+                          (department head). If the head is reassigned, the new
+                          team lead approves pending requests at this step.
                         </p>
                       </div>
                     ) : null}

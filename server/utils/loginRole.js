@@ -1,8 +1,10 @@
 /**
  * Login role for directory employees.
  *
- * Only the Human Resources department head gets `hr` (module maintainer).
- * Other Human Resources staff — and all other departments — use `employee`.
+ * - Human Resources department head → `hr` (HR login / HR modules)
+ * - Every other department head → stays `employee`, but is treated as Team Lead
+ *   via `isDepartmentHead` (head_employee_id) for team leave approvals
+ * - All other staff → `employee`
  */
 
 export function isHumanResourcesDepartment(departmentName) {
