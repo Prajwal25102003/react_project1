@@ -251,6 +251,45 @@ export function useDashboard() {
     [seenUserKey, navigate],
   );
 
+  const markAllAsRead = useCallback(async () => {
+    if (!seenUserKey) return;
+
+    const activityIds = (data.activities || [])
+      .map((activity) => activity.id)
+      .filter(Boolean);
+    const unreadIds = (data.unreadMessages || [])
+      .map((message) => message.id)
+      .filter(Boolean);
+
+    let notificationIds = [];
+    try {
+      notificationIds = (await fetchNotifications())
+        .map((item) => item.id)
+        .filter(Boolean);
+    } catch {
+      notificationIds = [];
+    }
+
+    const allIds = [
+      ...new Set(
+        [...activityIds, ...unreadIds, ...notificationIds].map(String),
+      ),
+    ];
+    if (allIds.length === 0) return;
+
+    markFeedItemSeen(seenUserKey, allIds);
+    setMessagesPreview([]);
+    setData((current) => ({
+      ...withOrgUnreadMessagesMetric(current, []),
+      activities: (current.activities || []).map((activity) => ({
+        ...activity,
+        isNew: false,
+      })),
+      unreadMessages: [],
+    }));
+    requestNotificationsRefresh();
+  }, [seenUserKey, data.activities, data.unreadMessages]);
+
   const handleMetricAction = useCallback(
     (metric) => {
       if (metric?.action === "unread-messages") {
@@ -273,6 +312,7 @@ export function useDashboard() {
     acknowledgeUnreadMessage,
     dismissUnreadMessage,
     acknowledgeActivity,
+    markAllAsRead,
     handleMetricAction,
   };
 }
