@@ -129,7 +129,7 @@ function HolidaysPage() {
         {!loading && !error ? (
           <>
             <div className="flex shrink-0 flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="flex min-w-0 w-full flex-1 flex-col gap-2">
                 <div className="min-w-0 w-full sm:max-w-[200px]">
                   <input
                     type="search"
@@ -142,28 +142,32 @@ function HolidaysPage() {
                     aria-label="Search holiday"
                   />
                 </div>
-                {filterDefs.map((filter) => (
-                  <div key={filter.id} className="min-w-0 w-full sm:w-32">
-                    <SelectField
-                      value={table.columnFilters[filter.id] || ""}
-                      onChange={(nextValue) =>
-                        table.setColumnFilter(filter.id, nextValue)
-                      }
-                      ariaLabel={filter.label}
-                      placeholder={`All ${filter.label}`}
-                      options={[
-                        { value: "", label: `All ${filter.label}` },
-                        ...filter.options.map((option) => ({
-                          value: option.value,
-                          label: option.label,
-                        })),
-                      ]}
-                    />
+                {filterDefs.length > 0 ? (
+                  <div className="grid min-w-0 w-full grid-cols-2 gap-2 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
+                    {filterDefs.map((filter) => (
+                      <div key={filter.id} className="min-w-0 w-full sm:w-32">
+                        <SelectField
+                          value={table.columnFilters[filter.id] || ""}
+                          onChange={(nextValue) =>
+                            table.setColumnFilter(filter.id, nextValue)
+                          }
+                          ariaLabel={filter.label}
+                          placeholder={`All ${filter.label}`}
+                          options={[
+                            { value: "", label: `All ${filter.label}` },
+                            ...filter.options.map((option) => ({
+                              value: option.value,
+                              label: option.label,
+                            })),
+                          ]}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : null}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto">
                 {canRelease ? (
                   <button
                     type="button"

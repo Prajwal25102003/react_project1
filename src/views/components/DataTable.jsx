@@ -63,7 +63,7 @@ function PeriodColumnFilter({
   onValueChange,
 }) {
   return (
-    <div className="flex min-w-0 w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+    <>
       <div className="min-w-0 w-full sm:w-36">
         <SelectField
           value={period}
@@ -85,7 +85,7 @@ function PeriodColumnFilter({
           title={periodFilterTitle(period)}
         />
       </div>
-    </div>
+    </>
   );
 }
 
@@ -360,6 +360,8 @@ function DataTable({
   columnsOpen,
   onColumnsOpenChange,
   onExportCsv,
+  /** Extra controls rendered just left of Rows (e.g. Import). */
+  toolbarStart = null,
   getActions,
   onRowClick,
   emptyMessage = "No records found.",
@@ -387,7 +389,8 @@ function DataTable({
         filterDefs.length > 0 ||
         onExportCsv ||
         (onToggleColumn && allColumns) ||
-        onPageSizeChange,
+        onPageSizeChange ||
+        toolbarStart,
     );
   const fillRowsEvenly =
     fillHeight && pageSize > 0 && rows.length >= pageSize;
@@ -418,7 +421,7 @@ function DataTable({
     >
       {showToolbar ? (
       <div className="flex min-w-0 w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex min-w-0 w-full flex-col gap-3 max-sm:flex-col sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex min-w-0 w-full flex-1 flex-col gap-3">
           {onSearchChange ? (
             <div className="min-w-0 w-full sm:max-w-xs">
               <input
@@ -432,178 +435,190 @@ function DataTable({
             </div>
           ) : null}
 
-          {filterDefs.map((filter) => {
-            if (filter.type === "period") {
-              const period =
-                periodModes[filter.id] ||
-                filter.defaultPeriod ||
-                filter.periodOptions?.[0]?.value ||
-                "date";
-              return (
-                <PeriodColumnFilter
-                  key={filter.id}
-                  filter={filter}
-                  period={period}
-                  value={columnFilters[filter.id] || ""}
-                  onPeriodChange={(nextPeriod) =>
-                    handlePeriodModeChange(filter.id, nextPeriod)
-                  }
-                  onValueChange={(nextValue) =>
-                    onColumnFilterChange?.(filter.id, nextValue)
-                  }
-                />
-              );
-            }
+          <div className="grid min-w-0 w-full grid-cols-2 gap-3 sm:flex sm:flex-row sm:flex-wrap sm:items-center">
+            {filterDefs.map((filter) => {
+              if (filter.type === "period") {
+                const period =
+                  periodModes[filter.id] ||
+                  filter.defaultPeriod ||
+                  filter.periodOptions?.[0]?.value ||
+                  "date";
+                return (
+                  <PeriodColumnFilter
+                    key={filter.id}
+                    filter={filter}
+                    period={period}
+                    value={columnFilters[filter.id] || ""}
+                    onPeriodChange={(nextPeriod) =>
+                      handlePeriodModeChange(filter.id, nextPeriod)
+                    }
+                    onValueChange={(nextValue) =>
+                      onColumnFilterChange?.(filter.id, nextValue)
+                    }
+                  />
+                );
+              }
 
-            if (filter.type === "toggle") {
-              const activeValue = filter.activeValue ?? "true";
-              const isActive =
-                String(columnFilters[filter.id] || "") === String(activeValue);
+              if (filter.type === "toggle") {
+                const activeValue = filter.activeValue ?? "true";
+                const isActive =
+                  String(columnFilters[filter.id] || "") === String(activeValue);
+                return (
+                  <button
+                    key={filter.id}
+                    type="button"
+                    onClick={() =>
+                      onColumnFilterChange?.(
+                        filter.id,
+                        isActive ? "" : activeValue,
+                      )
+                    }
+                    aria-pressed={isActive}
+                    aria-label={filter.label}
+                    className={`w-full sm:w-auto ${isActive ? TOOLBAR_BTN_ACTIVE : TOOLBAR_BTN}`}
+                  >
+                    {filter.label}
+                  </button>
+                );
+              }
+
               return (
-                <button
+                <div
                   key={filter.id}
-                  type="button"
-                  onClick={() =>
-                    onColumnFilterChange?.(
-                      filter.id,
-                      isActive ? "" : activeValue,
-                    )
-                  }
-                  aria-pressed={isActive}
-                  aria-label={filter.label}
-                  className={isActive ? TOOLBAR_BTN_ACTIVE : TOOLBAR_BTN}
+                  className={`min-w-0 w-full ${
+                    filter.type === "date" || filter.type === "month"
+                      ? "sm:w-48"
+                      : "sm:w-40"
+                  }`}
                 >
-                  {filter.label}
-                </button>
+                  {filter.type === "date" || filter.type === "month" ? (
+                    <DateField
+                      type={filter.type}
+                      value={columnFilters[filter.id] || ""}
+                      onChange={(nextValue) =>
+                        onColumnFilterChange?.(filter.id, nextValue)
+                      }
+                      ariaLabel={filter.label}
+                      placeholder={
+                        filter.type === "month" ? "Select month" : "Select date"
+                      }
+                      title={
+                        filter.type === "month"
+                          ? "Filter by month and year"
+                          : "Filter by date (day, month, year)"
+                      }
+                    />
+                  ) : (
+                    <SelectField
+                      value={columnFilters[filter.id] || ""}
+                      onChange={(nextValue) =>
+                        onColumnFilterChange?.(filter.id, nextValue)
+                      }
+                      ariaLabel={filter.label}
+                      placeholder={`All ${filter.label}`}
+                      options={[
+                        { value: "", label: `All ${filter.label}` },
+                        ...(filter.options || []).map((option) => ({
+                          value: option.value,
+                          label: option.label,
+                        })),
+                      ]}
+                    />
+                  )}
+                </div>
               );
-            }
+            })}
 
-            return (
-            <div
-              key={filter.id}
-              className={`min-w-0 w-full max-sm:w-full ${
-                filter.type === "date" || filter.type === "month"
-                  ? "sm:w-48"
-                  : "sm:w-40"
-              }`}
-            >
-              {filter.type === "date" || filter.type === "month" ? (
-                <DateField
-                  type={filter.type}
-                  value={columnFilters[filter.id] || ""}
-                  onChange={(nextValue) =>
-                    onColumnFilterChange?.(filter.id, nextValue)
-                  }
-                  ariaLabel={filter.label}
-                  placeholder={
-                    filter.type === "month" ? "Select month" : "Select date"
-                  }
-                  title={
-                    filter.type === "month"
-                      ? "Filter by month and year"
-                      : "Filter by date (day, month, year)"
-                  }
-                />
-              ) : (
-                <SelectField
-                  value={columnFilters[filter.id] || ""}
-                  onChange={(nextValue) =>
-                    onColumnFilterChange?.(filter.id, nextValue)
-                  }
-                  ariaLabel={filter.label}
-                  placeholder={`All ${filter.label}`}
-                  options={[
-                    { value: "", label: `All ${filter.label}` },
-                    ...(filter.options || []).map((option) => ({
-                      value: option.value,
-                      label: option.label,
-                    })),
-                  ]}
-                />
-              )}
-            </div>
-            );
-          })}
-
-          {hasActiveFilters ? (
-            <button type="button" onClick={handleClearFilters} className={TOOLBAR_BTN}>
-              Clear filters
-            </button>
-          ) : null}
-
-          {onExportCsv ? (
-            <button
-              type="button"
-              onClick={onExportCsv}
-              title="Export CSV"
-              aria-label="Export CSV"
-              className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
-            >
-              <ActionIcon name="export" />
-            </button>
-          ) : null}
-
-          {onToggleColumn && allColumns ? (
-            <div className="relative min-w-0">
+            {hasActiveFilters ? (
               <button
                 type="button"
-                onClick={() => onColumnsOpenChange?.(!columnsOpen)}
-                className={TOOLBAR_BTN}
+                onClick={handleClearFilters}
+                className={`w-full sm:w-auto ${TOOLBAR_BTN}`}
               >
-                Columns
+                Clear filters
               </button>
-              {columnsOpen ? (
-                <div className="absolute left-0 z-20 mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-3 shadow-theme-lg sm:w-56">
-                  <p className="mb-2 text-theme-xs font-medium text-gray-500">
-                    Toggle columns
-                  </p>
-                  <div className="max-h-64 space-y-2 overflow-y-auto">
-                    {allColumns
-                      .filter(
-                        (column) =>
-                          column.id !== "actions" && column.hideable !== false,
-                      )
-                      .map((column) => (
-                        <label
-                          key={column.id}
-                          className="flex cursor-pointer items-center gap-2 text-theme-sm text-gray-700"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={visibleColumnIds?.includes(column.id)}
-                            onChange={() => onToggleColumn(column.id)}
-                            className="rounded border-gray-300 text-brand-500 focus:ring-brand-500/20"
-                          />
-                          {column.header}
-                        </label>
-                      ))}
+            ) : null}
+
+            {onToggleColumn && allColumns ? (
+              <div className="relative min-w-0">
+                <button
+                  type="button"
+                  onClick={() => onColumnsOpenChange?.(!columnsOpen)}
+                  className={TOOLBAR_BTN}
+                >
+                  Columns
+                </button>
+                {columnsOpen ? (
+                  <div className="absolute left-0 z-20 mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-3 shadow-theme-lg sm:w-56">
+                    <p className="mb-2 text-theme-xs font-medium text-gray-500">
+                      Toggle columns
+                    </p>
+                    <div className="max-h-64 space-y-2 overflow-y-auto">
+                      {allColumns
+                        .filter(
+                          (column) =>
+                            column.id !== "actions" && column.hideable !== false,
+                        )
+                        .map((column) => (
+                          <label
+                            key={column.id}
+                            className="flex cursor-pointer items-center gap-2 text-theme-sm text-gray-700"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={visibleColumnIds?.includes(column.id)}
+                              onChange={() => onToggleColumn(column.id)}
+                              className="rounded border-gray-300 text-brand-500 focus:ring-brand-500/20"
+                            />
+                            {column.header}
+                          </label>
+                        ))}
+                    </div>
                   </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        {onPageSizeChange ? (
-          <div className="flex shrink-0 items-center justify-end gap-2 sm:ml-auto">
-            <label
-              htmlFor="data-table-page-size"
-              className="shrink-0 text-theme-sm text-gray-500"
-            >
-              Rows
-            </label>
-            <div className="min-w-0 w-20">
-              <SelectField
-                value={String(pageSize)}
-                onChange={onPageSizeChange}
-                ariaLabel="Rows per page"
-                options={PAGE_SIZE_OPTIONS.map((size) => ({
-                  value: String(size),
-                  label: String(size),
-                }))}
-                className="w-20"
-              />
-            </div>
+        {onExportCsv || onPageSizeChange || toolbarStart ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 sm:ml-auto">
+            {onExportCsv ? (
+              <button
+                type="button"
+                onClick={onExportCsv}
+                title="Export CSV"
+                aria-label="Export CSV"
+                className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
+              >
+                <ActionIcon name="export" />
+              </button>
+            ) : null}
+
+            {toolbarStart}
+
+            {onPageSizeChange ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <label
+                  htmlFor="data-table-page-size"
+                  className="shrink-0 text-theme-sm text-gray-500"
+                >
+                  Rows
+                </label>
+                <div className="min-w-0 w-20">
+                  <SelectField
+                    value={String(pageSize)}
+                    onChange={onPageSizeChange}
+                    ariaLabel="Rows per page"
+                    options={PAGE_SIZE_OPTIONS.map((size) => ({
+                      value: String(size),
+                      label: String(size),
+                    }))}
+                    className="w-20"
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

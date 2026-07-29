@@ -83,27 +83,6 @@ function AttendancePage() {
         loading={loading}
         error={error}
         loadingLabel="Loading attendance…"
-        actions={
-          isEmployee ? null : (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
-                className="sr-only"
-                onChange={handleImportFile}
-              />
-              <button
-                type="button"
-                onClick={openImportPicker}
-                disabled={importing}
-                className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:opacity-60"
-              >
-                {importing ? "Importing…" : "Import Excel"}
-              </button>
-            </div>
-          )
-        }
       >
         {!isEmployee && importError ? (
           <div className="mb-4 rounded-xl border border-error-500 bg-error-50 p-4">
@@ -136,6 +115,27 @@ function AttendancePage() {
           onColumnFilterChange={table.setColumnFilter}
           onClearFilters={table.clearColumnFilters}
           onExportCsv={() => table.exportCsv("attendance.csv")}
+          toolbarStart={
+            isEmployee ? null : (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                  className="sr-only"
+                  onChange={handleImportFile}
+                />
+                <button
+                  type="button"
+                  onClick={openImportPicker}
+                  disabled={importing}
+                  className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {importing ? "Importing…" : "Import Excel"}
+                </button>
+              </>
+            )
+          }
           getActions={
             isEmployee
               ? undefined
