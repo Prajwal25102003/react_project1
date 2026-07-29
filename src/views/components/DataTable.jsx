@@ -24,7 +24,7 @@ const TOOLBAR_BTN_ACTIVE =
 /** Keep outer table edge gap equal to the gap between columns. */
 function cellPadClass({ dense, fitWidth, vertical, columnIndex, columnCount }) {
   if (dense) {
-    return vertical === "head" ? "px-3 py-1.5 sm:px-3" : "px-3 py-1.5 sm:px-3";
+    return vertical === "head" ? "px-2.5 py-1 sm:px-3" : "px-2.5 py-1 sm:px-3";
   }
 
   if (!fitWidth) {
@@ -107,19 +107,19 @@ function TableCell({ column, row, getActions, clamp = false }) {
   }
 
   if (column.type === "dotName") {
+    const nameClass = column.wrap
+      ? clamp
+        ? "min-w-0 truncate text-theme-sm font-medium text-gray-800"
+        : "min-w-0 whitespace-normal break-words text-theme-sm font-medium text-gray-800"
+      : "min-w-0 truncate text-theme-sm font-medium text-gray-800";
+
     return (
       <div className="flex min-w-0 items-center gap-2">
         <span
           className={`h-2 w-2 shrink-0 rounded-full ${row.typeDotClass || "bg-gray-400"}`}
           aria-hidden="true"
         />
-        <span
-          className={
-            column.wrap
-              ? "whitespace-normal break-words text-theme-sm font-medium text-gray-800"
-              : "truncate text-theme-sm font-medium text-gray-800"
-          }
-        >
+        <span className={nameClass} title={String(display || "")}>
           {display}
         </span>
       </div>
@@ -170,7 +170,7 @@ function TableCell({ column, row, getActions, clamp = false }) {
     }
 
     return (
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-nowrap items-center gap-2.5">
         {actions.map((action) => {
           const iconNode =
             typeof action.icon === "string" ? (
@@ -392,12 +392,32 @@ function DataTable({
         onPageSizeChange ||
         toolbarStart,
     );
-  const fillRowsEvenly =
+  // Full pages space rows evenly between header and pagination (first row
+  // stays flush under the header). Partial pages pack from the top.
+  const stretchRows =
     fillHeight && pageSize > 0 && rows.length >= pageSize;
-  const fillRowHeight = fillRowsEvenly
-    ? `${100 / rows.length}%`
+  const rowAlign = "align-middle";
+  const tableFixedClass = fitWidth
+    ? "min-w-[720px] w-full lg:min-w-0 lg:table-fixed"
+    : "min-w-full";
+  const stretchTableStyle = stretchRows
+    ? { display: "flex", flexDirection: "column", height: "100%" }
     : undefined;
-  const rowAlign = fillRowsEvenly ? "align-middle" : "align-top";
+  const stretchHeadStyle = stretchRows
+    ? { display: "table", width: "100%", tableLayout: "fixed" }
+    : undefined;
+  const stretchBodyStyle = stretchRows
+    ? {
+        display: "flex",
+        flexDirection: "column",
+        flex: "1 1 auto",
+        justifyContent: "space-between",
+        minHeight: 0,
+      }
+    : undefined;
+  const stretchRowStyle = stretchRows
+    ? { display: "table", width: "100%", tableLayout: "fixed" }
+    : undefined;
 
   function handleClearFilters() {
     setPeriodModes(initialPeriodModes(filterDefs));
@@ -414,7 +434,7 @@ function DataTable({
       className={[
         "min-w-0 max-w-full overflow-x-hidden",
         fillHeight ? "flex h-full min-h-0 flex-col" : "",
-        showToolbar ? "space-y-4" : fillHeight ? "gap-3" : "space-y-3",
+        showToolbar ? "space-y-4" : fillHeight ? "gap-1.5" : "space-y-3",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -646,14 +666,10 @@ function DataTable({
 
       <div
         className={[
-          "overflow-hidden rounded-xl border border-gray-200 bg-white",
-          showMobileCards
-            ? fillHeight
-              ? "relative hidden min-h-0 flex-1 md:block"
-              : "hidden md:block"
-            : fillHeight
-              ? "relative min-h-0 flex-1"
-              : "",
+          fillHeight
+            ? "min-h-0 min-w-0 flex-1 overflow-hidden"
+            : "overflow-hidden rounded-xl border border-gray-200 bg-white",
+          showMobileCards ? "hidden md:block" : "",
         ]
           .filter(Boolean)
           .join(" ")}
@@ -661,25 +677,19 @@ function DataTable({
         <div
           className={
             fillHeight
-              ? fitWidth
-                ? "absolute inset-0 overflow-x-auto overflow-y-hidden lg:overflow-x-visible"
-                : "absolute inset-0 overflow-x-auto overflow-y-hidden"
+              ? "h-full min-h-0 overflow-x-auto overflow-y-hidden lg:overflow-x-visible"
               : fitWidth
                 ? "w-full overflow-x-auto lg:overflow-x-visible"
                 : "max-w-full overflow-x-auto"
           }
         >
           <table
-            className={[
-              fitWidth
-                ? "min-w-[720px] w-full lg:min-w-0 lg:table-fixed"
-                : "min-w-full",
-              fillHeight ? "h-full" : "",
-            ]
+            className={[tableFixedClass, stretchRows ? "h-full" : ""]
               .filter(Boolean)
               .join(" ")}
+            style={stretchTableStyle}
           >
-            <thead>
+            <thead style={stretchHeadStyle}>
               <tr className="border-b border-gray-100">
                 {columns.map((column, columnIndex) => {
                   const cellClass = [
@@ -720,9 +730,12 @@ function DataTable({
                 })}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody
+              className="divide-y divide-gray-100"
+              style={stretchBodyStyle}
+            >
               {rows.length === 0 ? (
-                <tr className={fillHeight ? "h-full" : undefined}>
+                <tr style={stretchRowStyle}>
                   <td
                     colSpan={columns.length}
                     className={`${cellPadClass({
@@ -740,9 +753,7 @@ function DataTable({
                 rows.map((row) => (
                   <tr
                     key={row[rowKey]}
-                    style={
-                      fillRowHeight ? { height: fillRowHeight } : undefined
-                    }
+                    style={stretchRowStyle}
                     className={
                       onRowClick
                         ? "cursor-pointer hover:bg-gray-50/80"
@@ -772,11 +783,6 @@ function DataTable({
                         <td
                           key={column.id}
                           className={cellClass}
-                          style={
-                            fillRowHeight && columnIndex === 0
-                              ? { height: fillRowHeight }
-                              : undefined
-                          }
                           onClick={
                             stopRowClick
                               ? (event) => event.stopPropagation()
@@ -787,7 +793,7 @@ function DataTable({
                             column={column}
                             row={row}
                             getActions={getActions}
-                            clamp={fitWidth && column.wrap}
+                            clamp={fitWidth && Boolean(column.wrap)}
                           />
                         </td>
                       );
@@ -803,9 +809,8 @@ function DataTable({
       {onPageChange ? (
         <div
           className={[
-            "flex min-w-0 w-full flex-col gap-2 max-sm:items-stretch sm:flex-row sm:items-center sm:justify-between",
-            dense ? "pt-1" : "",
-            fillHeight ? "mt-auto shrink-0" : "",
+            "flex min-w-0 w-full shrink-0 flex-col gap-2 max-sm:items-stretch sm:flex-row sm:items-center sm:justify-between",
+            fillHeight ? "mt-auto border-t border-gray-100 pt-1.5" : "",
           ]
             .filter(Boolean)
             .join(" ")}
@@ -821,7 +826,11 @@ function DataTable({
               type="button"
               disabled={page <= 1}
               onClick={() => onPageChange(page - 1)}
-              className={TOOLBAR_BTN}
+              className={
+                dense
+                  ? "inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-theme-xs font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  : TOOLBAR_BTN
+              }
             >
               Previous
             </button>
@@ -832,7 +841,11 @@ function DataTable({
               type="button"
               disabled={page >= totalPages}
               onClick={() => onPageChange(page + 1)}
-              className={TOOLBAR_BTN}
+              className={
+                dense
+                  ? "inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-theme-xs font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  : TOOLBAR_BTN
+              }
             >
               Next
             </button>
