@@ -145,7 +145,9 @@ function LeaveBalancePanel({
           <p>{preview.summary}</p>
           {preview.willUseLop ? (
             <p className="mt-1">
-              Days beyond casual and sick leave become Loss of Pay (LOP).
+              {formatBalanceValue(preview.fromLop)} day
+              {Number(preview.fromLop) === 1 ? "" : "s"} of this leave will be
+              Loss of Pay (LOP).
             </p>
           ) : null}
         </div>

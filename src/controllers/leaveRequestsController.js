@@ -13,6 +13,7 @@ import {
   uploadLeaveMedicalDocument,
 } from "../services/leaveRequestsService.js";
 import { fetchAuthProfile } from "../services/authService.js";
+import { fetchHolidays } from "../services/holidaysService.js";
 import {
   EMPTY_LEAVE_FORM,
   LEAVE_TYPES,
@@ -268,9 +269,24 @@ export function useLeaveRequests() {
     openDecisionModal(request, "Approved");
   }
 
+  function approveFromView() {
+    if (!viewTarget) return;
+    const request = viewTarget;
+    closeViewModal();
+    openApproveModal(request);
+  }
+
   function openRejectModal(request) {
     openDecisionModal(request, "Rejected");
   }
+
+  const canApproveViewTarget = Boolean(
+    viewTarget &&
+      actorMatchesCurrentStep(viewTarget, {
+        employeeId: user?.employeeId,
+        role: user?.role,
+      }),
+  );
 
   function closeDecisionModal() {
     if (deciding) return;
@@ -431,6 +447,8 @@ export function useLeaveRequests() {
     remarks,
     remarksError,
     openApproveModal,
+    approveFromView,
+    canApproveViewTarget,
     openRejectModal,
     closeDecisionModal,
     updateRemarks,
@@ -462,6 +480,7 @@ export function useLeaveForm() {
   const [employees, setEmployees] = useState([]);
   const [gender, setGender] = useState("");
   const [balances, setBalances] = useState(null);
+  const [holidayDates, setHolidayDates] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
@@ -487,7 +506,10 @@ export function useLeaveForm() {
           throw new Error("Your account is not linked to an employee record");
         }
 
-        const profile = await fetchAuthProfile();
+        const [profile, holidaysResult] = await Promise.all([
+          fetchAuthProfile(),
+          fetchHolidays().catch(() => ({ holidays: [] })),
+        ]);
         const employee = profile?.employee;
         if (!cancelled) {
           const nextGender = employee?.gender || "";
@@ -503,6 +525,13 @@ export function useLeaveForm() {
             employee
               ? normalizeLeaveBalances(employee)
               : normalizeLeaveBalances({}),
+          );
+          setHolidayDates(
+            new Set(
+              (holidaysResult.holidays || [])
+                .map((item) => String(item.date || "").trim())
+                .filter(Boolean),
+            ),
           );
           const allowedTypes = leaveTypesForGender(nextGender, LEAVE_TYPES);
           setForm((current) => ({
@@ -525,6 +554,24 @@ export function useLeaveForm() {
       cancelled = true;
     };
   }, [user?.role, user?.employeeId, user?.name]);
+
+  useEffect(() => {
+    setForm((current) => {
+      if (isMaternityLeave(current.leaveType)) return current;
+      if (!current.startDate) return current;
+      const duration = current.duration === "half" ? "half" : "full";
+      const endDate =
+        duration === "half" ? current.startDate : current.endDate;
+      const leaveDays = calculateLeaveDays(
+        current.startDate,
+        endDate,
+        duration,
+        holidayDates,
+      );
+      if (leaveDays === current.leaveDays) return current;
+      return { ...current, leaveDays };
+    });
+  }, [holidayDates]);
 
   function updateField(field, value) {
     setForm((current) => {
@@ -557,9 +604,15 @@ export function useLeaveForm() {
               next.startDate,
               next.endDate,
               "half",
+              holidayDates,
             );
           } else {
-            next.leaveDays = calculateLeaveDays(next.startDate, next.endDate);
+            next.leaveDays = calculateLeaveDays(
+              next.startDate,
+              next.endDate,
+              "full",
+              holidayDates,
+            );
           }
         }
       }
@@ -567,10 +620,20 @@ export function useLeaveForm() {
       if (field === "duration" && !isMaternityLeave(next.leaveType)) {
         if (value === "half") {
           next.endDate = next.startDate;
-          next.leaveDays = calculateLeaveDays(next.startDate, next.endDate, "half");
+          next.leaveDays = calculateLeaveDays(
+            next.startDate,
+            next.endDate,
+            "half",
+            holidayDates,
+          );
           if (!next.halfDaySession) next.halfDaySession = "first_half";
         } else {
-          next.leaveDays = calculateLeaveDays(next.startDate, next.endDate);
+          next.leaveDays = calculateLeaveDays(
+            next.startDate,
+            next.endDate,
+            "full",
+            holidayDates,
+          );
         }
       }
 
@@ -595,11 +658,18 @@ export function useLeaveForm() {
           const dateValue = field === "startDate" ? value : next.startDate;
           next.startDate = dateValue;
           next.endDate = dateValue;
-          next.leaveDays = calculateLeaveDays(dateValue, dateValue, "half");
+          next.leaveDays = calculateLeaveDays(
+            dateValue,
+            dateValue,
+            "half",
+            holidayDates,
+          );
         } else {
           next.leaveDays = calculateLeaveDays(
             field === "startDate" ? value : next.startDate,
             field === "endDate" ? value : next.endDate,
+            "full",
+            holidayDates,
           );
         }
       }
@@ -697,7 +767,7 @@ export function useLeaveForm() {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const validation = validateLeaveForm(form, { gender });
+    const validation = validateLeaveForm(form, { gender, holidayDates });
     if (!validation.ok) {
       setFieldErrors(validation.fieldErrors);
       setError(validation.message);

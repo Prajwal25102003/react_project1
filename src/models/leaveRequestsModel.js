@@ -5,6 +5,10 @@ import {
   maternityDatesFromDelivery,
   MATERNITY_TOTAL_DAYS,
 } from "./maternityLeaveModel.js";
+import {
+  countWorkingLeaveDays,
+  isWorkingLeaveDay,
+} from "./leaveWorkingDaysModel.js";
 
 export const LEAVE_TYPES = [
   "Sick Leave",
@@ -565,16 +569,20 @@ export function canCancelLeaveRequest(request, { employeeId } = {}) {
   return Boolean(employeeId) && request.employeeId === employeeId;
 }
 
-export function calculateLeaveDays(startDate, endDate, duration = "full") {
+export function calculateLeaveDays(
+  startDate,
+  endDate,
+  duration = "full",
+  holidayDates = [],
+) {
   if (duration === "half") {
-    return startDate ? "0.5" : "";
+    if (!startDate) return "";
+    return isWorkingLeaveDay(startDate, holidayDates) ? "0.5" : "";
   }
   if (!startDate || !endDate) return "";
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T00:00:00`);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return "";
-  const diff = Math.floor((end - start) / 86400000) + 1;
-  return diff >= 1 ? String(diff) : "";
+  const days = countWorkingLeaveDays(startDate, endDate, holidayDates);
+  if (days === null) return "";
+  return days >= 1 ? String(days) : "";
 }
 
 export function toLeavePayload(form) {
@@ -615,7 +623,7 @@ export function toLeavePayload(form) {
   return payload;
 }
 
-export function validateLeaveForm(form, { gender } = {}) {
+export function validateLeaveForm(form, { gender, holidayDates = [] } = {}) {
   const fieldErrors = {};
   const employeeId = String(form?.employeeId ?? "").trim();
   const leaveType = String(form?.leaveType ?? "").trim();
@@ -658,6 +666,10 @@ export function validateLeaveForm(form, { gender } = {}) {
     }
   } else if (duration === "half") {
     if (!startDate) fieldErrors.startDate = "Leave date is required";
+    else if (!isWorkingLeaveDay(startDate, holidayDates)) {
+      fieldErrors.startDate =
+        "Cannot apply leave on a Saturday, Sunday, or company holiday";
+    }
     if (!["first_half", "second_half"].includes(halfDaySession)) {
       fieldErrors.halfDaySession = "Select first half or second half";
     }
@@ -670,11 +682,19 @@ export function validateLeaveForm(form, { gender } = {}) {
     if (startDate && endDate && endDate < startDate) {
       fieldErrors.endDate = "End date cannot be before start date";
     }
-    if (!leaveDaysRaw) fieldErrors.leaveDays = "Leave days are required";
-    else {
+    if (!leaveDaysRaw) {
+      fieldErrors.leaveDays =
+        startDate && endDate && endDate >= startDate
+          ? "No working days in this range (weekends and holidays are excluded)"
+          : "Leave days are required";
+    } else {
       const days = Number(leaveDaysRaw);
+      const expected = countWorkingLeaveDays(startDate, endDate, holidayDates);
       if (Number.isNaN(days) || days < 1) {
-        fieldErrors.leaveDays = "Leave days must be at least 1";
+        fieldErrors.leaveDays =
+          "Leave days must be at least 1 working day (weekends and holidays excluded)";
+      } else if (expected != null && days !== expected) {
+        fieldErrors.leaveDays = `Leave days must be ${expected} (weekends and holidays excluded)`;
       }
     }
   }

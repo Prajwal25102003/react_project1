@@ -216,7 +216,8 @@ export async function assignLeaveBalances({
     ? `casual_leave_balance = casual_leave_balance + $1,
        sick_leave_balance = sick_leave_balance + $2`
     : `casual_leave_balance = $1,
-       sick_leave_balance = $2`
+       sick_leave_balance = $2,
+       lop_days = 0`
 
   const result = await query(
     `UPDATE employees e

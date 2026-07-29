@@ -31,6 +31,20 @@ export async function findAllHolidays({ year } = {}) {
   return result.rows
 }
 
+/** Distinct holiday dates (YYYY-MM-DD) within an inclusive range. */
+export async function findHolidayDatesBetween(startDate, endDate) {
+  if (!startDate || !endDate) return []
+  const result = await query(
+    `SELECT DISTINCT TO_CHAR(holiday_date, 'YYYY-MM-DD') AS date
+    FROM holidays
+    WHERE holiday_date >= $1::date
+      AND holiday_date <= $2::date
+    ORDER BY date ASC`,
+    [startDate, endDate],
+  )
+  return result.rows.map((row) => row.date)
+}
+
 export async function findHolidayById(id) {
   const result = await query(
     `SELECT ${HOLIDAY_SELECT}

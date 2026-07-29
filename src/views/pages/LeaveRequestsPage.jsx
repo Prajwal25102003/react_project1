@@ -70,6 +70,8 @@ function LeaveRequestsPage() {
     viewDirection,
     openViewModal,
     closeViewModal,
+    canApproveViewTarget,
+    approveFromView,
     getLeaveActions,
   } = useLeaveRequests();
 
@@ -166,6 +168,7 @@ function LeaveRequestsPage() {
         request={viewTarget}
         direction={viewDirection}
         onClose={closeViewModal}
+        onApprove={canApproveViewTarget ? approveFromView : null}
       />
 
       <LeaveDecisionModal
