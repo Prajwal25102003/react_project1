@@ -30,7 +30,9 @@ export function getHolidayColumns(canManage) {
       type: "dotName",
       sortable: true,
       wrap: true,
-      cellClassName: canManage ? "w-[34%]" : "w-[40%]",
+      cellClassName: canManage
+        ? "w-[34%] max-w-0"
+        : "w-[40%] max-w-0",
       mobilePrimary: true,
     },
     {

@@ -223,7 +223,7 @@ function HolidaysPage() {
                       Holiday List ({table.total})
                     </h3>
                   </div>
-                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2.5">
+                  <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-2.5 pb-2 pt-1.5">
                     <DataTable
                       columns={table.visibleColumns}
                       rows={table.rows}
