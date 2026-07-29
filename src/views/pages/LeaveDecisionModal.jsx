@@ -124,11 +124,7 @@ function LeaveDecisionModal({
             balances={balances}
             leaveType={request.leaveType}
             leaveDays={request.leaveDays}
-            title={
-              hasNextStep
-                ? "Leave balance (before approval)"
-                : "Balance impact on approval"
-            }
+            title="Leave balance (before approval)"
           />
         ) : null}
 
