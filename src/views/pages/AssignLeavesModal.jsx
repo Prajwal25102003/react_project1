@@ -82,7 +82,7 @@ function AssignLeavesModal({
               <p className="mt-1.5 text-theme-xs text-gray-500">
                 {form.mode === "add"
                   ? "Days are added on top of current balances."
-                  : "Days replace the current casual and sick balances."}
+                  : "Days replace the current casual and sick balances, and LOP days are reset to 0."}
               </p>
             </div>
           </div>

@@ -29,7 +29,12 @@ function actionTone(action) {
   return "bg-gray-100 text-gray-700";
 }
 
-function LeaveViewModal({ request, direction = null, onClose }) {
+function LeaveViewModal({
+  request,
+  direction = null,
+  onClose,
+  onApprove = null,
+}) {
   if (!request) return null;
 
   const history = (request.approvalHistory || []).filter(
@@ -105,10 +110,20 @@ function LeaveViewModal({ request, direction = null, onClose }) {
               : request.endDate || "—"}
           </DetailItem>
           <DetailItem label="Status">
-            <StatusPill
-              label={request.statusLabel || request.status}
-              statusClass={request.statusClass}
-            />
+            {onApprove ? (
+              <button
+                type="button"
+                onClick={onApprove}
+                className="inline-flex max-w-full cursor-pointer items-center rounded-full bg-warning-50 px-2.5 py-0.5 text-theme-xs font-medium leading-4 text-warning-700 transition hover:bg-warning-100"
+              >
+                Approve now
+              </button>
+            ) : (
+              <StatusPill
+                label={request.statusLabel || request.status}
+                statusClass={request.statusClass}
+              />
+            )}
           </DetailItem>
         </div>
 

@@ -36,7 +36,12 @@ import {
   isMaternityLeave,
   validateMaternityLeaveRequest,
 } from '../models/maternityLeaveModel.js'
+import { findHolidayDatesBetween } from '../models/holidaysModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
+import {
+  countWorkingLeaveDays,
+  isWorkingLeaveDay,
+} from '../utils/leaveWorkingDays.js'
 import {
   formatApproverLabel,
   formatDisplayRange,
@@ -76,12 +81,11 @@ function approverMetaFromStep(
   }
 }
 
-function countLeaveDays(startDate, endDate) {
+function countCalendarLeaveDays(startDate, endDate) {
   const start = new Date(`${startDate}T00:00:00`)
   const end = new Date(`${endDate}T00:00:00`)
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null
-  const diff = Math.floor((end - start) / 86400000) + 1
-  return diff
+  return Math.floor((end - start) / 86400000) + 1
 }
 
 function isHr(role) {
@@ -174,7 +178,7 @@ function parseLeavePayload(body) {
   let leaveDays = null
 
   if (isMaternityLeave(leaveType)) {
-    leaveDays = countLeaveDays(startDate, endDate)
+    leaveDays = countCalendarLeaveDays(startDate, endDate)
     return {
       errors,
       leaveRequest: {
@@ -211,7 +215,8 @@ function parseLeavePayload(body) {
       errors.push('End date must be YYYY-MM-DD')
     }
 
-    leaveDays = countLeaveDays(startDate, endDate)
+    // Working-day count (excludes weekends/holidays) is applied in the handler.
+    leaveDays = countCalendarLeaveDays(startDate, endDate)
     if (leaveDays === null) errors.push('Leave dates are invalid')
     else if (leaveDays < 1) errors.push('End date cannot be before start date')
   }
@@ -447,6 +452,37 @@ export async function createLeaveRequestHandler(req, res) {
       leaveRequest.startDate = maternity.startDate
       leaveRequest.endDate = maternity.endDate
       leaveRequest.leaveDays = maternity.leaveDays
+    } else {
+      const holidayDates = await findHolidayDatesBetween(
+        leaveRequest.startDate,
+        leaveRequest.endDate,
+      )
+
+      if (leaveRequest.halfDaySession) {
+        if (!isWorkingLeaveDay(leaveRequest.startDate, holidayDates)) {
+          return res.status(400).json({
+            message:
+              'Half-day leave cannot be applied on a Saturday, Sunday, or company holiday',
+          })
+        }
+        leaveRequest.leaveDays = 0.5
+      } else {
+        const workingDays = countWorkingLeaveDays(
+          leaveRequest.startDate,
+          leaveRequest.endDate,
+          holidayDates,
+        )
+        if (workingDays === null) {
+          return res.status(400).json({ message: 'Leave dates are invalid' })
+        }
+        if (workingDays < 1) {
+          return res.status(400).json({
+            message:
+              'Selected dates have no working days (Saturdays, Sundays, and company holidays are excluded)',
+          })
+        }
+        leaveRequest.leaveDays = workingDays
+      }
     }
 
     delete leaveRequest.expectedDeliveryDate

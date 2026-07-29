@@ -43,7 +43,7 @@ function LeaveFormPage() {
     handleCancel,
   } = useLeaveForm();
 
-  const leaveDaysReadOnly = maternitySelected || halfDaySelected;
+  const leaveDaysReadOnly = true;
 
   return (
     <>
@@ -215,11 +215,16 @@ function LeaveFormPage() {
                         ? "182 days (auto)"
                         : halfDaySelected
                           ? "0.5"
-                          : "Auto-calculated from dates"
+                          : "Working days only"
                     }
                     disabled={leaveDaysReadOnly}
                     readOnly={leaveDaysReadOnly}
                   />
+                  {!maternitySelected ? (
+                    <p className="mt-1.5 text-theme-xs text-gray-500">
+                      Saturdays, Sundays, and company holidays are not counted.
+                    </p>
+                  ) : null}
                   <FieldError message={fieldErrors.leaveDays} />
                 </div>
               </div>
