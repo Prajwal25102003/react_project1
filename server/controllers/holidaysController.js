@@ -2,7 +2,6 @@ import {
   findAllHolidayCalendars,
   findHolidayCalendarByYear,
   isHolidayYearReleased,
-  releaseHolidayCalendar,
 } from '../models/holidayCalendarsModel.js'
 import { getHolidayTemplateForYear } from '../models/holidayTemplateModel.js'
 import {
@@ -11,7 +10,7 @@ import {
   findAllHolidays,
   findHolidayById,
   generateNextHolidayId,
-  replaceHolidaysForYear,
+  releaseCalendarAndReplaceHolidays,
   updateHoliday,
 } from '../models/holidaysModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
@@ -198,8 +197,12 @@ export async function releaseHolidayCalendarHandler(req, res) {
       })
     }
 
-    const saved = await replaceHolidaysForYear(year, holidays)
-    const calendar = await releaseHolidayCalendar(year, req.user?.id)
+    // Calendar row must exist before holidays (FK holidays.calendar_year).
+    const { calendar, holidays: saved } = await releaseCalendarAndReplaceHolidays(
+      year,
+      holidays,
+      req.user?.id,
+    )
 
     const actorLabel = formatActorLabel(actorFromUser(req.user))
     await createRecentActivity({

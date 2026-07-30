@@ -1,5 +1,6 @@
 import { query } from '../config/db.js'
 import pool from '../config/db.js'
+import { findHolidayCalendarByYear } from './holidayCalendarsModel.js'
 
 const HOLIDAY_SELECT = `
   id,
@@ -16,7 +17,7 @@ export async function findAllHolidays({ year } = {}) {
     const result = await query(
       `SELECT ${HOLIDAY_SELECT}
       FROM holidays
-      WHERE EXTRACT(YEAR FROM holiday_date) = $1
+      WHERE calendar_year = $1
       ORDER BY holiday_date ASC, name ASC`,
       [year],
     )
@@ -69,10 +70,15 @@ export async function generateNextHolidayId() {
   return `HOL-${nextNum}`
 }
 
+function calendarYearFromDate(date) {
+  return Number(String(date).slice(0, 4))
+}
+
 export async function createHoliday(holiday) {
+  const calendarYear = calendarYearFromDate(holiday.date)
   const result = await query(
-    `INSERT INTO holidays (id, name, holiday_date, holiday_type, description)
-    VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO holidays (id, name, holiday_date, holiday_type, description, calendar_year)
+    VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING id`,
     [
       holiday.id,
@@ -80,22 +86,25 @@ export async function createHoliday(holiday) {
       holiday.date,
       holiday.type,
       holiday.description,
+      calendarYear,
     ],
   )
   return findHolidayById(result.rows[0].id)
 }
 
 export async function updateHoliday(id, holiday) {
+  const calendarYear = calendarYearFromDate(holiday.date)
   const result = await query(
     `UPDATE holidays SET
       name = $2,
       holiday_date = $3,
       holiday_type = $4,
       description = $5,
+      calendar_year = $6,
       updated_at = NOW()
     WHERE id = $1
     RETURNING id`,
-    [id, holiday.name, holiday.date, holiday.type, holiday.description],
+    [id, holiday.name, holiday.date, holiday.type, holiday.description, calendarYear],
   )
 
   if (result.rowCount === 0) return null
@@ -113,24 +122,58 @@ export async function deleteHolidayById(id) {
 export async function deleteHolidaysByYear(year) {
   const result = await query(
     `DELETE FROM holidays
-    WHERE EXTRACT(YEAR FROM holiday_date) = $1`,
+    WHERE calendar_year = $1`,
     [year],
   )
   return result.rowCount
 }
 
-export async function replaceHolidaysForYear(year, holidays) {
+/**
+ * Release the year calendar (FK parent) and replace its holiday rows atomically.
+ */
+export async function releaseCalendarAndReplaceHolidays(year, holidays, releasedBy) {
   const client = await pool.connect()
 
   try {
     await client.query('BEGIN')
+
+    const existing = await client.query(
+      `SELECT status FROM holiday_calendars WHERE year = $1 FOR UPDATE`,
+      [year],
+    )
+    if (existing.rows[0]?.status === 'released') {
+      const error = new Error(`${year} holiday calendar is already released`)
+      error.code = 'ALREADY_RELEASED'
+      error.status = 409
+      throw error
+    }
+
+    const calendarResult = await client.query(
+      `INSERT INTO holiday_calendars (year, status, released_at, released_by)
+      VALUES ($1, 'released', NOW(), $2)
+      ON CONFLICT (year) DO UPDATE SET
+        status = 'released',
+        released_at = NOW(),
+        released_by = EXCLUDED.released_by,
+        updated_at = NOW()
+      WHERE holiday_calendars.status IS DISTINCT FROM 'released'
+      RETURNING year`,
+      [year, releasedBy || null],
+    )
+
+    if (calendarResult.rowCount === 0) {
+      const error = new Error(`${year} holiday calendar is already released`)
+      error.code = 'ALREADY_RELEASED'
+      error.status = 409
+      throw error
+    }
+
     await client.query(
       `DELETE FROM holidays
-      WHERE EXTRACT(YEAR FROM holiday_date) = $1`,
+      WHERE calendar_year = $1`,
       [year],
     )
 
-    const created = []
     for (const holiday of holidays) {
       const idResult = await client.query(
         `SELECT COALESCE(
@@ -144,11 +187,67 @@ export async function replaceHolidaysForYear(year, holidays) {
       const id = `HOL-${nextNum}`
 
       await client.query(
-        `INSERT INTO holidays (id, name, holiday_date, holiday_type, description)
-        VALUES ($1, $2, $3, $4, $5)`,
-        [id, holiday.name, holiday.date, holiday.type, holiday.description || ''],
+        `INSERT INTO holidays (id, name, holiday_date, holiday_type, description, calendar_year)
+        VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          id,
+          holiday.name,
+          holiday.date,
+          holiday.type,
+          holiday.description || '',
+          year,
+        ],
       )
-      created.push(id)
+    }
+
+    await client.query('COMMIT')
+
+    const calendar = await findHolidayCalendarByYear(year)
+    const saved = await findAllHolidays({ year })
+    return { calendar, holidays: saved }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function replaceHolidaysForYear(year, holidays) {
+  const client = await pool.connect()
+
+  try {
+    await client.query('BEGIN')
+    await client.query(
+      `DELETE FROM holidays
+      WHERE calendar_year = $1`,
+      [year],
+    )
+
+    for (const holiday of holidays) {
+      const idResult = await client.query(
+        `SELECT COALESCE(
+          MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)),
+          1000
+        ) AS max_num
+        FROM holidays
+        WHERE id ~ '^HOL-[0-9]+$'`,
+      )
+      const nextNum = Number(idResult.rows[0].max_num) + 1
+      const id = `HOL-${nextNum}`
+
+      await client.query(
+        `INSERT INTO holidays (id, name, holiday_date, holiday_type, description, calendar_year)
+        VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          id,
+          holiday.name,
+          holiday.date,
+          holiday.type,
+          holiday.description || '',
+          year,
+        ],
+      )
     }
 
     await client.query('COMMIT')
