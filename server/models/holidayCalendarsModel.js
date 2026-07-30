@@ -22,7 +22,7 @@ export async function findAllHolidayCalendars({ minYear } = {}) {
         (
           SELECT COUNT(*)::INTEGER
           FROM holidays h
-          WHERE EXTRACT(YEAR FROM h.holiday_date) = hc.year
+          WHERE h.calendar_year = hc.year
         ) AS "holidayCount"
       FROM holiday_calendars hc
       WHERE hc.year >= $1
@@ -43,7 +43,7 @@ export async function findAllHolidayCalendars({ minYear } = {}) {
       (
         SELECT COUNT(*)::INTEGER
         FROM holidays h
-        WHERE EXTRACT(YEAR FROM h.holiday_date) = hc.year
+        WHERE h.calendar_year = hc.year
       ) AS "holidayCount"
     FROM holiday_calendars hc
     ORDER BY hc.year ASC`,

@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS recent_activities (
     )
   ),
   event_type VARCHAR(60),
-  subject_employee_id VARCHAR(20),
-  actor_employee_id VARCHAR(20),
+  subject_employee_id VARCHAR(20) REFERENCES employees(id) ON DELETE SET NULL,
+  actor_employee_id VARCHAR(20) REFERENCES employees(id) ON DELETE SET NULL,
   meta JSONB
 );
 
