@@ -39,6 +39,16 @@ export function isRemovalOnlyNotification(notification) {
     return true;
   }
 
+  if (
+    category === "Departments" &&
+    (eventType === "department.removed" ||
+      status === "Removed" ||
+      title.includes("department removed") ||
+      title.includes("department deleted"))
+  ) {
+    return true;
+  }
+
   return false;
 }
 

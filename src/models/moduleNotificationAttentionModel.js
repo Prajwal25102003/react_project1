@@ -42,10 +42,13 @@ export function attentionKeysFromNotification(notification, navId) {
         .filter(Boolean)
         .map(String);
     }
-    case "departments":
+    case "departments": {
+      // Deletions stay in the header feed only — no row highlight.
+      if (isRemovalOnlyNotification(notification)) return [];
       return [notification.departmentId, notification.departmentName]
         .filter(Boolean)
         .map(String);
+    }
     case "holidays":
       return [notification.holidayId, notification.holidayDate]
         .filter(Boolean)
