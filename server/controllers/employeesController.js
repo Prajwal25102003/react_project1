@@ -22,6 +22,10 @@ import {
 import { assignLeaveBalances } from '../models/leaveBalancesModel.js'
 import { findDepartmentById } from '../models/departmentsModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
+import {
+  buildEmployeeAudienceMeta,
+  expandEmployeeIdsWithDepartmentHeads,
+} from '../utils/notificationAudience.js'
 import pool from '../config/db.js'
 import {
   actorFromUser,
@@ -395,6 +399,9 @@ export async function createEmployeeHandler(req, res) {
     const created = await findEmployeeById(id)
 
     const actorLabel = formatActorLabel(actorFromUser(req.user))
+    const audience = await buildEmployeeAudienceMeta(created, {
+      findDepartmentById,
+    })
     await createRecentActivity({
       title: wantsAdmin ? 'Admin Added' : 'New Employee Added',
       description: wantsAdmin
@@ -409,6 +416,9 @@ export async function createEmployeeHandler(req, res) {
         subjectName: created.name,
         departmentName: created.department,
         designation: created.designation,
+        departmentId: audience.departmentId,
+        departmentIds: audience.departmentIds,
+        employeeIds: audience.employeeIds,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },
@@ -608,6 +618,10 @@ export async function updateEmployeeHandler(req, res) {
       description = `${updated.name}'s employee profile was updated by ${actorLabel}.`
     }
 
+    const audience = await buildEmployeeAudienceMeta(updated, {
+      findDepartmentById,
+      previousDepartmentId: previous.departmentId,
+    })
     await createRecentActivity({
       title: 'Employee Profile Updated',
       description,
@@ -620,6 +634,9 @@ export async function updateEmployeeHandler(req, res) {
         subjectName: updated.name,
         departmentName: updated.department,
         designation: updated.designation,
+        departmentId: audience.departmentId,
+        departmentIds: audience.departmentIds,
+        employeeIds: audience.employeeIds,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },
@@ -683,6 +700,9 @@ export async function deleteEmployeeHandler(req, res) {
       }
 
       const actorLabel = formatActorLabel(actorFromUser(req.user))
+      const adminAudience = await buildEmployeeAudienceMeta(existing, {
+        findDepartmentById,
+      })
       await createRecentActivity({
         title: 'Admin Removed',
         description: `${existing.name}'s admin access was removed by ${actorLabel}.`,
@@ -693,6 +713,9 @@ export async function deleteEmployeeHandler(req, res) {
         actorEmployeeId: req.user?.employeeId || null,
         meta: {
           subjectName: existing.name,
+          departmentId: adminAudience.departmentId,
+          departmentIds: adminAudience.departmentIds,
+          employeeIds: adminAudience.employeeIds,
           actorName: req.user?.name || null,
           actorRole: req.user?.role || null,
         },
@@ -707,6 +730,9 @@ export async function deleteEmployeeHandler(req, res) {
     }
 
     const actorLabel = formatActorLabel(actorFromUser(req.user))
+    const removedAudience = await buildEmployeeAudienceMeta(existing, {
+      findDepartmentById,
+    })
     await createRecentActivity({
       title: 'Employee Removed',
       description: `${existing.name} was removed from the employee directory by ${actorLabel}.`,
@@ -718,6 +744,9 @@ export async function deleteEmployeeHandler(req, res) {
       meta: {
         subjectName: existing.name,
         departmentName: existing.department,
+        departmentId: removedAudience.departmentId,
+        departmentIds: removedAudience.departmentIds,
+        employeeIds: removedAudience.employeeIds,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },
@@ -832,6 +861,10 @@ export async function assignLeaveBalancesHandler(req, res) {
           ? `${result.updatedCount} employee(s) in a department`
           : `${result.updatedCount} employee(s)`
 
+    const audienceEmployeeIds = await expandEmployeeIdsWithDepartmentHeads(
+      result.employeeIds,
+      { findEmployeeById, findDepartmentById },
+    )
     await createRecentActivity({
       title: 'Leave Balances Updated',
       description: `${actorLabel} ${modeLabel} leave balances for ${scopeLabel} (casual ${casualLeaveBalance}, sick ${sickLeaveBalance}).`,
@@ -846,8 +879,9 @@ export async function assignLeaveBalancesHandler(req, res) {
         casualLeaveBalance,
         sickLeaveBalance,
         departmentId,
+        departmentIds: departmentId ? [departmentId] : [],
         updatedCount: result.updatedCount,
-        employeeIds: result.employeeIds,
+        employeeIds: audienceEmployeeIds,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },
