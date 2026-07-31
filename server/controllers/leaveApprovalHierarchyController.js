@@ -23,8 +23,15 @@ function parseStepsPayload(body) {
     errors.push('At least one approval step is required')
   }
 
+  if (rawSteps.length > APPROVER_ROLES.length + 1) {
+    // Team Lead + each role in APPROVER_ROLES (hr, admin)
+    errors.push(
+      `At most ${APPROVER_ROLES.length + 1} approval steps are allowed (one per approver type)`,
+    )
+  }
+
   const steps = []
-  const signatures = []
+  const seen = new Set()
   const allowedKinds = ['department_head', 'role']
 
   rawSteps.forEach((item, index) => {
@@ -52,10 +59,12 @@ function parseStepsPayload(body) {
     const signature =
       kind === 'department_head' ? 'department_head' : `role:${approverRole}`
 
-    if (signatures.length > 0 && signatures[signatures.length - 1] === signature) {
-      errors.push(`Step ${stepOrder}: consecutive duplicate approvers are not allowed`)
+    if (seen.has(signature)) {
+      errors.push(
+        `Step ${stepOrder}: each approver type can only appear once in the hierarchy`,
+      )
     }
-    signatures.push(signature)
+    seen.add(signature)
 
     steps.push({
       stepOrder,

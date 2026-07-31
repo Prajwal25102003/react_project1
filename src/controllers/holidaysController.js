@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
+import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
 import { ROLES } from "../models/authModel.js";
 import {
   buildReleaseYearOptions,
@@ -40,8 +42,7 @@ import {
 } from "../services/holidaysService.js";
 import { fetchNotifications } from "../services/notificationsService.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
-import { markFeedItemSeen } from "../utils/feedSeenState.js";
-import { requestNotificationsRefresh } from "../utils/notificationsRefresh.js";
+import { NOTIFICATIONS_REFRESH_EVENT } from "../utils/notificationsRefresh.js";
 
 const MONTH_NAMES = [
   "January",
@@ -72,8 +73,17 @@ export function useHolidays() {
   const [error, setError] = useState("");
   const [recentChanges, setRecentChanges] = useState([]);
   const seenUserKey = user?.id || user?.email || user?.employeeId || "";
-  const holidayChangesAckedRef = useRef(false);
+  const [searchParams] = useSearchParams();
+  const deepLinkAckedRef = useRef("");
   const toast = useToast();
+
+  const { acknowledgeAttention, withAttention } = useModuleNotificationAttention({
+    navId: "holidays",
+    role: user?.role,
+    seenUserKey,
+    enabled: !canManage && Boolean(seenUserKey),
+    acknowledgeOrphansOnMount: !canManage && Boolean(seenUserKey),
+  });
 
   const showActionFlash = useCallback(
     (action, holidayName = "") => {
@@ -94,10 +104,14 @@ export function useHolidays() {
   );
 
   const columns = useMemo(() => getHolidayColumns(canManage), [canManage]);
-  const tableRows = useMemo(() => {
+  const filteredHolidays = useMemo(() => {
     if (!selectedCalendarDate) return holidays;
     return holidays.filter((holiday) => holiday.date === selectedCalendarDate);
   }, [holidays, selectedCalendarDate]);
+  const tableRows = useMemo(
+    () => withAttention(filteredHolidays),
+    [filteredHolidays, withAttention],
+  );
   const table = useDataTable(tableRows, {
     columns,
     searchKeys: HOLIDAY_SEARCH_KEYS,
@@ -178,45 +192,61 @@ export function useHolidays() {
     loadCalendars();
   }, [loadCalendars]);
 
-  // Employees/HR: show unread holiday changes beside Released; clear sidebar badge once viewed.
+  // Employees/HR: chips for unread holiday changes; row interact marks them read.
   // Admin: no chips / no sidebar badge — confirmation stays in the header bell only.
   useEffect(() => {
-    if (canManage || !seenUserKey || holidayChangesAckedRef.current) {
+    if (canManage || !seenUserKey) {
+      setRecentChanges([]);
       return undefined;
     }
 
     let cancelled = false;
 
-    async function acknowledgeHolidayChanges() {
+    async function loadHolidayChanges() {
       try {
         const items = await fetchNotifications();
         if (cancelled) return;
-
         const withSeen = withNotificationSeenState(items, seenUserKey);
-        const changes = mapHolidayChangeNotifications(withSeen);
-        setRecentChanges(changes);
-
-        if (changes.length === 0) {
-          holidayChangesAckedRef.current = true;
-          return;
-        }
-
-        const ids = changes.map((item) => item.id);
-        markFeedItemSeen(seenUserKey, ids, {
-          retainOnlyIds: withSeen.map((item) => String(item.id)),
-        });
-        holidayChangesAckedRef.current = true;
-        requestNotificationsRefresh();
+        setRecentChanges(mapHolidayChangeNotifications(withSeen));
       } catch {
         if (!cancelled) setRecentChanges([]);
       }
     }
 
-    acknowledgeHolidayChanges();
+    loadHolidayChanges();
+
+    function handleRefresh() {
+      loadHolidayChanges();
+    }
+    window.addEventListener(NOTIFICATIONS_REFRESH_EVENT, handleRefresh);
     return () => {
       cancelled = true;
+      window.removeEventListener(NOTIFICATIONS_REFRESH_EVENT, handleRefresh);
     };
   }, [canManage, seenUserKey]);
+
+  useEffect(() => {
+    if (canManage || loading || !holidays?.length) return;
+    const holidayId = String(searchParams.get("id") || "").trim();
+    const holidayDate = String(searchParams.get("date") || "").trim();
+    const key = holidayId || holidayDate;
+    if (!key || deepLinkAckedRef.current === key) return;
+
+    const match = holidayId
+      ? holidays.find((row) => String(row.id) === holidayId)
+      : holidays.find((row) => String(row.date) === holidayDate);
+    if (!match) return;
+
+    deepLinkAckedRef.current = key;
+    if (match.date) {
+      setSelectedCalendarDate(match.date);
+      const month = Number(String(match.date).slice(5, 7)) - 1;
+      if (Number.isFinite(month) && month >= 0 && month <= 11) {
+        setCalendarMonth(month);
+      }
+    }
+    acknowledgeAttention(match);
+  }, [acknowledgeAttention, canManage, holidays, loading, searchParams]);
 
   const upcoming = useMemo(() => getUpcomingHolidays(holidays), [holidays]);
   const isYearReleased = calendar?.status === CALENDAR_STATUS.RELEASED;
@@ -257,6 +287,14 @@ export function useHolidays() {
 
   function selectCalendarDate(isoDate) {
     setSelectedCalendarDate(isoDate || null);
+    if (!isoDate || canManage) return;
+    for (const holiday of holidays) {
+      if (holiday.date === isoDate) acknowledgeAttention(holiday);
+    }
+  }
+
+  function onHolidayInteract(holiday) {
+    acknowledgeAttention(holiday);
   }
 
   function openCreateModal() {
@@ -275,6 +313,7 @@ export function useHolidays() {
     setFieldErrors({});
     setFormError("");
     setFormOpen(true);
+    acknowledgeAttention(holiday);
   }
 
   function closeFormModal() {
@@ -334,6 +373,7 @@ export function useHolidays() {
     if (!canManage || !isYearReleased) return;
     setDeleteError("");
     setDeleteTarget(holiday);
+    acknowledgeAttention(holiday);
   }
 
   function closeDeleteModal() {
@@ -453,9 +493,16 @@ export function useHolidays() {
 
   function addReleaseRow() {
     setReleaseRows((current) => [
-      ...current,
       { ...EMPTY_RELEASE_ROW, date: `${releaseYear}-01-01` },
+      ...current,
     ]);
+    setReleaseFieldErrors((current) => {
+      const next = {};
+      Object.entries(current).forEach(([key, value]) => {
+        next[Number(key) + 1] = value;
+      });
+      return next;
+    });
   }
 
   function removeReleaseRow(index) {
@@ -512,6 +559,7 @@ export function useHolidays() {
     calendarMonthLabel: `${MONTH_NAMES[calendarMonth]} ${year}`,
     selectedCalendarDate,
     selectCalendarDate,
+    onHolidayInteract,
     shiftCalendar,
     changeYear,
     holidays,

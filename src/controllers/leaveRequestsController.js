@@ -19,6 +19,8 @@ import {
   LEAVE_TYPES,
   MAX_MEDICAL_ATTACHMENTS,
   actorMatchesCurrentStep,
+  leaveRequestNeedsAttention,
+  leaveScopeNotificationCounts,
   calculateLeaveDays,
   canCancelLeaveRequest,
   hierarchyStepLabel,
@@ -43,6 +45,7 @@ import {
 import { ROLES } from "../models/authModel.js";
 import { userCanApproveLeaves } from "../models/navModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
+import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
 
 const LEAVE_STATUS_FILTERS = new Set([
   "Pending",
@@ -72,9 +75,9 @@ export function useLeaveRequests() {
   // Admin maintains modules and is not an employee leave requester.
   const canRequestLeave =
     Boolean(user?.employeeId) && user?.role !== ROLES.ADMIN;
-  // Admin only reviews HR leave; HR / department heads use the unified queue.
+  // Admin reviews leave whenever hierarchy current step is Admin (any category).
   const listApiScope = isAdmin
-    ? "admin-hr"
+    ? "admin"
     : canApproveLeaves
       ? "unified"
       : "mine";
@@ -85,8 +88,14 @@ export function useLeaveRequests() {
   );
   const urlLeaveId = searchParams.get("id");
   const urlDirection = searchParams.get("direction"); // sent | received
+  const seenUserKey = user?.id || user?.email || user?.employeeId || "";
 
-  // Keep headship flags current so a newly assigned department head can approve.
+  const { acknowledgeAttention, withAttention } = useModuleNotificationAttention({
+    navId: "leave-requests",
+    role: user?.role,
+    seenUserKey,
+    enabled: Boolean(seenUserKey && user?.employeeId),
+  });
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -165,15 +174,62 @@ export function useLeaveRequests() {
     return (rows || []).filter((row) => row.employeeId !== myId);
   }, [canApproveLeaves, isAdmin, listScope, rows, user?.employeeId]);
 
-  const table = useDataTable(scopedRows, {
+  const actorContext = useMemo(
+    () => ({
+      employeeId: user?.employeeId,
+      role: user?.role,
+    }),
+    [user?.employeeId, user?.role],
+  );
+
+  const scopeBadgeCounts = useMemo(
+    () => leaveScopeNotificationCounts(rows || [], actorContext),
+    [rows, actorContext],
+  );
+
+  const listScopeOptionsWithBadges = useMemo(
+    () =>
+      (listScopeOptions || []).map((option) => ({
+        ...option,
+        badge:
+          option.value === "mine"
+            ? scopeBadgeCounts.mine
+            : option.value === "employees"
+              ? scopeBadgeCounts.employees
+              : 0,
+      })),
+    [listScopeOptions, scopeBadgeCounts],
+  );
+
+  const tableRows = useMemo(
+    () =>
+      withAttention(
+        (scopedRows || []).map((row) => ({
+          ...row,
+          needsAction: leaveRequestNeedsAttention(row, actorContext),
+        })),
+      ).map((row) => ({
+        ...row,
+        needsAction: Boolean(row.needsAction || row.needsAttention),
+      })),
+    [scopedRows, actorContext, withAttention],
+  );
+
+  const isPersonalLeaveList =
+    listScope === "mine" || (!canApproveLeaves && canRequestLeave);
+
+  const table = useDataTable(tableRows, {
     columns: LEAVE_REQUEST_COLUMNS,
     searchKeys: LEAVE_REQUEST_SEARCH_KEYS,
-    initialVisibleColumnIds: getLeaveRequestDefaultVisibleIds(true),
+    initialVisibleColumnIds: getLeaveRequestDefaultVisibleIds(
+      isPersonalLeaveList,
+    ),
     initialColumnFilters,
   });
 
   const [decisionTarget, setDecisionTarget] = useState(null);
   const [decisionStatus, setDecisionStatus] = useState("");
+  const [decisionLoading, setDecisionLoading] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [decisionError, setDecisionError] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -204,6 +260,7 @@ export function useLeaveRequests() {
             ? urlDirection
             : null,
         );
+        acknowledgeAttention(detailed);
         // Clear deep-link params after opening so refresh doesn't re-open
         setSearchParams(
           (current) => {
@@ -234,11 +291,12 @@ export function useLeaveRequests() {
     return () => {
       cancelled = true;
     };
-  }, [urlLeaveId, urlDirection, setSearchParams]);
+  }, [urlLeaveId, urlDirection, setSearchParams, acknowledgeAttention]);
 
   async function openViewModal(request) {
     setViewDirection(null);
     setViewTarget(request);
+    if (request) acknowledgeAttention(request);
     if (!request?.id) return;
     try {
       setViewLoading(true);
@@ -263,6 +321,25 @@ export function useLeaveRequests() {
     setRemarksError("");
     setDecisionStatus(nextStatus);
     setDecisionTarget(request);
+    setDecisionLoading(Boolean(request?.id));
+
+    if (!request?.id) {
+      setDecisionLoading(false);
+      return;
+    }
+
+    fetchLeaveRequestById(request.id)
+      .then((detailed) => {
+        setDecisionTarget((current) =>
+          current?.id === detailed.id ? detailed : current,
+        );
+      })
+      .catch(() => {
+        // Keep the list/view row if the detail fetch fails.
+      })
+      .finally(() => {
+        setDecisionLoading(false);
+      });
   }
 
   function openApproveModal(request) {
@@ -274,6 +351,13 @@ export function useLeaveRequests() {
     const request = viewTarget;
     closeViewModal();
     openApproveModal(request);
+  }
+
+  function rejectFromView() {
+    if (!viewTarget) return;
+    const request = viewTarget;
+    closeViewModal();
+    openRejectModal(request);
   }
 
   function openRejectModal(request) {
@@ -292,6 +376,7 @@ export function useLeaveRequests() {
     if (deciding) return;
     setDecisionTarget(null);
     setDecisionStatus("");
+    setDecisionLoading(false);
     setDecisionError("");
     setRemarks("");
     setRemarksError("");
@@ -400,6 +485,7 @@ export function useLeaveRequests() {
       actions.push({
         label: `Approve (${label})`,
         icon: "check-circle",
+        iconSize: 32,
         onClick: () => openApproveModal(request),
       });
       actions.push({
@@ -432,7 +518,7 @@ export function useLeaveRequests() {
     isDepartmentHead,
     listScope,
     setListScope,
-    listScopeOptions,
+    listScopeOptions: listScopeOptionsWithBadges,
     leaveRequests: table.rows,
     loading,
     error,
@@ -442,12 +528,14 @@ export function useLeaveRequests() {
     canRequestLeave,
     decisionTarget,
     decisionStatus,
+    decisionLoading,
     deciding,
     decisionError,
     remarks,
     remarksError,
     openApproveModal,
     approveFromView,
+    rejectFromView,
     canApproveViewTarget,
     openRejectModal,
     closeDecisionModal,

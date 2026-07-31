@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
+import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
 import { HR_ADMIN_ROLES, ROLES } from "../models/authModel.js";
 import { fetchDepartments } from "../services/departmentsService.js";
 import {
@@ -42,6 +43,8 @@ export function useEmployees() {
   const toast = useToast();
   const { user } = useAuth();
   const isAdminUser = user?.role === ROLES.ADMIN;
+  const seenUserKey =
+    user?.id || user?.email || user?.employeeId || "";
   const loadEmployees = useMemo(
     () => () =>
       fetchEmployees(
@@ -60,11 +63,6 @@ export function useEmployees() {
   );
   const [departmentFilterOptions, setDepartmentFilterOptions] = useState([]);
   const [assignDepartments, setAssignDepartments] = useState([]);
-  const table = useDataTable(rows, {
-    columns: EMPLOYEE_COLUMNS,
-    searchKeys: EMPLOYEE_SEARCH_KEYS,
-    initialColumnFilters,
-  });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -76,6 +74,25 @@ export function useEmployees() {
   const [assignError, setAssignError] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const deepLinkAckedRef = useRef("");
+
+  const { acknowledgeAttention, withAttention } = useModuleNotificationAttention({
+    navId: "employees",
+    role: user?.role,
+    seenUserKey,
+    enabled: Boolean(user),
+  });
+
+  const tableSourceRows = useMemo(
+    () => withAttention(rows),
+    [rows, withAttention],
+  );
+
+  const table = useDataTable(tableSourceRows, {
+    columns: EMPLOYEE_COLUMNS,
+    searchKeys: EMPLOYEE_SEARCH_KEYS,
+    initialColumnFilters,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -167,17 +184,36 @@ export function useEmployees() {
       .map((employee) => employee.id);
   }
 
+  const acknowledgeEmployeeAttention = useCallback(
+    (employeeId) => acknowledgeAttention(employeeId),
+    [acknowledgeAttention],
+  );
+
   function openViewModal(employee) {
     setViewTarget(employee);
+    acknowledgeEmployeeAttention(employee?.id);
   }
 
   function closeViewModal() {
     setViewTarget(null);
   }
 
+  // Deep-link from notification: /employees?id=EMP-…
+  useEffect(() => {
+    const deepLinkId = String(searchParams.get("id") || "").trim();
+    if (!deepLinkId || loading || !rows?.length) return;
+    if (deepLinkAckedRef.current === deepLinkId) return;
+    const match = rows.find((row) => String(row.id) === deepLinkId);
+    if (!match) return;
+    deepLinkAckedRef.current = deepLinkId;
+    setViewTarget(match);
+    acknowledgeEmployeeAttention(deepLinkId);
+  }, [acknowledgeEmployeeAttention, loading, rows, searchParams]);
+
   function openDeleteModal(employee) {
     setDeleteError("");
     setDeleteTarget(employee);
+    acknowledgeEmployeeAttention(employee?.id);
   }
 
   function closeDeleteModal() {
@@ -343,6 +379,7 @@ export function useEmployees() {
           label: "Edit",
           icon: "pencil",
           to: `/employees/${employee.id}/edit`,
+          onClick: () => acknowledgeEmployeeAttention(employee.id),
         },
         {
           label: "Delete",
@@ -360,6 +397,7 @@ export function useEmployees() {
         label: "Edit",
         icon: "pencil",
         to: `/employees/${employee.id}/edit`,
+        onClick: () => acknowledgeEmployeeAttention(employee.id),
       },
     ];
 

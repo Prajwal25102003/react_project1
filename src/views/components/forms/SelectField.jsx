@@ -121,7 +121,7 @@ function SelectField({
             role="listbox"
             aria-label={ariaLabel}
             style={menuStyle}
-            className="overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 shadow-theme-lg"
+            className="custom-scrollbar overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 shadow-theme-lg"
           >
             {options.map((option) => {
               const active = option.value === value;

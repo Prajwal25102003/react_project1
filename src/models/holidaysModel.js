@@ -18,6 +18,13 @@ const HOLIDAY_TYPE_STATUS = {
   "Festival Holiday": "bg-[#f4f3ff] text-[#6941c6]",
 };
 
+/** Soft card fill for upcoming holiday chips (lighter than calendar day circles). */
+const HOLIDAY_TYPE_BG = {
+  "National Holiday": "bg-error-50",
+  "Optional Holiday": "bg-warning-50",
+  "Festival Holiday": "bg-[#f4f3ff]",
+};
+
 /** Soft circle fill for calendar day badges (matches holiday calendar mockup). */
 const HOLIDAY_TYPE_DAY = {
   "National Holiday": "bg-error-100 text-error-700",
@@ -88,6 +95,7 @@ export function mapHoliday(holiday) {
       "National Holiday",
     ),
     typeDotClass: HOLIDAY_TYPE_DOT[holiday.type] || "bg-gray-400",
+    typeBgClass: HOLIDAY_TYPE_BG[holiday.type] || "bg-gray-50",
     typeDayClass:
       HOLIDAY_TYPE_DAY[holiday.type] || "bg-brand-500 text-white",
   };

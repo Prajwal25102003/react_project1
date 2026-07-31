@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import HoverTooltip from "../components/HoverTooltip.jsx";
 import StatusPill from "../components/StatusPill.jsx";
 
 /** Visible rows before the rest scroll (invisible scrollbar). */
@@ -29,7 +30,10 @@ function ActivityCard({ activity, onClick }) {
       } ${isClickable ? "cursor-pointer transition hover:border-brand-200 hover:shadow-sm" : ""}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <HoverTooltip
+          content={activity.description || activity.title}
+          className="block min-w-0 flex-1"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate text-theme-sm font-medium text-gray-800">
               {activity.title}
@@ -41,14 +45,11 @@ function ActivityCard({ activity, onClick }) {
             ) : null}
           </div>
           {activity.description ? (
-            <p
-              className="mt-1 line-clamp-2 text-theme-xs leading-snug text-gray-500"
-              title={activity.description}
-            >
+            <p className="mt-1 line-clamp-3 text-theme-xs leading-snug text-gray-500 sm:line-clamp-2">
               {activity.description}
             </p>
           ) : null}
-        </div>
+        </HoverTooltip>
         <StatusPill label={activity.status} statusClass={activity.statusClass} />
       </div>
 
@@ -96,7 +97,7 @@ function RecentActivitiesTable({
       className={
         compact
           ? "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-2 pt-3 sm:px-5"
-          : "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 sm:px-6"
+          : "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white px-4 pb-3 pt-4 sm:px-6"
       }
     >
       <div
@@ -149,7 +150,7 @@ function RecentActivitiesTable({
           </div>
 
           <div
-            className={`hidden md:block ${
+            className={`hidden min-h-0 flex-1 md:block ${
               needsScroll
                 ? `no-scrollbar overflow-y-auto ${scrollMaxClass}`
                 : "w-full overflow-x-auto"
@@ -220,10 +221,14 @@ function RecentActivitiesTable({
                     >
                       <td className={compact ? "py-2.5 pr-3" : "py-3.5 pr-4"}>
                         <div className="flex items-start gap-2">
-                          <div className="min-w-0">
+                          <HoverTooltip
+                            content={activity.description || activity.title}
+                            className="block min-w-0"
+                          >
                             <p
                               className={`truncate text-theme-sm font-medium ${
-                                activity.direction === "sent"
+                                activity.direction === "sent" ||
+                                activity.directionLabel === "Forwarded"
                                   ? "text-brand-500"
                                   : activity.direction === "received"
                                     ? "text-gray-800"
@@ -233,14 +238,22 @@ function RecentActivitiesTable({
                               {activity.title}
                             </p>
                             {activity.description ? (
-                              <span
-                                className="mt-0.5 line-clamp-2 text-theme-xs leading-snug text-gray-500"
-                                title={activity.description}
-                              >
+                              <span className="mt-0.5 line-clamp-3 text-theme-xs leading-snug text-gray-500 sm:line-clamp-2">
                                 {activity.description}
                               </span>
                             ) : null}
-                          </div>
+                            {activity.directionLabel ? (
+                              <span
+                                className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                  activity.directionLabel === "Received"
+                                    ? "bg-blue-light-50 text-blue-light-700"
+                                    : "bg-brand-50 text-brand-500"
+                                }`}
+                              >
+                                {activity.directionLabel}
+                              </span>
+                            ) : null}
+                          </HoverTooltip>
                           {activity.isNew ? (
                             <span className="shrink-0 rounded-full bg-brand-500 px-2 py-0.5 text-theme-xs font-medium uppercase tracking-wide text-white">
                               New

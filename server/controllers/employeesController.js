@@ -613,6 +613,7 @@ export async function updateEmployeeHandler(req, res) {
       description,
       category: 'Employees',
       status: 'Updated',
+      eventType: 'employee.updated',
       subjectEmployeeId: updated.id,
       actorEmployeeId: req.user?.employeeId || null,
       meta: {
@@ -711,6 +712,7 @@ export async function deleteEmployeeHandler(req, res) {
       description: `${existing.name} was removed from the employee directory by ${actorLabel}.`,
       category: 'Employees',
       status: 'Removed',
+      eventType: 'employee.removed',
       subjectEmployeeId: existing.id,
       actorEmployeeId: req.user?.employeeId || null,
       meta: {
@@ -835,6 +837,7 @@ export async function assignLeaveBalancesHandler(req, res) {
       description: `${actorLabel} ${modeLabel} leave balances for ${scopeLabel} (casual ${casualLeaveBalance}, sick ${sickLeaveBalance}).`,
       category: 'Employees',
       status: 'Updated',
+      eventType: 'employee.leave_balances',
       subjectEmployeeId: null,
       actorEmployeeId: req.user?.employeeId || null,
       meta: {
@@ -844,6 +847,7 @@ export async function assignLeaveBalancesHandler(req, res) {
         sickLeaveBalance,
         departmentId,
         updatedCount: result.updatedCount,
+        employeeIds: result.employeeIds,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },

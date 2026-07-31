@@ -90,8 +90,9 @@ const { getSeenIds: getSeenActivityIds, markSeen: markActivitiesSeen, pruneSeenT
 export { getSeenActivityIds, markActivitiesSeen };
 
 /**
- * Latest N activities always display. Unseen → isNew until the user
+ * Latest 25 activities always display. Unseen → isNew until the user
  * interacts with that item (banner, header notification, or activity row).
+ * Order is newest first (activityTime), then older below.
  */
 export function withActivitySeenState(activities, userKey) {
   const list = activities || [];
@@ -99,10 +100,20 @@ export function withActivitySeenState(activities, userKey) {
   pruneActivitySeen(userKey, currentIds);
 
   const seenSet = new Set(getSeenActivityIds(userKey));
-  return list.map((activity) => ({
-    ...activity,
-    isNew: Boolean(activity.id) && !seenSet.has(String(activity.id)),
-  }));
+  return list
+    .map((activity) => ({
+      ...activity,
+      isNew: Boolean(activity.id) && !seenSet.has(String(activity.id)),
+    }))
+    .sort((a, b) => {
+      const tb = new Date(b.activityTime || 0).getTime();
+      const ta = new Date(a.activityTime || 0).getTime();
+      if (tb !== ta) return tb - ta;
+      const bId = String(b.id || "").match(/^ACT-(\d+)$/i);
+      const aId = String(a.id || "").match(/^ACT-(\d+)$/i);
+      if (bId && aId) return Number(bId[1]) - Number(aId[1]);
+      return String(b.id || "").localeCompare(String(a.id || ""));
+    });
 }
 
 /**
@@ -136,7 +147,9 @@ export function bannerNotificationTitle(message) {
       if (/in progress|forwarded/i.test(original)) {
         return `Leave Request In Progress${lopSuffix}`;
       }
-      if (status === "Pending") return `Leave Request Received${lopSuffix}`;
+      if (/sent/i.test(original) || status === "Pending") {
+        return `Leave Request Received${lopSuffix}`;
+      }
       if (status === "Approved" || status === "TeamLeadApproved") {
         return `Leave Request Approved${lopSuffix}`;
       }
@@ -152,8 +165,13 @@ export function bannerNotificationTitle(message) {
   }
 
   if (direction === "sent") {
-    if (category === "leave" && status === "Pending") {
-      return `Leave Request Sent${lopSuffix}`;
+    if (category === "leave") {
+      if (/forwarded/i.test(original)) {
+        return `Leave Request Forwarded${lopSuffix}`;
+      }
+      if (status === "Pending") {
+        return `Leave Request Sent${lopSuffix}`;
+      }
     }
     return original || "Notification Sent";
   }

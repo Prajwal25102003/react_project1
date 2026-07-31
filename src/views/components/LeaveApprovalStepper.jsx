@@ -98,11 +98,15 @@ function LeaveApprovalStepper({ steps = [] }) {
         ? "grid-cols-3"
         : steps.length === 4
           ? "grid-cols-4"
-          : "grid-cols-5";
+          : steps.length === 5
+            ? "grid-cols-5"
+            : steps.length === 6
+              ? "grid-cols-6"
+              : "grid-cols-7";
 
   return (
     <div
-      className="w-full min-w-0 max-w-[min(520px,100%)]"
+      className="w-full min-w-0 max-w-[min(640px,100%)]"
       aria-label="Approval progress"
     >
       {/* Icons + connectors */}

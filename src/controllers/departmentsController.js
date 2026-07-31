@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "./authContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
+import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
 import { useToast } from "./toastContext.jsx";
 import { fetchEmployees } from "../services/employeesService.js";
 import {
@@ -27,11 +29,29 @@ import { requestEmsRefresh } from "../utils/emsRefresh.js";
 
 export function useDepartments() {
   const toast = useToast();
+  const { user } = useAuth();
+  const seenUserKey =
+    user?.id || user?.email || user?.employeeId || "";
+  const [searchParams] = useSearchParams();
+  const deepLinkAckedRef = useRef("");
   const { rows, loading, error, reload } = useListData(
     fetchDepartments,
     "Failed to load departments",
   );
-  const table = useDataTable(rows, {
+
+  const { acknowledgeAttention, withAttention } = useModuleNotificationAttention({
+    navId: "departments",
+    role: user?.role,
+    seenUserKey,
+    enabled: Boolean(user),
+  });
+
+  const tableSourceRows = useMemo(
+    () => withAttention(rows),
+    [rows, withAttention],
+  );
+
+  const table = useDataTable(tableSourceRows, {
     columns: DEPARTMENT_COLUMNS,
     searchKeys: DEPARTMENT_SEARCH_KEYS,
   });
@@ -39,9 +59,15 @@ export function useDepartments() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
+  const acknowledgeDepartment = useCallback(
+    (department) => acknowledgeAttention(department),
+    [acknowledgeAttention],
+  );
+
   function openDeleteModal(department) {
     setDeleteError("");
     setDeleteTarget(department);
+    acknowledgeDepartment(department);
   }
 
   function closeDeleteModal() {
@@ -49,6 +75,20 @@ export function useDepartments() {
     setDeleteTarget(null);
     setDeleteError("");
   }
+
+  function onDepartmentInteract(department) {
+    acknowledgeDepartment(department);
+  }
+
+  useEffect(() => {
+    const deepLinkId = String(searchParams.get("id") || "").trim();
+    if (!deepLinkId || loading || !rows?.length) return;
+    if (deepLinkAckedRef.current === deepLinkId) return;
+    const match = rows.find((row) => String(row.id) === deepLinkId);
+    if (!match) return;
+    deepLinkAckedRef.current = deepLinkId;
+    acknowledgeDepartment(match);
+  }, [acknowledgeDepartment, loading, rows, searchParams]);
 
   async function confirmDelete() {
     if (!deleteTarget) return;
@@ -81,6 +121,7 @@ export function useDepartments() {
     openDeleteModal,
     closeDeleteModal,
     confirmDelete,
+    onDepartmentInteract,
   };
 }
 

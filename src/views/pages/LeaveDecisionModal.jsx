@@ -11,6 +11,7 @@ import {
   currentHierarchyStep,
   formatLeaveDaysLabel,
   hierarchyStepLabel,
+  isFinalApprovalStep,
   leaveTypeSkipsBalanceDeduction,
   nextStepAfterCurrent,
 } from "../../models/leaveRequestsModel.js";
@@ -19,6 +20,7 @@ function LeaveDecisionModal({
   request,
   status,
   deciding,
+  loading = false,
   error,
   remarks = "",
   remarksError = "",
@@ -34,14 +36,10 @@ function LeaveDecisionModal({
   const stepLabel = hierarchyStepLabel(currentStep);
   const hasNextStep = Boolean(nextStepAfterCurrent(request));
   const skipsBalance = leaveTypeSkipsBalanceDeduction(request.leaveType);
-  const hierarchySteps = [...(request.hierarchySteps || [])].sort(
-    (a, b) => Number(a.stepOrder) - Number(b.stepOrder),
-  );
-  const isFirstApprovalStep =
-    hierarchySteps.length === 0 ||
-    Number(currentStep?.stepOrder) === Number(hierarchySteps[0]?.stepOrder);
-  const showBalancePanel =
-    isApprove && !skipsBalance && (isFirstApprovalStep || !hasNextStep);
+  const isFinalStep = isFinalApprovalStep(request);
+  // Always show balances on approve (except types that never deduct). Deduction
+  // preview only appears on the final step — matching server behavior.
+  const showBalancePanel = isApprove && !skipsBalance;
 
   const title = isReject
     ? "Reject Leave Request"
@@ -50,19 +48,23 @@ function LeaveDecisionModal({
   const daysLabel =
     request.leaveDaysLabel ||
     formatLeaveDaysLabel(request.leaveDays, request.halfDaySession);
+  const startLabel = request.startDateLabel || request.startDate;
+  const endLabel = request.endDateLabel || request.endDate;
   const dateRange =
     Number(request.leaveDays) === 0.5
-      ? `${request.startDate} · ${daysLabel}`
-      : `${request.startDate} to ${request.endDate}`;
+      ? `${startLabel} · ${daysLabel}`
+      : `${startLabel} to ${endLabel}`;
 
   const balanceNote = skipsBalance
     ? "Leave balances will not be deducted."
-    : "Leave balances will be deducted now.";
+    : isFinalStep
+      ? "Leave balances will be deducted now."
+      : "Leave balances are deducted on final approval.";
 
   const description = isReject
     ? `Reject ${request.leaveType} for ${request.employeeId} (${dateRange}). The workflow will stop.`
     : hasNextStep
-      ? `Approve ${request.leaveType} for ${request.employeeId} (${dateRange}) as ${stepLabel}? The next approver will continue the workflow.`
+      ? `Approve ${request.leaveType} for ${request.employeeId} (${dateRange}) as ${stepLabel}? The next approver will continue the workflow. ${balanceNote}`
       : `Give final ${stepLabel} approval for ${request.leaveType} for ${request.employeeId} (${dateRange})? ${balanceNote}`;
 
   const balances = normalizeLeaveBalances(request);
@@ -72,90 +74,98 @@ function LeaveDecisionModal({
       onClose={onClose}
       title={title}
       description={description}
+      panelClassName="relative mx-auto my-6 flex max-h-[calc(100vh-6rem)] w-full min-w-0 max-w-[min(600px,calc(100vw-4rem))] flex-col overflow-hidden rounded-3xl bg-white p-5 sm:p-6"
     >
       <form
-        className="space-y-5 px-2"
+        className="flex min-h-0 flex-1 flex-col"
         onSubmit={(event) => {
           event.preventDefault();
           onConfirm();
         }}
       >
-        {error ? (
-          <p className="text-theme-sm text-error-600">{error}</p>
-        ) : null}
+        <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-1 pb-1">
+          {error ? (
+            <p className="text-theme-sm text-error-600">{error}</p>
+          ) : null}
 
-        {request.attachments?.length ? (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-            <p className={LABEL_CLASS}>
-              Medical Document{request.attachments.length > 1 ? "s" : ""}
-            </p>
-            <ul className="mt-1 space-y-1.5">
-              {request.attachments.map((file) => (
-                <li key={file.url}>
-                  <a
-                    href={file.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
-                  >
-                    View / download{" "}
-                    {attachmentFileLabel(file.url, file.name)}
-                  </a>
-                </li>
-              ))}
-            </ul>
+          {showBalancePanel ? (
+            <LeaveBalancePanel
+              balances={balances}
+              leaveType={request.leaveType}
+              leaveDays={request.leaveDays}
+              showPreview={isFinalStep}
+              title={
+                isFinalStep
+                  ? "Leave balance (before approval)"
+                  : "Current leave balance"
+              }
+            />
+          ) : null}
+
+          {request.attachments?.length ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+              <p className={LABEL_CLASS}>
+                Medical Document{request.attachments.length > 1 ? "s" : ""}
+              </p>
+              <ul className="mt-1 space-y-1.5">
+                {request.attachments.map((file) => (
+                  <li key={file.url}>
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
+                    >
+                      View / download{" "}
+                      {attachmentFileLabel(file.url, file.name)}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : request.attachmentUrl ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+              <p className={LABEL_CLASS}>Medical Document</p>
+              <a
+                href={request.attachmentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
+              >
+                View / download {attachmentFileLabel(request.attachmentUrl)}
+              </a>
+            </div>
+          ) : null}
+
+          <div>
+            <label className={LABEL_CLASS} htmlFor="leave-decision-remarks">
+              Remarks
+              {isReject ? <RequiredMark /> : null}
+              {!isReject ? (
+                <span className="ml-1 font-normal text-gray-400">(optional)</span>
+              ) : null}
+            </label>
+            <textarea
+              id="leave-decision-remarks"
+              rows={4}
+              value={remarks}
+              onChange={(event) => onRemarksChange?.(event.target.value)}
+              disabled={deciding}
+              className={`${TEXTAREA_CLASS} max-h-32 overflow-y-auto`}
+              placeholder={
+                isReject
+                  ? "Explain why this leave request is being rejected"
+                  : "Add comments (optional)"
+              }
+            />
+            <FieldError message={remarksError} />
           </div>
-        ) : request.attachmentUrl ? (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-            <p className={LABEL_CLASS}>Medical Document</p>
-            <a
-              href={request.attachmentUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-1 inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
-            >
-              View / download {attachmentFileLabel(request.attachmentUrl)}
-            </a>
-          </div>
-        ) : null}
-
-        {showBalancePanel ? (
-          <LeaveBalancePanel
-            balances={balances}
-            leaveType={request.leaveType}
-            leaveDays={request.leaveDays}
-            title="Leave balance (before approval)"
-          />
-        ) : null}
-
-        <div>
-          <label className={LABEL_CLASS} htmlFor="leave-decision-remarks">
-            Remarks
-            {isReject ? <RequiredMark /> : null}
-            {!isReject ? (
-              <span className="ml-1 font-normal text-gray-400">(optional)</span>
-            ) : null}
-          </label>
-          <textarea
-            id="leave-decision-remarks"
-            rows={4}
-            value={remarks}
-            onChange={(event) => onRemarksChange?.(event.target.value)}
-            disabled={deciding}
-            className={TEXTAREA_CLASS}
-            placeholder={
-              isReject
-                ? "Explain why this leave request is being rejected"
-                : "Add comments (optional)"
-            }
-          />
-          <FieldError message={remarksError} />
         </div>
 
-        <div className="flex items-center justify-center">
+        <div className="flex shrink-0 items-center justify-center border-t border-gray-100 pt-4">
           <button
             type="submit"
-            disabled={deciding}
+            disabled={deciding || loading}
             className={
               isApprove
                 ? "rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60"

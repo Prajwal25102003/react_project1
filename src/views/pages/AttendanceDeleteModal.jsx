@@ -12,7 +12,7 @@ function AttendanceDeleteModal({
   return (
     <ConfirmModal
       title="Delete Attendance"
-      description={`Delete attendance for ${record.employeeId || record.employeeName} on ${record.date}?`}
+      description={`Delete attendance for ${record.employeeId || record.employeeName} on ${record.dateLabel || record.date}?`}
       error={error}
       confirmLabel="Delete"
       confirmingLabel="Deleting…"

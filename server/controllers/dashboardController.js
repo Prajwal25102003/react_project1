@@ -1,5 +1,6 @@
 import {
   findRecentActivities,
+  findTeamEmployeeIds,
   getDashboardStats,
   getDepartmentBreakdown,
   getEmployeeDashboardStats,
@@ -8,13 +9,22 @@ import {
   normalizeNewEmployeesPeriod,
 } from '../models/dashboardModel.js'
 import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
-import { findLeaveRequestsForAdminApprovals } from '../models/leaveRequestsModel.js'
+import { isNamedLeaveApprover } from '../models/leaveApprovalHierarchyModel.js'
+import {
+  findLeaveRequestsAwaitingActor,
+  findLeaveRequestsForAdminApprovals,
+  findLeaveRequestsWhereActorIsFutureStep,
+} from '../models/leaveRequestsModel.js'
 import {
   findHolidayActivityRows,
+  findLeaveActivityRowsForLeaveIds,
+  findLeaveDecisionActivityRows,
   findNotificationsForAdmin,
+  findPersonalSubjectActivityRows,
+  mergeActivityFeeds,
 } from '../models/notificationsModel.js'
 import { formatDbError } from '../utils/formatDbError.js'
-import { mapActivityRows } from '../utils/relativeTime.js'
+import { mapActivityRowsAsync } from '../utils/relativeTime.js'
 
 const PERIOD_LABELS = {
   month: 'this month',
@@ -22,42 +32,144 @@ const PERIOD_LABELS = {
   year: 'this year',
 }
 
+const RECENT_ACTIVITY_LIMIT = 25
+
+function parseMeta(meta) {
+  if (!meta) return {}
+  if (typeof meta === 'string') {
+    try {
+      return JSON.parse(meta) || {}
+    } catch {
+      return {}
+    }
+  }
+  return meta
+}
+
+function leaveRequestKey(row) {
+  const meta = parseMeta(row.meta)
+  if (meta.leaveRequestId) return String(meta.leaveRequestId)
+  const match = String(row.id || '').match(/^leave-(.+)$/i)
+  return match ? match[1] : null
+}
+
+function isLeaveFeedRow(row) {
+  return (
+    String(row?.category || '') === 'Leave' ||
+    String(row?.eventType || '').startsWith('leave.')
+  )
+}
+
 function mergeScopedWithHolidays(
   scopedRows,
   holidayRows,
   viewerEmployeeId,
-  limit = 10,
+  limit = RECENT_ACTIVITY_LIMIT,
+  leaveDecisionRows = [],
 ) {
-  const seen = new Set()
-  const merged = []
+  const byId = new Map()
+  const leaveBest = new Map()
 
-  for (const row of scopedRows || []) {
-    const id = String(row.id)
-    if (seen.has(id)) continue
-    seen.add(id)
+  const pushRow = (row, audience) => {
+    const withAudience = { ...row, audience: row.audience || audience }
+    const leaveKey = isLeaveFeedRow(withAudience)
+      ? leaveRequestKey(withAudience)
+      : null
+    if (leaveKey) {
+      const existing = leaveBest.get(leaveKey)
+      if (!existing) {
+        leaveBest.set(leaveKey, withAudience)
+        return
+      }
+      const rowSynthetic = String(withAudience.id || '').startsWith('leave-')
+      const existingSynthetic = String(existing.id || '').startsWith('leave-')
+      const rowTime = new Date(withAudience.activityTime || 0).getTime()
+      const existingTime = new Date(existing.activityTime || 0).getTime()
+        if (existingSynthetic && !rowSynthetic) {
+          leaveBest.set(leaveKey, withAudience)
+        } else if (rowSynthetic && !existingSynthetic) {
+          // keep recorded decision activity
+        } else if (rowTime >= existingTime) {
+          leaveBest.set(leaveKey, withAudience)
+        }
+      return
+    }
+    const id = String(withAudience.id)
+    if (!byId.has(id)) byId.set(id, withAudience)
+  }
+
+  for (const row of leaveDecisionRows || []) {
     const isSelf =
       viewerEmployeeId &&
       String(row.subjectEmployeeId || '') === String(viewerEmployeeId)
-    merged.push({
-      ...row,
-      audience: isSelf ? 'self' : 'org',
-    })
+    pushRow(row, isSelf ? 'self' : 'org')
+  }
+
+  for (const row of scopedRows || []) {
+    const isSelf =
+      viewerEmployeeId &&
+      String(row.subjectEmployeeId || '') === String(viewerEmployeeId)
+    pushRow(row, isSelf ? 'self' : 'org')
   }
 
   for (const row of holidayRows || []) {
-    const id = String(row.id)
-    if (seen.has(id)) continue
-    seen.add(id)
-    merged.push({ ...row, audience: 'org' })
+    pushRow(row, 'org')
   }
 
+  const merged = [...byId.values(), ...leaveBest.values()]
   merged.sort((a, b) => {
     const ta = new Date(a.activityTime || 0).getTime()
     const tb = new Date(b.activityTime || 0).getTime()
     return tb - ta
   })
 
-  return merged.slice(0, limit)
+  const personalLeave = merged.filter(
+    (row) =>
+      isLeaveFeedRow(row) &&
+      String(row.audience || '').toLowerCase() === 'self',
+  )
+  const rest = merged.filter(
+    (row) =>
+      !(
+        isLeaveFeedRow(row) &&
+        String(row.audience || '').toLowerCase() === 'self'
+      ),
+  )
+  const leaveSlots = Math.min(
+    personalLeave.length,
+    Math.max(3, Math.ceil(limit / 2)),
+  )
+  const selected = [
+    ...personalLeave.slice(0, leaveSlots),
+    ...rest.slice(0, Math.max(0, limit - leaveSlots)),
+  ]
+  selected.sort((a, b) => {
+    const ta = new Date(a.activityTime || 0).getTime()
+    const tb = new Date(b.activityTime || 0).getTime()
+    return tb - ta
+  })
+
+  return selected.slice(0, limit)
+}
+
+async function findAwaitingApproverLeaveActivities(
+  { role = null, employeeId = null },
+  limit = RECENT_ACTIVITY_LIMIT,
+) {
+  const [awaiting, future] = await Promise.all([
+    findLeaveRequestsAwaitingActor({ role, employeeId }),
+    findLeaveRequestsWhereActorIsFutureStep({ role, employeeId }),
+  ])
+  const leaveIds = [
+    ...new Set(
+      [...(awaiting || []), ...(future || [])]
+        .map((row) => row.id)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ]
+  if (leaveIds.length === 0) return []
+  return findLeaveActivityRowsForLeaveIds(leaveIds, limit)
 }
 
 function buildOrgPrimaryMetrics(stats, periodLabel, period = 'month', { includeLeave = true, leaveLabel = 'Pending Leave', leaveHref = '/leave-requests?status=Pending' } = {}) {
@@ -162,11 +274,35 @@ async function buildOrgDashboard(req, res) {
     })
   }
 
-  const [baseStats, activityRows, departments] = await Promise.all([
+  const [baseStats, rawActivityRows, departments] = await Promise.all([
     getDashboardStats(newEmployeesPeriod),
-    isAdminUser ? findNotificationsForAdmin(10) : findRecentActivities(),
+    isAdminUser
+      ? findNotificationsForAdmin(RECENT_ACTIVITY_LIMIT)
+      : findRecentActivities(),
     getDepartmentBreakdown(),
   ])
+
+  const awaitingRows =
+    isAdminUser || req.user?.role === 'hr'
+      ? await findAwaitingApproverLeaveActivities(
+          {
+            role: isAdminUser ? 'admin' : 'hr',
+            employeeId: req.user?.employeeId || null,
+          },
+          RECENT_ACTIVITY_LIMIT,
+        )
+      : []
+
+  const activityRows = mergeActivityFeeds(
+    [
+      awaitingRows.map((row) => ({ ...row, audience: row.audience || 'org' })),
+      (rawActivityRows || []).map((row) => ({
+        ...row,
+        audience: row.audience || 'org',
+      })),
+    ],
+    RECENT_ACTIVITY_LIMIT,
+  )
 
   const stats = await withRoleLeaveStats(baseStats)
 
@@ -183,11 +319,17 @@ async function buildOrgDashboard(req, res) {
     name: req.user?.name || null,
   }
 
+  const orderedActivities = [...(activityRows || [])].sort((a, b) => {
+    const tb = new Date(b.activityTime || 0).getTime()
+    const ta = new Date(a.activityTime || 0).getTime()
+    return tb - ta
+  })
+
   res.json({
     variant: 'org',
     metrics: primaryMetrics,
     primaryMetrics,
-    activities: mapActivityRows(activityRows, viewer),
+    activities: await mapActivityRowsAsync(orderedActivities, viewer),
     newEmployeesPeriod,
     departments,
   })
@@ -202,19 +344,37 @@ async function buildEmployeeDashboard(req, res) {
   }
 
   const isTeamLead = await isEmployeeDepartmentHead(employeeId)
-  const [stats, scopedRows, holidayRows] = await Promise.all([
-    getEmployeeDashboardStats(employeeId),
-    isTeamLead
-      ? getTeamRecentActivities(employeeId)
-      : getEmployeeRecentActivities(employeeId),
-    findHolidayActivityRows(10),
-  ])
+  const namedApprover = await isNamedLeaveApprover(employeeId)
+  const teamIds = isTeamLead ? await findTeamEmployeeIds(employeeId) : []
+  const subjectIds = [...new Set([employeeId, ...(teamIds || [])])]
+
+  const [stats, scopedRows, holidayRows, leaveDecisionRows, subjectRows, awaitingRows] =
+    await Promise.all([
+      getEmployeeDashboardStats(employeeId),
+      isTeamLead
+        ? getTeamRecentActivities(employeeId)
+        : getEmployeeRecentActivities(employeeId),
+      findHolidayActivityRows(RECENT_ACTIVITY_LIMIT),
+      findLeaveDecisionActivityRows(subjectIds, RECENT_ACTIVITY_LIMIT),
+      findPersonalSubjectActivityRows(employeeId, RECENT_ACTIVITY_LIMIT),
+      namedApprover || isTeamLead
+        ? findAwaitingApproverLeaveActivities(
+            { employeeId },
+            RECENT_ACTIVITY_LIMIT,
+          )
+        : Promise.resolve([]),
+    ])
 
   const activityRows = mergeScopedWithHolidays(
     scopedRows,
     holidayRows,
     employeeId,
-    isTeamLead ? 15 : 10,
+    RECENT_ACTIVITY_LIMIT,
+    [
+      ...(awaitingRows || []),
+      ...(leaveDecisionRows || []),
+      ...(subjectRows || []),
+    ],
   )
 
   const marked = stats.attendanceMarkedMonth || 0
@@ -279,14 +439,23 @@ async function buildEmployeeDashboard(req, res) {
     employeeId: employeeId,
     role: req.user?.role || null,
     name: req.user?.name || null,
+    isDepartmentHead: isTeamLead,
   }
+
+  const orderedEmployeeActivities = [...(activityRows || [])].sort((a, b) => {
+    const tb = new Date(b.activityTime || 0).getTime()
+    const ta = new Date(a.activityTime || 0).getTime()
+    return tb - ta
+  })
 
   res.json({
     variant: 'employee',
     metrics: primaryMetrics,
     primaryMetrics,
     secondaryMetrics,
-    activities: mapActivityRows(activityRows, viewer).slice(0, 10),
+    activities: (
+      await mapActivityRowsAsync(orderedEmployeeActivities, viewer)
+    ).slice(0, RECENT_ACTIVITY_LIMIT),
     charts: {
       activeRate: attendanceRate,
       targetMeta: {

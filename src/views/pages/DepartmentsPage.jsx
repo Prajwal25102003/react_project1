@@ -19,6 +19,7 @@ function DepartmentsPage() {
     openDeleteModal,
     closeDeleteModal,
     confirmDelete,
+    onDepartmentInteract,
   } = useDepartments();
 
   return (
@@ -66,11 +67,18 @@ function DepartmentsPage() {
           columnsOpen={table.columnsOpen}
           onColumnsOpenChange={table.setColumnsOpen}
           onExportCsv={() => table.exportCsv("departments.csv")}
+          onRowClick={onDepartmentInteract}
+          getRowClassName={(row) =>
+            row.needsAttention
+              ? "bg-brand-25 hover:bg-brand-25"
+              : "bg-white hover:bg-gray-50/80"
+          }
           getActions={(department) => [
             {
               label: "Edit",
               icon: "pencil",
               to: `/departments/${department.id}/edit`,
+              onClick: () => onDepartmentInteract(department),
             },
             {
               label: "Delete",

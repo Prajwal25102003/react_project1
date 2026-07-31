@@ -1,18 +1,27 @@
 import ModalShell from "../components/ModalShell.jsx";
+import DateField from "../components/forms/DateField.jsx";
 import { FieldError, RequiredMark } from "../components/forms/FormHelpers.jsx";
 import SelectField from "../components/forms/SelectField.jsx";
+import HoverTooltip from "../components/HoverTooltip.jsx";
 import { PlusIcon } from "../icons/ActionIcons.jsx";
 import { HOLIDAY_TYPES } from "../../models/holidaysModel.js";
 import { LABEL_CLASS } from "../../models/formLayoutModel.js";
 
 const CELL_INPUT =
-  "box-border h-10 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10";
+  "box-border h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10";
 
 const CELL_INPUT_ERROR =
-  "box-border h-10 w-full min-w-0 rounded-lg border border-error-500 bg-white px-3 py-2 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-error-500 focus:outline-hidden focus:ring-3 focus:ring-error-500/10";
+  "box-border h-11 w-full min-w-0 rounded-lg border border-error-500 bg-white px-3 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-error-500 focus:outline-hidden focus:ring-3 focus:ring-error-500/10";
+
+const TD = "px-3 py-2.5 align-middle";
 
 const TH =
   "sticky top-0 z-10 bg-gray-50 px-3 py-2.5 text-left text-theme-xs font-medium text-gray-500";
+
+const TYPE_OPTIONS = HOLIDAY_TYPES.map((value) => ({
+  value,
+  label: value.replace(/ Holiday$/, ""),
+}));
 
 function HolidayReleaseModal({
   open,
@@ -38,7 +47,7 @@ function HolidayReleaseModal({
       onClose={onClose}
       title="Release Holiday Calendar"
       description="Select a year from the current year through 2030 that has not been released yet. Holidays are fetched from the India holiday calendar for that year — edit the list, then release once."
-      panelClassName="relative mx-auto my-6 flex max-h-[calc(100vh-6rem)] w-full min-w-0 max-w-[min(720px,calc(100vw-4rem))] flex-col overflow-hidden rounded-3xl bg-white p-5 sm:p-6"
+      panelClassName="relative mx-auto my-6 flex max-h-[calc(100vh-6rem)] w-full min-w-0 max-w-[min(960px,calc(100vw-3rem))] flex-col overflow-hidden rounded-3xl bg-white p-5 sm:p-6"
     >
       <form
         onSubmit={onSubmit}
@@ -72,20 +81,20 @@ function HolidayReleaseModal({
             disabled={loading || releasing}
             title="Add Row"
             aria-label="Add Row"
-            className="inline-flex h-10 shrink-0 items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105 disabled:opacity-60"
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105 disabled:opacity-60"
           >
             <PlusIcon />
           </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-gray-200">
-          <div className="max-h-[min(42vh,380px)] overflow-auto">
-            <table className="w-full table-fixed border-collapse text-left">
+          <div className="custom-scrollbar max-h-[min(42vh,380px)] overflow-auto">
+            <table className="w-full min-w-[720px] table-fixed border-collapse text-left">
               <colgroup>
-                <col className="w-[24%]" />
+                <col className="w-[30%]" />
+                <col className="w-[20%]" />
                 <col className="w-[16%]" />
                 <col className="w-[22%]" />
-                <col className="w-[26%]" />
                 <col className="w-[12%]" />
               </colgroup>
               <thead>
@@ -123,37 +132,43 @@ function HolidayReleaseModal({
                 {!loading
                   ? rows.map((row, index) => (
                       <tr key={`release-row-${index}`}>
-                        <td className="px-3 py-2.5 align-top">
-                          <input
-                            value={row.name}
-                            onChange={(event) =>
-                              onRowChange(index, "name", event.target.value)
-                            }
-                            className={
-                              fieldErrors[index]?.name
-                                ? CELL_INPUT_ERROR
-                                : CELL_INPUT
-                            }
-                            placeholder="Holiday name"
-                          />
+                        <td className={TD}>
+                          <HoverTooltip
+                            content={row.name}
+                            onlyWhenTruncated
+                            className="block w-full min-w-0"
+                          >
+                            <input
+                              type="text"
+                              value={row.name}
+                              onChange={(event) =>
+                                onRowChange(index, "name", event.target.value)
+                              }
+                              className={
+                                fieldErrors[index]?.name
+                                  ? CELL_INPUT_ERROR
+                                  : CELL_INPUT
+                              }
+                              placeholder="Holiday name"
+                              aria-label={`Holiday name row ${index + 1}`}
+                            />
+                          </HoverTooltip>
                           <FieldError message={fieldErrors[index]?.name} />
                         </td>
-                        <td className="px-3 py-2.5 align-top">
-                          <input
-                            type="date"
+                        <td className={TD}>
+                          <DateField
                             value={row.date}
-                            onChange={(event) =>
-                              onRowChange(index, "date", event.target.value)
+                            onChange={(nextValue) =>
+                              onRowChange(index, "date", nextValue)
                             }
-                            className={
-                              fieldErrors[index]?.date
-                                ? CELL_INPUT_ERROR
-                                : CELL_INPUT
-                            }
+                            ariaLabel={`Holiday date row ${index + 1}`}
+                            hasError={Boolean(fieldErrors[index]?.date)}
+                            placeholder="Select date"
+                            showClear={false}
                           />
                           <FieldError message={fieldErrors[index]?.date} />
                         </td>
-                        <td className="px-3 py-2.5 align-top">
+                        <td className={TD}>
                           <SelectField
                             value={row.type}
                             onChange={(value) =>
@@ -161,15 +176,13 @@ function HolidayReleaseModal({
                             }
                             ariaLabel={`Holiday type row ${index + 1}`}
                             hasError={Boolean(fieldErrors[index]?.type)}
-                            options={HOLIDAY_TYPES.map((value) => ({
-                              value,
-                              label: value,
-                            }))}
+                            options={TYPE_OPTIONS}
                           />
                           <FieldError message={fieldErrors[index]?.type} />
                         </td>
-                        <td className="px-3 py-2.5 align-top">
+                        <td className={TD}>
                           <input
+                            type="text"
                             value={row.description}
                             onChange={(event) =>
                               onRowChange(
@@ -182,11 +195,11 @@ function HolidayReleaseModal({
                             placeholder="Description"
                           />
                         </td>
-                        <td className="px-2 py-2.5 text-center align-middle">
+                        <td className={`${TD} px-2 text-center`}>
                           <button
                             type="button"
                             onClick={() => onRemoveRow(index)}
-                            className="inline-flex h-10 items-center justify-center rounded-lg px-2 text-theme-sm font-medium text-error-600 hover:bg-error-50 hover:text-error-700"
+                            className="inline-flex h-11 items-center justify-center rounded-lg px-2 text-theme-sm font-medium text-error-600 hover:bg-error-50 hover:text-error-700"
                           >
                             Remove
                           </button>

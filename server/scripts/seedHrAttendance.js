@@ -1,10 +1,9 @@
 /**
- * Seeds attendance for all Active employees from 2026-01-01 through 2026-07-20.
- * Skips weekends. Marks Approved leave days as Absent.
+ * Backfill attendance for HR-linked employees (same weekday window as seedAttendance).
+ * Does not delete existing rows — uses ON CONFLICT DO NOTHING.
  *
  * Usage:
- *   node server/scripts/seedAttendance.js
- *   import { seedAttendance } from './seedAttendance.js'
+ *   node server/scripts/seedHrAttendance.js
  */
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -40,11 +39,7 @@ function eachWorkingDay(startStr, endStr) {
   return days
 }
 
-function statusFor(employeeId, dateStr, onLeave) {
-  if (onLeave) {
-    return { status: 'Absent', checkIn: '—', checkOut: '—', workingHours: 0 }
-  }
-
+function statusFor(employeeId, dateStr) {
   const seed =
     Number(String(employeeId).replace(/\D/g, '')) +
     Number(dateStr.replace(/-/g, ''))
@@ -74,66 +69,43 @@ function statusFor(employeeId, dateStr, onLeave) {
   return { status: 'Present', checkIn, checkOut, workingHours }
 }
 
-async function loadApprovedLeaveDays() {
-  const result = await query(
-    `SELECT employee_id AS "employeeId",
-            TO_CHAR(start_date, 'YYYY-MM-DD') AS "startDate",
-            TO_CHAR(end_date, 'YYYY-MM-DD') AS "endDate"
-     FROM leave_requests
-     WHERE status = 'Approved'`,
-  )
-
-  const byEmployee = new Map()
-  for (const row of result.rows) {
-    const set = byEmployee.get(row.employeeId) || new Set()
-    const cursor = parseDate(row.startDate)
-    const end = parseDate(row.endDate)
-    while (cursor <= end) {
-      set.add(toDateString(cursor))
-      cursor.setDate(cursor.getDate() + 1)
-    }
-    byEmployee.set(row.employeeId, set)
-  }
-  return byEmployee
-}
-
-export async function seedAttendance({
+export async function seedHrAttendance({
   startDate = ATTENDANCE_START,
   endDate = ATTENDANCE_END,
 } = {}) {
   const employeesResult = await query(
     `SELECT e.id
      FROM employees e
+     INNER JOIN users u ON u.employee_id = e.id
      WHERE e.status = 'Active'
-       AND NOT EXISTS (
-         SELECT 1
-         FROM users u
-         WHERE u.employee_id = e.id
-           AND u.role = ANY($1::text[])
-       )
+       AND u.role = 'hr'
      ORDER BY e.id ASC`,
-    [['admin']],
   )
 
   const employeeIds = employeesResult.rows.map((row) => row.id)
+  if (employeeIds.length === 0) {
+    console.log('No HR-linked employees found — nothing to seed.')
+    return 0
+  }
+
+  const idResult = await query(
+    `SELECT COALESCE(
+       MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)),
+       5000
+     ) AS max_num
+     FROM attendance
+     WHERE id ~ '^ATT-[0-9]+$'`,
+  )
+  let nextId = Number(idResult.rows[0].max_num) + 1
   const workingDays = eachWorkingDay(startDate, endDate)
-  const leaveDaysByEmployee = await loadApprovedLeaveDays()
-
-  await query(`DELETE FROM attendance`)
-
-  let nextId = 5001
-  const batchSize = 400
   let inserted = 0
 
-  for (let i = 0; i < employeeIds.length; i += 1) {
-    const employeeId = employeeIds[i]
-    const leaveSet = leaveDaysByEmployee.get(employeeId) || new Set()
+  for (const employeeId of employeeIds) {
     const values = []
     const params = []
 
     for (const dateStr of workingDays) {
-      // Skip dates before the employee's joining date if we had it; keep simple for seed.
-      const row = statusFor(employeeId, dateStr, leaveSet.has(dateStr))
+      const row = statusFor(employeeId, dateStr)
       const base = params.length
       values.push(
         `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`,
@@ -148,42 +120,28 @@ export async function seedAttendance({
         row.status,
       )
       nextId += 1
-
-      if (values.length >= batchSize) {
-        await query(
-          `INSERT INTO attendance (
-            id, employee_id, attendance_date, check_in, check_out, working_hours, status
-          ) VALUES ${values.join(', ')}
-          ON CONFLICT (employee_id, attendance_date) DO NOTHING`,
-          params,
-        )
-        inserted += values.length
-        values.length = 0
-        params.length = 0
-      }
     }
 
-    if (values.length > 0) {
-      await query(
-        `INSERT INTO attendance (
-          id, employee_id, attendance_date, check_in, check_out, working_hours, status
-        ) VALUES ${values.join(', ')}
-        ON CONFLICT (employee_id, attendance_date) DO NOTHING`,
-        params,
-      )
-      inserted += values.length
-    }
+    const result = await query(
+      `INSERT INTO attendance (
+        id, employee_id, attendance_date, check_in, check_out, working_hours, status
+      ) VALUES ${values.join(', ')}
+      ON CONFLICT (employee_id, attendance_date) DO NOTHING
+      RETURNING id`,
+      params,
+    )
+    inserted += result.rows.length
   }
 
   console.log(
-    `Seeded ~${inserted} attendance rows for ${employeeIds.length} employees (${startDate} → ${endDate}, weekdays)`,
+    `Seeded ${inserted} new attendance row(s) for ${employeeIds.length} HR employee(s) (${startDate} → ${endDate}, weekdays)`,
   )
   return inserted
 }
 
 async function main() {
   await connectDatabase()
-  await seedAttendance()
+  await seedHrAttendance()
   await pool.end()
 }
 

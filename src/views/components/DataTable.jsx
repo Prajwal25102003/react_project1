@@ -11,6 +11,7 @@ import {
 import { INPUT_CLASS } from "../../models/formLayoutModel.js";
 import { ActionIcon } from "../icons/ActionIcons.jsx";
 import DateField from "./forms/DateField.jsx";
+import HoverTooltip from "./HoverTooltip.jsx";
 import SelectField from "./forms/SelectField.jsx";
 import StatusPill from "./StatusPill.jsx";
 import UserAvatar from "./UserAvatar.jsx";
@@ -108,15 +109,13 @@ function TableCell({ column, row, getActions, clamp = false }) {
 
   if (column.type === "dotName") {
     const nameClass = column.wrap
-      ? clamp
-        ? "min-w-0 truncate text-theme-sm font-medium text-gray-800"
-        : "min-w-0 whitespace-normal break-words text-theme-sm font-medium text-gray-800"
+      ? "min-w-0 whitespace-normal break-words text-theme-sm font-medium leading-snug text-gray-800"
       : "min-w-0 truncate text-theme-sm font-medium text-gray-800";
 
     return (
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-start gap-2">
         <span
-          className={`h-2 w-2 shrink-0 rounded-full ${row.typeDotClass || "bg-gray-400"}`}
+          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${row.typeDotClass || "bg-gray-400"}`}
           aria-hidden="true"
         />
         <span className={nameClass} title={String(display || "")}>
@@ -166,15 +165,15 @@ function TableCell({ column, row, getActions, clamp = false }) {
   if (column.type === "actions") {
     const actions = getActions?.(row) || [];
     if (!actions.length) {
-      return <p className="text-theme-sm text-gray-400">—</p>;
+      return <p className="text-left text-theme-sm text-gray-400">—</p>;
     }
 
     return (
-      <div className="flex flex-nowrap items-center gap-2.5">
+      <div className="flex flex-nowrap items-center justify-start gap-2.5">
         {actions.map((action) => {
           const iconNode =
             typeof action.icon === "string" ? (
-              <ActionIcon name={action.icon} />
+              <ActionIcon name={action.icon} size={action.iconSize} />
             ) : (
               action.icon
             );
@@ -195,29 +194,56 @@ function TableCell({ column, row, getActions, clamp = false }) {
           );
 
           if (action.to) {
-            return (
+            const link = (
               <Link
-                key={action.label}
                 to={action.to}
                 className={className}
-                title={action.label}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  action.onClick?.(event);
+                }}
               >
                 {content}
               </Link>
             );
+            return isIcon ? (
+              <HoverTooltip
+                key={action.label}
+                content={action.label}
+                onlyWhenTruncated={false}
+                compact
+                className="inline-flex"
+              >
+                {link}
+              </HoverTooltip>
+            ) : (
+              <span key={action.label}>{link}</span>
+            );
           }
 
-          return (
+          const button = (
             <button
-              key={action.label}
               type="button"
               onClick={action.onClick}
               className={className}
-              title={action.label}
               aria-label={action.label}
             >
               {content}
             </button>
+          );
+
+          return isIcon ? (
+            <HoverTooltip
+              key={action.label}
+              content={action.label}
+              onlyWhenTruncated={false}
+              compact
+              className="inline-flex"
+            >
+              {button}
+            </HoverTooltip>
+          ) : (
+            <span key={action.label}>{button}</span>
           );
         })}
       </div>
@@ -241,7 +267,7 @@ function TableCell({ column, row, getActions, clamp = false }) {
   );
 }
 
-function MobileCard({ columns, row, getActions, onRowClick }) {
+function MobileCard({ columns, row, getActions, onRowClick, rowClassName = "" }) {
   const statusColumn = columns.find((column) => column.type === "status");
   const actionColumn = columns.find((column) => column.type === "actions");
   const detailColumns = columns.filter(
@@ -258,7 +284,7 @@ function MobileCard({ columns, row, getActions, onRowClick }) {
     <article
       className={`rounded-xl border border-gray-200 bg-white p-4 shadow-theme-xs ${
         onRowClick ? "cursor-pointer hover:border-gray-300" : ""
-      }`}
+      } ${rowClassName}`.trim()}
       onClick={onRowClick ? () => onRowClick(row) : undefined}
       onKeyDown={
         onRowClick
@@ -364,6 +390,7 @@ function DataTable({
   toolbarStart = null,
   getActions,
   onRowClick,
+  getRowClassName,
   emptyMessage = "No records found.",
   /** Fit all columns in the viewport on large screens (no horizontal scroll). */
   fitWidth = false,
@@ -658,6 +685,7 @@ function DataTable({
                 row={row}
                 getActions={getActions}
                 onRowClick={onRowClick}
+                rowClassName={getRowClassName?.(row) || ""}
               />
             ))
           )}
@@ -712,7 +740,7 @@ function DataTable({
                         <button
                           type="button"
                           onClick={() => onSortChange(column.id)}
-                          className="text-theme-xs font-medium text-gray-500 hover:text-gray-800"
+                          className="block w-full text-left text-theme-xs font-medium text-gray-500 hover:text-gray-800"
                         >
                           {column.header}
                         </button>
@@ -722,7 +750,7 @@ function DataTable({
 
                   return (
                     <th key={column.id} className={cellClass}>
-                      <p className="text-theme-xs font-medium text-gray-500">
+                      <p className="text-left text-theme-xs font-medium text-gray-500">
                         {column.header}
                       </p>
                     </th>
@@ -754,11 +782,13 @@ function DataTable({
                   <tr
                     key={row[rowKey]}
                     style={stretchRowStyle}
-                    className={
-                      onRowClick
-                        ? "cursor-pointer hover:bg-gray-50/80"
-                        : undefined
-                    }
+                    className={[
+                      onRowClick ? "cursor-pointer" : "",
+                      getRowClassName?.(row) ||
+                        (onRowClick ? "hover:bg-gray-50/80" : ""),
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                   >
                     {columns.map((column, columnIndex) => {
@@ -769,7 +799,7 @@ function DataTable({
                           vertical: "body",
                           columnIndex,
                           columnCount,
-                        })} ${rowAlign}`,
+                        })} text-left ${rowAlign}`,
                         column.nowrap && !column.wrap
                           ? "whitespace-nowrap"
                           : "",

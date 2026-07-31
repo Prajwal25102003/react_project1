@@ -1,12 +1,21 @@
 import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
+import { isNamedLeaveApprover } from '../models/leaveApprovalHierarchyModel.js'
 import {
+  findLeaveRequestsAwaitingActor,
+  findLeaveRequestsWhereActorIsFutureStep,
+} from '../models/leaveRequestsModel.js'
+import {
+  findLeaveActivityRowsForLeaveIds,
   findNotificationsForAdmin,
   findNotificationsForEmployee,
   findNotificationsForOrg,
   findNotificationsForTeamLead,
+  mergeActivityFeeds,
 } from '../models/notificationsModel.js'
 import { formatDbError } from '../utils/formatDbError.js'
-import { mapActivityRows } from '../utils/relativeTime.js'
+import { mapActivityRowsAsync } from '../utils/relativeTime.js'
+
+const NOTIFICATION_FEED_LIMIT = 25
 
 function withAudience(rows, audience) {
   return (rows || []).map((row) => ({
@@ -15,35 +24,54 @@ function withAudience(rows, audience) {
   }))
 }
 
-/**
- * Merge org + personal feeds for HR/Admin who also have an employee record.
- * Personal leave items keep audience "self" so sidebar badges stay module-correct.
- */
-function mergeOrgAndPersonal(orgRows, personalRows) {
-  const seen = new Set()
-  const merged = []
-
-  for (const row of withAudience(personalRows, 'self')) {
-    const id = String(row.id)
-    if (seen.has(id)) continue
-    seen.add(id)
-    merged.push(row)
-  }
-
-  for (const row of withAudience(orgRows, 'org')) {
-    const id = String(row.id)
-    if (seen.has(id)) continue
-    seen.add(id)
-    merged.push(row)
-  }
-
-  merged.sort((a, b) => {
-    const ta = new Date(a.activityTime || 0).getTime()
+function sortNewestFirst(rows) {
+  return [...(rows || [])].sort((a, b) => {
     const tb = new Date(b.activityTime || 0).getTime()
+    const ta = new Date(a.activityTime || 0).getTime()
     return tb - ta
   })
+}
 
-  return merged.slice(0, 15)
+/**
+ * Activities for leaves where this actor is current OR later in the chain.
+ * Current → Approval Needed; future → Awaiting Approval (personalized at map time).
+ */
+async function findChainApproverLeaveActivities(
+  { role = null, employeeId = null },
+  limit = NOTIFICATION_FEED_LIMIT,
+) {
+  const [awaiting, future] = await Promise.all([
+    findLeaveRequestsAwaitingActor({ role, employeeId }),
+    findLeaveRequestsWhereActorIsFutureStep({ role, employeeId }),
+  ])
+  const awaitingIds = [
+    ...new Set(
+      (awaiting || [])
+        .map((row) => row.id)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ]
+  const futureIds = [
+    ...new Set(
+      (future || [])
+        .map((row) => row.id)
+        .filter(Boolean)
+        .map(String)
+        .filter((id) => !awaitingIds.includes(id)),
+    ),
+  ]
+  if (awaitingIds.length === 0 && futureIds.length === 0) return []
+
+  // Latest activity per leave, then merge/sort into the feed window.
+  const [awaitingRows, futureRows] = await Promise.all([
+    findLeaveActivityRowsForLeaveIds(
+      awaitingIds,
+      Math.max(limit, awaitingIds.length),
+    ),
+    findLeaveActivityRowsForLeaveIds(futureIds, limit),
+  ])
+  return [...(awaitingRows || []), ...(futureRows || [])]
 }
 
 export async function getNotifications(req, res) {
@@ -58,23 +86,85 @@ export async function getNotifications(req, res) {
         })
       }
 
-      const isTeamLead = await isEmployeeDepartmentHead(req.user.employeeId)
-      rows = isTeamLead
-        ? await findNotificationsForTeamLead(req.user.employeeId)
-        : await findNotificationsForEmployee(req.user.employeeId)
+      const employeeId = req.user.employeeId
+      const [isTeamLead, namedApprover] = await Promise.all([
+        isEmployeeDepartmentHead(employeeId),
+        isNamedLeaveApprover(employeeId),
+      ])
+
+      const baseRows = isTeamLead
+        ? await findNotificationsForTeamLead(
+            employeeId,
+            NOTIFICATION_FEED_LIMIT,
+          )
+        : await findNotificationsForEmployee(
+            employeeId,
+            NOTIFICATION_FEED_LIMIT,
+          )
+
+      let chainRows = []
+      if (namedApprover || isTeamLead) {
+        chainRows = await findChainApproverLeaveActivities(
+          { employeeId },
+          NOTIFICATION_FEED_LIMIT,
+        )
+      }
+
+      rows = mergeActivityFeeds(
+        [withAudience(chainRows, 'org'), baseRows],
+        NOTIFICATION_FEED_LIMIT,
+        { reservePersonalLeave: true },
+      )
+
+      const viewer = {
+        employeeId,
+        role: req.user?.role || null,
+        name: req.user?.name || null,
+        isDepartmentHead: isTeamLead,
+      }
+      const notifications = await mapActivityRowsAsync(
+        sortNewestFirst(rows),
+        viewer,
+      )
+      return res.json({ notifications })
     } else if (role === 'admin') {
-      // Admin maintains modules + HR leave approvals only.
-      rows = withAudience(await findNotificationsForAdmin(10), 'org')
+      const orgRows = withAudience(
+        await findNotificationsForAdmin(NOTIFICATION_FEED_LIMIT),
+        'org',
+      )
+      const chainRows = await findChainApproverLeaveActivities(
+        { role: 'admin', employeeId: req.user?.employeeId || null },
+        NOTIFICATION_FEED_LIMIT,
+      )
+      rows = mergeActivityFeeds(
+        [withAudience(chainRows, 'org'), orgRows],
+        NOTIFICATION_FEED_LIMIT,
+      )
     } else if (role === 'hr') {
-      const orgRows = await findNotificationsForOrg(10)
+      const orgRows = await findNotificationsForOrg(NOTIFICATION_FEED_LIMIT)
+      const chainRows = await findChainApproverLeaveActivities(
+        { role: 'hr', employeeId: req.user?.employeeId || null },
+        NOTIFICATION_FEED_LIMIT,
+      )
       if (req.user.employeeId) {
         const personalRows = await findNotificationsForEmployee(
           req.user.employeeId,
-          10,
+          NOTIFICATION_FEED_LIMIT,
         )
-        rows = mergeOrgAndPersonal(orgRows, personalRows)
+        rows = mergeActivityFeeds(
+          [
+            withAudience(chainRows, 'org'),
+            withAudience(personalRows, 'self'),
+            withAudience(orgRows, 'org'),
+          ],
+          NOTIFICATION_FEED_LIMIT,
+          { reservePersonalLeave: true },
+        )
       } else {
-        rows = withAudience(orgRows, 'org')
+        rows = mergeActivityFeeds(
+          [withAudience(chainRows, 'org'), withAudience(orgRows, 'org')],
+          NOTIFICATION_FEED_LIMIT,
+        )
       }
     } else {
       return res.status(403).json({ message: 'Unauthorized' })
@@ -85,7 +175,11 @@ export async function getNotifications(req, res) {
       role: req.user?.role || null,
       name: req.user?.name || null,
     }
-    const notifications = mapActivityRows(rows, viewer)
+    // Newest at top — older messages follow below.
+    const notifications = await mapActivityRowsAsync(
+      sortNewestFirst(rows),
+      viewer,
+    )
 
     res.json({ notifications })
   } catch (error) {

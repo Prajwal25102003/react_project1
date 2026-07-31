@@ -31,6 +31,7 @@ function HolidaysPage() {
     calendarMonthLabel,
     selectedCalendarDate,
     selectCalendarDate,
+    onHolidayInteract,
     shiftCalendar,
     changeYear,
     holidays,
@@ -238,6 +239,12 @@ function HolidaysPage() {
                       onPageChange={table.goToPage}
                       columnFilters={table.columnFilters}
                       filterDefs={[]}
+                      onRowClick={onHolidayInteract}
+                      getRowClassName={(row) =>
+                        row.needsAttention
+                          ? "bg-brand-25 hover:bg-brand-25"
+                          : "bg-white hover:bg-gray-50/80"
+                      }
                       getActions={
                         canManage && isYearReleased
                           ? (holiday) => [

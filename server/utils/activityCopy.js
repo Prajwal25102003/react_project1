@@ -59,11 +59,11 @@ export function parseCalendarDate(value) {
   }
 }
 
-/** 24 Jul 2026 */
+/** 24/07/2026 */
 export function formatDisplayDate(value) {
   const parts = parseCalendarDate(value)
   if (!parts) return String(value || '').trim()
-  return `${pad2(parts.day)} ${MONTHS_SHORT[parts.monthIndex]} ${parts.year}`
+  return `${pad2(parts.day)}/${pad2(parts.monthIndex + 1)}/${parts.year}`
 }
 
 /** 24 Jul 2026 - 28 Jul 2026 (or a single date) */

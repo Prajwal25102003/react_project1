@@ -6,9 +6,11 @@ import { normalizeLeaveBalances } from "../../models/leaveBalancesModel.js";
 
 function DetailItem({ label, children }) {
   return (
-    <div className="min-w-0 rounded-xl border border-gray-100 bg-gray-50/50 px-3.5 py-2.5">
+    <div className="flex h-full min-w-0 flex-col rounded-xl border border-gray-100 bg-gray-50/50 px-3.5 py-2.5 text-left">
       <p className="mb-1 text-theme-xs font-medium text-gray-500">{label}</p>
-      <div className="text-theme-sm font-medium text-gray-800">{children}</div>
+      <div className="break-words text-theme-sm font-medium text-gray-800">
+        {children}
+      </div>
     </div>
   );
 }
@@ -29,8 +31,9 @@ function EmployeeViewModal({ employee, onClose }) {
       onClose={onClose}
       title="Employee Details"
       description={`${employee.id || "Employee"}${employee.name ? ` · ${employee.name}` : ""}`}
+      panelClassName="relative mx-auto my-6 flex max-h-[calc(100vh-6rem)] w-full min-w-0 max-w-[min(700px,calc(100vw-3rem))] flex-col overflow-hidden rounded-3xl bg-white p-5 sm:p-6"
     >
-      <div className="no-scrollbar max-h-[min(58vh,520px)] space-y-4 overflow-y-auto px-1">
+      <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-1 pb-1">
         <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white px-4 py-3.5">
           <UserAvatar src={employee.avatar} name={employee.name || ""} size="lg" />
           <div className="min-w-0">
@@ -49,9 +52,11 @@ function EmployeeViewModal({ employee, onClose }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        <div className="grid grid-cols-2 items-stretch gap-2.5 sm:grid-cols-3">
           <DetailItem label="Employee ID">{employee.id || "—"}</DetailItem>
-          <DetailItem label="Email">{employee.loginEmail || employee.email || "—"}</DetailItem>
+          <DetailItem label="Email">
+            {employee.loginEmail || employee.email || "—"}
+          </DetailItem>
           {isAdminAccount ? (
             <DetailItem label="Role">Admin</DetailItem>
           ) : (

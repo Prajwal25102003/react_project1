@@ -106,9 +106,9 @@ export function getNavGroups(role = "hr", options = {}) {
       if (role === ROLES.EMPLOYEE && EMPLOYEE_LABELS[id]) {
         return { ...item, label: EMPLOYEE_LABELS[id] };
       }
-      // Admin only reviews HR leave — keep the same nav id/path.
+      // Admin reviews leave whenever hierarchy puts Admin on a step.
       if (role === ROLES.ADMIN && id === "leave-requests") {
-        return { ...item, label: "HR Leave Approvals" };
+        return { ...item, label: "Leave Approvals" };
       }
       return item;
     })

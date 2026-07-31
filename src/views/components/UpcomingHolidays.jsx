@@ -66,7 +66,9 @@ function UpcomingHolidays({ holidays }) {
             return (
               <div
                 key={holiday.id}
-                className="flex min-w-0 shrink-0 basis-[calc(50%-4px)] items-center gap-2 rounded-xl border border-gray-200 bg-gray-50/50 px-2.5 py-1.5 sm:basis-[calc(33.333%-5.33px)] xl:basis-[calc(25%-6px)]"
+                className={`flex min-w-0 shrink-0 basis-[calc(50%-4px)] items-center gap-2 rounded-xl border border-gray-200 px-2.5 py-1.5 sm:basis-[calc(33.333%-5.33px)] xl:basis-[calc(25%-6px)] ${
+                  holiday.typeBgClass || "bg-gray-50"
+                }`}
               >
                 <span
                   className={`h-2.5 w-2.5 shrink-0 rounded-full ${holiday.typeDotClass}`}
@@ -78,7 +80,10 @@ function UpcomingHolidays({ holidays }) {
                       {monthLabel}
                     </span>
                   </p>
-                  <p className="truncate text-[11px] font-medium text-gray-800">
+                  <p
+                    className="whitespace-normal break-words text-[11px] font-medium leading-snug text-gray-800"
+                    title={holiday.name}
+                  >
                     {holiday.name}
                   </p>
                 </div>

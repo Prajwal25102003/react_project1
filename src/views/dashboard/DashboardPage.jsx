@@ -131,12 +131,14 @@ function OrgDashboard({
           <DepartmentOverview departments={departments} />
         </div>
 
-        <div className="col-span-12 lg:col-span-7">
-          <RecentActivitiesTable
-            activities={activities}
-            onActivityClick={onAcknowledgeActivity}
-            onMarkAllAsRead={onMarkAllAsRead}
-          />
+        <div className="col-span-12 flex min-h-[360px] min-w-0 lg:col-span-7">
+          <div className="flex min-h-0 w-full flex-1 flex-col">
+            <RecentActivitiesTable
+              activities={activities}
+              onActivityClick={onAcknowledgeActivity}
+              onMarkAllAsRead={onMarkAllAsRead}
+            />
+          </div>
         </div>
       </div>
 
