@@ -12,6 +12,14 @@ const LEAVE_SELECT = `
   e.department_id AS "departmentId",
   d.head_employee_id AS "departmentHeadId",
   head.name AS "departmentHeadName",
+  (
+    SELECT e_hr.name
+    FROM users u_hr
+    INNER JOIN employees e_hr ON e_hr.id = u_hr.employee_id
+    WHERE u_hr.role = 'hr'
+    ORDER BY u_hr.id
+    LIMIT 1
+  ) AS "hrApproverName",
   e.casual_leave_balance AS "casualLeaveBalance",
   e.sick_leave_balance AS "sickLeaveBalance",
   e.lop_days AS "lopDays",

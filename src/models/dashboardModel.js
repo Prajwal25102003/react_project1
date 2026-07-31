@@ -75,12 +75,12 @@ const ACTIVITY_STATUS = {
   Info: STATUS_TONE.info,
 };
 
-function mapActivities(activities) {
+function mapActivities(activities, viewer = null) {
   return (activities || []).map((activity) => ({
     ...activity,
     statusClass: getStatusClass(ACTIVITY_STATUS, activity.status, "Info"),
     isNew: Boolean(activity.isNew),
-    href: getNotificationPath(activity),
+    href: getNotificationPath(activity, viewer),
   }));
 }
 
@@ -219,7 +219,7 @@ export function withOrgUnreadMessagesMetric(dashboard, notifications) {
   };
 }
 
-function mapOrgDashboard(data, newEmployeesPeriod) {
+function mapOrgDashboard(data, newEmployeesPeriod, viewer = null) {
   const metrics = data.metrics || data.primaryMetrics || [];
 
   return {
@@ -228,12 +228,12 @@ function mapOrgDashboard(data, newEmployeesPeriod) {
     secondaryMetrics: data.secondaryMetrics || [],
     metrics,
     newEmployeesPeriod: data.newEmployeesPeriod || newEmployeesPeriod,
-    activities: mapActivities(data.activities),
+    activities: mapActivities(data.activities, viewer),
     departments: data.departments || [],
   };
 }
 
-function mapEmployeeDashboard(data) {
+function mapEmployeeDashboard(data, viewer = null) {
   const attendanceRate = data.charts?.activeRate ?? 0;
   const metrics = data.metrics || data.primaryMetrics || [];
 
@@ -243,7 +243,7 @@ function mapEmployeeDashboard(data) {
     secondaryMetrics: data.secondaryMetrics || [],
     metrics,
     newEmployeesPeriod: "month",
-    activities: mapActivities(data.activities),
+    activities: mapActivities(data.activities, viewer),
     departments: [],
     chartTwo: {
       title: "Attendance Rate",
@@ -261,9 +261,13 @@ function mapEmployeeDashboard(data) {
 }
 
 /** Shape raw dashboard API payload for the dashboard view. */
-export function mapDashboardData(data, newEmployeesPeriod = "month") {
+export function mapDashboardData(
+  data,
+  newEmployeesPeriod = "month",
+  viewer = null,
+) {
   if (data?.variant === "employee") {
-    return mapEmployeeDashboard(data);
+    return mapEmployeeDashboard(data, viewer);
   }
-  return mapOrgDashboard(data, newEmployeesPeriod);
+  return mapOrgDashboard(data, newEmployeesPeriod, viewer);
 }

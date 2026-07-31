@@ -101,6 +101,61 @@ export async function deleteAttendanceById(id) {
   return result.rowCount > 0
 }
 
+/** True when attendance already exists for this employee on this date. */
+export async function attendanceExistsForEmployeeDate(
+  employeeId,
+  date,
+  client = null,
+) {
+  const runner = client || { query }
+  const existing = await runner.query(
+    `SELECT 1
+     FROM attendance
+     WHERE employee_id = $1
+       AND attendance_date = $2::date
+     LIMIT 1`,
+    [employeeId, date],
+  )
+  return Boolean(existing.rows[0])
+}
+
+/**
+ * Insert attendance for (employee_id, attendance_date).
+ * Fails if a row for that employee + date already exists.
+ * Returns { id }
+ */
+export async function insertAttendanceByEmployeeDate(record, client = null) {
+  const runner = client || { query }
+
+  const idResult = await runner.query(
+    `SELECT COALESCE(
+      MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)),
+      5000
+    ) AS max_num
+    FROM attendance
+    WHERE id ~ '^ATT-[0-9]+$'`,
+  )
+  const nextNum = Number(idResult.rows[0].max_num) + 1
+  const id = `ATT-${nextNum}`
+
+  await runner.query(
+    `INSERT INTO attendance (
+      id, employee_id, attendance_date, check_in, check_out, working_hours, status
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      id,
+      record.employeeId,
+      record.date,
+      record.checkIn,
+      record.checkOut,
+      record.workingHours,
+      record.status,
+    ],
+  )
+
+  return { id }
+}
+
 /**
  * Insert or update attendance by (employee_id, attendance_date).
  * Returns { action: 'inserted' | 'updated', id }
@@ -131,32 +186,7 @@ export async function upsertAttendanceByEmployeeDate(record, client = null) {
     return { action: 'updated', id }
   }
 
-  const idResult = await runner.query(
-    `SELECT COALESCE(
-      MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)),
-      5000
-    ) AS max_num
-    FROM attendance
-    WHERE id ~ '^ATT-[0-9]+$'`,
-  )
-  const nextNum = Number(idResult.rows[0].max_num) + 1
-  const id = `ATT-${nextNum}`
-
-  await runner.query(
-    `INSERT INTO attendance (
-      id, employee_id, attendance_date, check_in, check_out, working_hours, status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [
-      id,
-      record.employeeId,
-      record.date,
-      record.checkIn,
-      record.checkOut,
-      record.workingHours,
-      record.status,
-    ],
-  )
-
-  return { action: 'inserted', id }
+  const inserted = await insertAttendanceByEmployeeDate(record, client)
+  return { action: 'inserted', id: inserted.id }
 }
 

@@ -47,14 +47,14 @@ export function useDashboard() {
   const loadUnreadMessagesMetric = useCallback(async () => {
     try {
       const items = withNotificationSeenState(
-        await fetchNotifications(),
+        await fetchNotifications(user),
         seenUserKey,
       );
       setData((current) => withOrgUnreadMessagesMetric(current, items));
     } catch {
       setData((current) => withOrgUnreadMessagesMetric(current, []));
     }
-  }, [seenUserKey]);
+  }, [seenUserKey, user]);
 
   const loadDashboard = useCallback(
     async ({ silent = false, scope } = {}) => {
@@ -64,7 +64,10 @@ export function useDashboard() {
       try {
         if (isInitialLoad && !silent) setLoading(true);
         setError("");
-        const dashboard = await fetchDashboard(newEmployeesPeriod, { scope });
+        const dashboard = await fetchDashboard(newEmployeesPeriod, {
+          scope,
+          viewer: user,
+        });
         const activities = withActivitySeenState(
           dashboard.activities,
           seenUserKey,
@@ -73,7 +76,7 @@ export function useDashboard() {
         let nextDashboard = dashboard;
         try {
           const items = withNotificationSeenState(
-            await fetchNotifications(),
+            await fetchNotifications(user),
             seenUserKey,
           );
           nextDashboard = withOrgUnreadMessagesMetric(dashboard, items);
@@ -114,7 +117,7 @@ export function useDashboard() {
         if (isInitialLoad && !silent) setLoading(false);
       }
     },
-    [newEmployeesPeriod, seenUserKey],
+    [newEmployeesPeriod, seenUserKey, user],
   );
 
   useEffect(() => {
@@ -263,7 +266,7 @@ export function useDashboard() {
 
     let notificationIds = [];
     try {
-      notificationIds = (await fetchNotifications())
+      notificationIds = (await fetchNotifications(user))
         .map((item) => item.id)
         .filter(Boolean);
     } catch {
@@ -288,7 +291,7 @@ export function useDashboard() {
       unreadMessages: [],
     }));
     requestNotificationsRefresh();
-  }, [seenUserKey, data.activities, data.unreadMessages]);
+  }, [seenUserKey, data.activities, data.unreadMessages, user]);
 
   const handleMetricAction = useCallback(
     (metric) => {

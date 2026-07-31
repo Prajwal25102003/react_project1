@@ -204,7 +204,7 @@ export function useHolidays() {
 
     async function loadHolidayChanges() {
       try {
-        const items = await fetchNotifications();
+        const items = await fetchNotifications(user);
         if (cancelled) return;
         const withSeen = withNotificationSeenState(items, seenUserKey);
         setRecentChanges(mapHolidayChangeNotifications(withSeen));
@@ -223,7 +223,7 @@ export function useHolidays() {
       cancelled = true;
       window.removeEventListener(NOTIFICATIONS_REFRESH_EVENT, handleRefresh);
     };
-  }, [canManage, seenUserKey]);
+  }, [canManage, seenUserKey, user]);
 
   useEffect(() => {
     if (canManage || loading || !holidays?.length) return;
