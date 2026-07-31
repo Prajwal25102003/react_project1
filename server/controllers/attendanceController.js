@@ -1,12 +1,13 @@
 import pool from '../config/db.js'
 import {
+  attendanceExistsForEmployeeDate,
   deleteAttendanceById,
   findAllAttendance,
   findAttendanceByEmployeeId,
   findAttendanceById,
+  insertAttendanceByEmployeeDate,
   normalizeAttendanceDays,
   updateAttendance,
-  upsertAttendanceByEmployeeDate,
 } from '../models/attendanceModel.js'
 import { findDepartmentById } from '../models/departmentsModel.js'
 import {
@@ -47,9 +48,15 @@ function normalizeClock(value) {
   return text
 }
 
+function formatImportDateLabel(isoDate) {
+  const match = String(isoDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return String(isoDate || '')
+  return `${match[3]}/${match[2]}/${match[1]}`
+}
+
 function parseAttendancePayload(body) {
   const errors = []
-  const employeeId = String(body?.employeeId ?? '').trim()
+  const employeeId = String(body?.employeeId ?? '').trim().toUpperCase()
   const date = String(body?.date ?? '').trim()
   const status = String(body?.status ?? '').trim()
   const checkIn = normalizeClock(body?.checkIn)
@@ -307,10 +314,46 @@ export async function importAttendanceHandler(req, res) {
 
     const errors = []
     const validated = []
+    const employeeDateRows = new Map()
 
-    // Validate every row first — reject the whole file if any row is invalid.
+    // Pass 1: find repeated employee + date pairs in the payload.
+    for (let i = 0; i < records.length; i += 1) {
+      const employeeId = String(records[i]?.employeeId ?? '')
+        .trim()
+        .toUpperCase()
+      const date = String(records[i]?.date ?? '').trim()
+      if (!employeeId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
+      const key = `${employeeId}|${date}`
+      const rowsForKey = employeeDateRows.get(key) || []
+      rowsForKey.push(i + 1)
+      employeeDateRows.set(key, rowsForKey)
+    }
+
+    const duplicateKeys = new Set(
+      [...employeeDateRows.entries()]
+        .filter(([, rowsForKey]) => rowsForKey.length > 1)
+        .map(([key]) => key),
+    )
+
+    // Pass 2: validate every row — reject the whole file if any row is invalid.
     for (let i = 0; i < records.length; i += 1) {
       const { errors: rowErrors, record } = parseAttendancePayload(records[i])
+      const duplicateKey = `${record.employeeId}|${record.date}`
+
+      if (
+        record.employeeId &&
+        record.date &&
+        duplicateKeys.has(duplicateKey)
+      ) {
+        const otherRows = (employeeDateRows.get(duplicateKey) || []).filter(
+          (rowNumber) => rowNumber !== i + 1,
+        )
+        errors.push(
+          `Row ${i + 1}: date ${formatImportDateLabel(record.date)} is repeated for ${record.employeeId} (also on row ${otherRows.join(', ')})`,
+        )
+        continue
+      }
+
       if (rowErrors.length > 0) {
         errors.push(`Row ${i + 1}: ${rowErrors.join('; ')}`)
         continue
@@ -331,6 +374,13 @@ export async function importAttendanceHandler(req, res) {
       if (isHrEditingOwnAttendance(req.user, record.employeeId)) {
         errors.push(
           `Row ${i + 1}: you cannot import your own attendance (${record.employeeId})`,
+        )
+        continue
+      }
+
+      if (await attendanceExistsForEmployeeDate(record.employeeId, record.date)) {
+        errors.push(
+          `Row ${i + 1}: attendance for ${formatImportDateLabel(record.date)} already exists for ${record.employeeId}`,
         )
         continue
       }
@@ -360,7 +410,6 @@ export async function importAttendanceHandler(req, res) {
     }
 
     let imported = 0
-    let updated = 0
     let present = 0
     let absent = 0
     let halfDay = 0
@@ -372,9 +421,24 @@ export async function importAttendanceHandler(req, res) {
       await client.query('BEGIN')
       for (let i = 0; i < validated.length; i += 1) {
         const record = validated[i]
-        const result = await upsertAttendanceByEmployeeDate(record, client)
-        if (result.action === 'inserted') imported += 1
-        else updated += 1
+        // Import is insert-only — existing employee+date rows are rejected above.
+        if (
+          await attendanceExistsForEmployeeDate(
+            record.employeeId,
+            record.date,
+            client,
+          )
+        ) {
+          throw Object.assign(
+            new Error(
+              `attendance for ${formatImportDateLabel(record.date)} already exists for ${record.employeeId}`,
+            ),
+            { code: 'ATTENDANCE_EXISTS' },
+          )
+        }
+
+        const result = await insertAttendanceByEmployeeDate(record, client)
+        imported += 1
 
         if (result.id) attendanceIds.push(result.id)
         if (record.employeeId) employeeIds.push(record.employeeId)
@@ -386,9 +450,13 @@ export async function importAttendanceHandler(req, res) {
       await client.query('COMMIT')
     } catch (error) {
       await client.query('ROLLBACK')
+      const message =
+        error.code === 'ATTENDANCE_EXISTS'
+          ? error.message
+          : formatDbError(error)
       return res.status(400).json({
-        message: `Import rejected — ${formatDbError(error)}`,
-        errors: [formatDbError(error)],
+        message: `Import rejected — ${message}`,
+        errors: [message],
         stats: {
           total: records.length,
           imported: 0,
@@ -398,15 +466,14 @@ export async function importAttendanceHandler(req, res) {
           present: 0,
           absent: 0,
           halfDay: 0,
-          errors: [formatDbError(error)],
+          errors: [message],
         },
       })
     } finally {
       client.release()
     }
 
-    const saved = imported + updated
-    if (saved > 0) {
+    if (imported > 0) {
       const actorLabel = formatActorLabel(actorFromUser(req.user))
       const uniqueEmployeeIds = await expandEmployeeIdsWithDepartmentHeads(
         employeeIds,
@@ -415,14 +482,14 @@ export async function importAttendanceHandler(req, res) {
       const uniqueAttendanceIds = [...new Set(attendanceIds.filter(Boolean))]
       await createRecentActivity({
         title: 'Attendance Imported',
-        description: `${actorLabel} imported ${saved} attendance rows from Excel (${imported} new, ${updated} updated).`,
+        description: `${actorLabel} imported ${imported} attendance rows from Excel.`,
         category: 'Attendance',
         status: 'Updated',
         eventType: 'attendance.imported',
         actorEmployeeId: req.user?.employeeId || null,
         meta: {
           imported,
-          updated,
+          updated: 0,
           employeeIds: uniqueEmployeeIds,
           attendanceIds: uniqueAttendanceIds,
           actorName: req.user?.name || null,
@@ -435,7 +502,7 @@ export async function importAttendanceHandler(req, res) {
       stats: {
         total: records.length,
         imported,
-        updated,
+        updated: 0,
         skipped: 0,
         failed: 0,
         present,

@@ -40,7 +40,7 @@ export function useHeader() {
 
     try {
       if (!silent) setNotificationsLoading(true);
-      const items = await fetchNotifications();
+      const items = await fetchNotifications(authUser);
       setNotifications(withNotificationSeenState(items, seenUserKey));
       lastFetchedAtRef.current = Date.now();
     } catch {

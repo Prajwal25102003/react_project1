@@ -328,7 +328,11 @@ function resolveApprovalStepName(stepDef, request, history) {
     );
   }
 
-  // Pending role steps: any matching login can act (show pool hint for Admin).
+  // Pending role steps: show the HR person when known; Admin is a login pool.
+  if (stepDef.approverKind === "role" && stepDef.approverRole === "hr") {
+    return String(request?.hrApproverName || "").trim() || "No HR assigned";
+  }
+
   if (stepDef.approverKind === "role" && stepDef.approverRole === "admin") {
     return "Any Admin";
   }
@@ -394,6 +398,7 @@ export function buildLeaveApprovalSteps(request) {
           label: "HR",
           historySteps: ["HR", "Admin"],
           approverKind: "role",
+          approverRole: "hr",
         },
         { id: "done", label: "Approved", historySteps: [] },
       ];
@@ -411,6 +416,7 @@ export function buildLeaveApprovalSteps(request) {
           label: "HR",
           historySteps: ["HR", "Admin"],
           approverKind: "role",
+          approverRole: "hr",
         },
         { id: "done", label: "Approved", historySteps: [] },
       ];

@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { ATTENDANCE_STATUSES, calculateWorkingHours } from "./attendanceModel.js";
+import { formatDateDisplay } from "./datePickerModel.js";
 
 const CLOCK_PATTERN = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i;
 
@@ -116,6 +117,30 @@ export function parseAttendanceImportFile(fileBuffer) {
   const rows = [];
   const errors = [];
 
+  // Pass 1: flag repeated employee + date pairs anywhere in the file.
+  /** @type {Map<string, number[]>} */
+  const employeeDateLines = new Map();
+  rawRows.forEach((raw, index) => {
+    const line = index + 2;
+    const mapped = {};
+    for (const [key, alias] of Object.entries(mappedKeys)) {
+      mapped[alias] = raw[key];
+    }
+    const employeeId = String(mapped.employeeId ?? "").trim().toUpperCase();
+    const date = excelDateToIso(mapped.date);
+    if (!employeeId || !date) return;
+    const key = `${employeeId}|${date}`;
+    const lines = employeeDateLines.get(key) || [];
+    lines.push(line);
+    employeeDateLines.set(key, lines);
+  });
+
+  const duplicateKeys = new Set(
+    [...employeeDateLines.entries()]
+      .filter(([, lines]) => lines.length > 1)
+      .map(([key]) => key),
+  );
+
   rawRows.forEach((raw, index) => {
     const line = index + 2;
     const mapped = {};
@@ -128,6 +153,7 @@ export function parseAttendanceImportFile(fileBuffer) {
     const status = normalizeStatus(mapped.status) || "Present";
     const checkIn = normalizeClock(mapped.checkIn);
     const checkOut = normalizeClock(mapped.checkOut);
+    const duplicateKey = employeeId && date ? `${employeeId}|${date}` : "";
 
     if (!employeeId) {
       errors.push(`Row ${line}: employeeId is required`);
@@ -137,6 +163,17 @@ export function parseAttendanceImportFile(fileBuffer) {
       errors.push(`Row ${line}: invalid date`);
       return;
     }
+
+    if (duplicateKeys.has(duplicateKey)) {
+      const lines = employeeDateLines.get(duplicateKey) || [];
+      const otherLines = lines.filter((n) => n !== line);
+      const dateLabel = formatDateDisplay(date) || date;
+      errors.push(
+        `Row ${line}: date ${dateLabel} is repeated for ${employeeId} (also on row ${otherLines.join(", ")})`,
+      );
+      return;
+    }
+
     if (!ATTENDANCE_STATUSES.includes(status)) {
       errors.push(`Row ${line}: status must be Present, Absent, or Half Day`);
       return;

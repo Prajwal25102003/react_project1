@@ -52,6 +52,7 @@ function mapOneActivityRow(row, viewer = null) {
     direction: personalized.direction || null,
     directionLabel: personalized.directionLabel || null,
     eventType: row.eventType || null,
+    actorEmployeeId: row.actorEmployeeId || null,
     leaveRequestId:
       meta?.leaveRequestId || leaveIdFromActivityId(row.id) || null,
     subjectEmployeeId: row.subjectEmployeeId || null,
@@ -66,6 +67,15 @@ function mapOneActivityRow(row, viewer = null) {
     employeeIds: Array.isArray(meta?.employeeIds)
       ? meta.employeeIds.map(String).filter(Boolean)
       : [],
+    hierarchyLabels: Array.isArray(meta?.hierarchyLabels)
+      ? meta.hierarchyLabels.map(String).filter(Boolean)
+      : [],
+    hierarchyApprovers: Array.isArray(meta?.hierarchyApprovers)
+      ? meta.hierarchyApprovers
+      : [],
+    currentApprover: meta?.currentApprover || null,
+    previousApprover: meta?.previousApprover || null,
+    nextApprover: meta?.nextApprover || null,
     fromLop: Number(meta?.fromLop || 0) || 0,
     willUseLop: Boolean(meta?.willUseLop) || Number(meta?.fromLop || 0) > 0,
   }

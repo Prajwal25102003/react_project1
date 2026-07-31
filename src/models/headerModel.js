@@ -68,10 +68,84 @@ function extractResourceId(id, prefix) {
   return null;
 }
 
+function samePersonId(a, b) {
+  return Boolean(a && b && String(a) === String(b));
+}
+
+/** True when the viewer matches a leave hierarchy approver step snapshot. */
+function viewerMatchesLeaveApproverStep(step, viewer = {}) {
+  if (!step?.approverKind) return false;
+  if (step.approverKind === "role") {
+    return Boolean(step.approverRole && viewer.role === step.approverRole);
+  }
+  if (step.approverKind === "employee") {
+    return samePersonId(viewer.employeeId, step.approverEmployeeId);
+  }
+  if (step.approverKind === "department_head") {
+    if (step.departmentHeadId) {
+      return samePersonId(viewer.employeeId, step.departmentHeadId);
+    }
+    return Boolean(viewer.isDepartmentHead);
+  }
+  return false;
+}
+
+/**
+ * Leave details deep-link only for people on that request's workflow
+ * (requester, actor, named audience, or a step in the hierarchy).
+ * Uninvolved Admin/HR may still read the notification text.
+ */
+export function viewerCanOpenLeaveNotification(notification, viewer = {}) {
+  if (!notification || !viewer) return false;
+
+  if (samePersonId(viewer.employeeId, notification.subjectEmployeeId)) {
+    return true;
+  }
+  if (samePersonId(viewer.employeeId, notification.actorEmployeeId)) {
+    return true;
+  }
+
+  const audienceIds = notification.employeeIds || [];
+  if (
+    viewer.employeeId &&
+    audienceIds.some((id) => samePersonId(viewer.employeeId, id))
+  ) {
+    return true;
+  }
+
+  if (String(notification.direction || "").toLowerCase() === "sent") {
+    return true;
+  }
+
+  const steps = [
+    ...(Array.isArray(notification.hierarchyApprovers)
+      ? notification.hierarchyApprovers
+      : []),
+    notification.currentApprover,
+    notification.previousApprover,
+    notification.nextApprover,
+  ].filter(Boolean);
+
+  if (steps.some((step) => viewerMatchesLeaveApproverStep(step, viewer))) {
+    return true;
+  }
+
+  const labels = (notification.hierarchyLabels || []).map((label) =>
+    String(label).trim().toLowerCase(),
+  );
+  if (labels.length > 0) {
+    if (viewer.role === "hr" && labels.includes("hr")) return true;
+    if (viewer.role === "admin" && labels.includes("admin")) return true;
+  }
+
+  return false;
+}
+
 /**
  * Get navigation path for a notification/activity based on category and ID.
+ * Pass `viewer` so leave links open only for workflow participants.
  */
-export function getNotificationPath(notification) {
+export function getNotificationPath(notification, viewer = null) {
   const category = String(notification?.category || "").toLowerCase();
   const id = notification?.id || "";
   const direction = notification?.direction || null;
@@ -83,6 +157,9 @@ export function getNotificationPath(notification) {
   const attId = extractResourceId(id, "att");
 
   if (category === "leave") {
+    if (viewer && !viewerCanOpenLeaveNotification(notification, viewer)) {
+      return null;
+    }
     const targetLeaveId = leaveRequestId || leaveIdFromId;
     if (!targetLeaveId) return "/leave-requests";
     const params = new URLSearchParams({ id: targetLeaveId });
@@ -144,7 +221,7 @@ function activityIdSortKey(id) {
   return 0;
 }
 
-export function mapNotifications(notifications) {
+export function mapNotifications(notifications, viewer = null) {
   return (notifications || []).map((notification) => {
     const mapped = {
       id: notification.id,
@@ -160,6 +237,7 @@ export function mapNotifications(notifications) {
       directionLabel: notification.directionLabel || null,
       leaveRequestId: notification.leaveRequestId || null,
       subjectEmployeeId: notification.subjectEmployeeId || null,
+      actorEmployeeId: notification.actorEmployeeId || null,
       departmentId: notification.departmentId || null,
       departmentName: notification.departmentName || null,
       holidayId: notification.holidayId || null,
@@ -171,6 +249,15 @@ export function mapNotifications(notifications) {
       employeeIds: Array.isArray(notification.employeeIds)
         ? notification.employeeIds.map(String).filter(Boolean)
         : [],
+      hierarchyLabels: Array.isArray(notification.hierarchyLabels)
+        ? notification.hierarchyLabels.map(String).filter(Boolean)
+        : [],
+      hierarchyApprovers: Array.isArray(notification.hierarchyApprovers)
+        ? notification.hierarchyApprovers
+        : [],
+      currentApprover: notification.currentApprover || null,
+      previousApprover: notification.previousApprover || null,
+      nextApprover: notification.nextApprover || null,
       fromLop: Number(notification.fromLop || 0) || 0,
       willUseLop: Boolean(notification.willUseLop),
       statusClass: getStatusClass(
@@ -180,7 +267,7 @@ export function mapNotifications(notifications) {
       ),
       isNew: false,
     };
-    mapped.href = getNotificationPath(mapped);
+    mapped.href = getNotificationPath(mapped, viewer);
     return mapped;
   });
 }

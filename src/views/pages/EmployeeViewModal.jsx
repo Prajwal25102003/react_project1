@@ -2,6 +2,7 @@ import ModalShell from "../components/ModalShell.jsx";
 import LeaveBalancePanel from "../components/LeaveBalancePanel.jsx";
 import StatusPill from "../components/StatusPill.jsx";
 import UserAvatar from "../components/UserAvatar.jsx";
+import { formatDateDisplay } from "../../models/datePickerModel.js";
 import { normalizeLeaveBalances } from "../../models/leaveBalancesModel.js";
 
 function DetailItem({ label, children }) {
@@ -70,7 +71,7 @@ function EmployeeViewModal({ employee, onClose }) {
                 {employee.designation || "—"}
               </DetailItem>
               <DetailItem label="Joining Date">
-                {employee.joiningDate || "—"}
+                {formatDateDisplay(employee.joiningDate) || "—"}
               </DetailItem>
             </>
           )}

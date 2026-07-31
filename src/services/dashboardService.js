@@ -3,7 +3,7 @@ import { mapDashboardData } from "../models/dashboardModel.js";
 
 export async function fetchDashboard(
   newEmployeesPeriod = "month",
-  { scope } = {},
+  { scope, viewer } = {},
 ) {
   const params = new URLSearchParams({
     newEmployeesPeriod: String(newEmployeesPeriod),
@@ -14,5 +14,5 @@ export async function fetchDashboard(
     `/api/dashboard?${params.toString()}`,
     "Failed to load dashboard",
   );
-  return mapDashboardData(data, newEmployeesPeriod);
+  return mapDashboardData(data, newEmployeesPeriod, viewer || null);
 }
