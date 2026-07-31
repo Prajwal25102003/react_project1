@@ -76,6 +76,21 @@ export async function countEmployeesInDepartment(departmentId) {
   return result.rows[0].count
 }
 
+/** Employee ids currently assigned to this department. */
+export async function findEmployeeIdsByDepartmentId(departmentId) {
+  if (!departmentId) return []
+
+  const result = await query(
+    `SELECT id
+     FROM employees
+     WHERE department_id = $1
+     ORDER BY id ASC`,
+    [departmentId],
+  )
+
+  return result.rows.map((row) => row.id)
+}
+
 export async function createDepartment(department) {
   const result = await query(
     `INSERT INTO departments (

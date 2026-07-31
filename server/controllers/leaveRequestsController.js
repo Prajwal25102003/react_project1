@@ -39,6 +39,7 @@ import {
 } from '../models/maternityLeaveModel.js'
 import { findHolidayDatesBetween } from '../models/holidaysModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
+import { employeeIdsFromHierarchySteps } from '../utils/notificationAudience.js'
 import {
   countWorkingLeaveDays,
   isWorkingLeaveDay,
@@ -577,6 +578,10 @@ export async function createLeaveRequestHandler(req, res) {
         willUseLop: Number(allocation.fromLop || 0) > 0,
         hierarchyLabels: hierarchyLabelsFromSteps(hierarchy.steps),
         departmentHeadId,
+        employeeIds: employeeIdsFromHierarchySteps(hierarchy.steps, {
+          departmentHeadId,
+          requesterEmployeeId: created.employeeId,
+        }),
         currentStepLabel: stepDisplayLabel(currentApproverStep),
         currentApprover: approverMetaFromStep(currentApproverStep, {
           departmentHeadId,
@@ -818,6 +823,10 @@ export async function updateLeaveRequestStatusHandler(req, res) {
         awaitsNext,
         hierarchyLabels: hierarchyLabelsFromSteps(existing.hierarchySteps),
         departmentHeadId: deptContext.departmentHeadId,
+        employeeIds: employeeIdsFromHierarchySteps(existing.hierarchySteps, {
+          departmentHeadId: deptContext.departmentHeadId,
+          requesterEmployeeId: leaveRequest.employeeId,
+        }),
         previousApprover: approverMetaFromStep(currentStep, {
           departmentHeadId: deptContext.departmentHeadId,
           requesterEmployeeId: leaveRequest.employeeId,
@@ -917,6 +926,9 @@ export async function cancelLeaveRequestHandler(req, res) {
       leaveRequest.startDate,
       leaveRequest.endDate,
     )
+    const deptContext = await findEmployeeDepartmentContext(
+      leaveRequest.employeeId,
+    )
     await createRecentActivity({
       title: 'Leave Request Cancelled',
       description: `${leaveRequest.employeeName} cancelled a ${leaveRequest.leaveType} request (${cancelRange}).`,
@@ -932,6 +944,11 @@ export async function cancelLeaveRequestHandler(req, res) {
         range: cancelRange,
         actorName: actor.actorName,
         actorRole: isManager ? 'hr' : 'employee',
+        departmentHeadId: deptContext.departmentHeadId,
+        employeeIds: employeeIdsFromHierarchySteps(existing.hierarchySteps, {
+          departmentHeadId: deptContext.departmentHeadId,
+          requesterEmployeeId: leaveRequest.employeeId,
+        }),
       },
     })
 

@@ -4,6 +4,7 @@ import {
   deleteDepartmentById,
   findAllDepartments,
   findDepartmentById,
+  findEmployeeIdsByDepartmentId,
   generateNextDepartmentId,
   updateDepartment,
 } from '../models/departmentsModel.js'
@@ -96,6 +97,7 @@ export async function createDepartmentHandler(req, res) {
     await syncDepartmentEmployeeLoginRoles(created)
 
     const actorLabel = formatActorLabel(actorFromUser(req.user))
+    const createdEmployeeIds = await findEmployeeIdsByDepartmentId(created.id)
     await createRecentActivity({
       title: `${created.name} Department Created`,
       description: `${actorLabel} added the ${created.name} department to the organization.`,
@@ -106,6 +108,7 @@ export async function createDepartmentHandler(req, res) {
       meta: {
         departmentName: created.name,
         departmentId: created.id,
+        employeeIds: createdEmployeeIds,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },
@@ -185,6 +188,13 @@ export async function updateDepartmentHandler(req, res) {
       description = `${actorLabel} renamed the department from ${existing.name} to ${updated.name}.`
     }
 
+    const updatedEmployeeIds = [
+      ...new Set([
+        ...(await findEmployeeIdsByDepartmentId(updated.id)),
+        existing.headEmployeeId,
+        updated.headEmployeeId,
+      ].filter(Boolean)),
+    ]
     await createRecentActivity({
       title: `${updated.name} Department Updated`,
       description,
@@ -195,6 +205,7 @@ export async function updateDepartmentHandler(req, res) {
       meta: {
         departmentName: updated.name,
         departmentId: updated.id,
+        employeeIds: updatedEmployeeIds,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },
@@ -244,6 +255,7 @@ export async function deleteDepartmentHandler(req, res) {
       meta: {
         departmentName: existing.name,
         departmentId: existing.id,
+        employeeIds: existing.headEmployeeId ? [existing.headEmployeeId] : [],
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },

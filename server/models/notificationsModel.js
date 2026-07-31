@@ -175,7 +175,7 @@ export function mergeActivityFeeds(
   return selected.slice(0, limit)
 }
 
-function withSelfOrTeamAudience(rows, viewerEmployeeId) {
+export function withSelfOrTeamAudience(rows, viewerEmployeeId) {
   return (rows || []).map((row) => {
     const meta = parseMeta(row.meta)
     const inEmployeeIds = Array.isArray(meta.employeeIds)
@@ -268,11 +268,19 @@ export async function findLeaveActivityRowsForLeaveIds(leaveIds, limit = 25) {
 }
 
 /**
- * Module notices aimed at this employee: profile updates, leave-balance grants,
- * and bulk actions that list them in meta.employeeIds.
+ * Module notices aimed at one or more employees:
+ * - subject_employee_id match
+ * - meta.employeeIds contains any of them
+ * - meta.departmentId / departmentIds matches their current department(s)
+ * Categories: Employees, Departments, Attendance, and Leave (when employeeIds set).
  */
-export async function findPersonalSubjectActivityRows(employeeId, limit = 10) {
-  if (!employeeId) return []
+export async function findPersonalSubjectActivityRows(employeeIds, limit = 10) {
+  const ids = [
+    ...new Set(
+      (Array.isArray(employeeIds) ? employeeIds : [employeeIds]).filter(Boolean),
+    ),
+  ]
+  if (ids.length === 0) return []
 
   const result = await query(
     `SELECT
@@ -287,18 +295,43 @@ export async function findPersonalSubjectActivityRows(employeeId, limit = 10) {
       actor_employee_id AS "actorEmployeeId",
       meta
     FROM recent_activities
-    WHERE category IN ('Employees', 'Departments', 'Attendance')
+    WHERE category IN ('Employees', 'Departments', 'Attendance', 'Leave')
       AND (
-        subject_employee_id = $1
+        subject_employee_id = ANY($1::varchar[])
         OR (
           meta IS NOT NULL
           AND jsonb_typeof(meta->'employeeIds') = 'array'
-          AND meta->'employeeIds' ? $1
+          AND meta->'employeeIds' ?| $1::text[]
+        )
+        OR (
+          -- Whole-department notices only for Department events
+          -- (create/update/head change), not every employee/attendance row.
+          category = 'Departments'
+          AND meta IS NOT NULL
+          AND meta->>'departmentId' IS NOT NULL
+          AND meta->>'departmentId' IN (
+            SELECT e.department_id
+            FROM employees e
+            WHERE e.id = ANY($1::varchar[])
+              AND e.department_id IS NOT NULL
+          )
+        )
+        OR (
+          category = 'Departments'
+          AND meta IS NOT NULL
+          AND jsonb_typeof(meta->'departmentIds') = 'array'
+          AND EXISTS (
+            SELECT 1
+            FROM employees e
+            WHERE e.id = ANY($1::varchar[])
+              AND e.department_id IS NOT NULL
+              AND meta->'departmentIds' ? e.department_id
+          )
         )
       )
     ORDER BY activity_time DESC
     LIMIT $2`,
-    [employeeId, limit],
+    [ids, limit],
   )
 
   return result.rows
@@ -341,7 +374,8 @@ export async function findNotificationsForTeamLead(headEmployeeId, limit = 25) {
       findTeamActivityRows(headEmployeeId, limit),
       findHolidayActivityRows(limit),
       findLeaveDecisionActivityRows(subjectIds, limit),
-      findPersonalSubjectActivityRows(headEmployeeId, limit),
+      // Include team subjects so heads see hire/profile/attendance/dept notices.
+      findPersonalSubjectActivityRows(subjectIds, limit),
     ])
 
   return mergeActivityFeeds(

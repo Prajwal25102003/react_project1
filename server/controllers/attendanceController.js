@@ -8,7 +8,12 @@ import {
   updateAttendance,
   upsertAttendanceByEmployeeDate,
 } from '../models/attendanceModel.js'
-import { employeeExists, employeeHasExcludedLoginRole } from '../models/employeesModel.js'
+import { findDepartmentById } from '../models/departmentsModel.js'
+import {
+  employeeExists,
+  employeeHasExcludedLoginRole,
+  findEmployeeById,
+} from '../models/employeesModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
 import {
   actorFromUser,
@@ -16,6 +21,10 @@ import {
   formatDisplayDate,
 } from '../utils/activityCopy.js'
 import { formatDbError } from '../utils/formatDbError.js'
+import {
+  buildEmployeeAudienceMeta,
+  expandEmployeeIdsWithDepartmentHeads,
+} from '../utils/notificationAudience.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 import { calculateWorkingHours } from '../utils/workingHours.js'
 
@@ -201,6 +210,10 @@ export async function updateAttendanceHandler(req, res) {
       description = `${updated.employeeName}'s attendance on ${dateLabel} was updated to ${updated.status} by ${actorLabel}.`
     }
 
+    const subject = await findEmployeeById(updated.employeeId)
+    const audience = await buildEmployeeAudienceMeta(subject || { id: updated.employeeId }, {
+      findDepartmentById,
+    })
     await createRecentActivity({
       title: 'Attendance Marked',
       description,
@@ -215,6 +228,9 @@ export async function updateAttendanceHandler(req, res) {
         attendanceStatus: updated.status,
         attendanceId: updated.id,
         checkIn: updated.checkIn,
+        departmentId: audience.departmentId,
+        departmentIds: audience.departmentIds,
+        employeeIds: audience.employeeIds,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },
@@ -246,6 +262,11 @@ export async function deleteAttendanceHandler(req, res) {
 
     const actorLabel = formatActorLabel(actorFromUser(req.user))
     const dateLabel = formatDisplayDate(existing.date)
+    const subject = await findEmployeeById(existing.employeeId)
+    const audience = await buildEmployeeAudienceMeta(
+      subject || { id: existing.employeeId },
+      { findDepartmentById },
+    )
     await createRecentActivity({
       title: 'Attendance Removed',
       description: `Attendance for ${existing.employeeName} on ${dateLabel} was removed by ${actorLabel}.`,
@@ -258,6 +279,9 @@ export async function deleteAttendanceHandler(req, res) {
         subjectName: existing.employeeName,
         attendanceDate: existing.date,
         attendanceId: existing.id,
+        departmentId: audience.departmentId,
+        departmentIds: audience.departmentIds,
+        employeeIds: audience.employeeIds,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },
@@ -384,7 +408,10 @@ export async function importAttendanceHandler(req, res) {
     const saved = imported + updated
     if (saved > 0) {
       const actorLabel = formatActorLabel(actorFromUser(req.user))
-      const uniqueEmployeeIds = [...new Set(employeeIds.filter(Boolean))]
+      const uniqueEmployeeIds = await expandEmployeeIdsWithDepartmentHeads(
+        employeeIds,
+        { findEmployeeById, findDepartmentById },
+      )
       const uniqueAttendanceIds = [...new Set(attendanceIds.filter(Boolean))]
       await createRecentActivity({
         title: 'Attendance Imported',

@@ -22,7 +22,9 @@ import {
   findNotificationsForAdmin,
   findPersonalSubjectActivityRows,
   mergeActivityFeeds,
+  withSelfOrTeamAudience,
 } from '../models/notificationsModel.js'
+import { viewerIsActivityAudience } from '../utils/notificationAudience.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import { mapActivityRowsAsync } from '../utils/relativeTime.js'
 
@@ -99,16 +101,20 @@ function mergeScopedWithHolidays(
   }
 
   for (const row of leaveDecisionRows || []) {
-    const isSelf =
-      viewerEmployeeId &&
-      String(row.subjectEmployeeId || '') === String(viewerEmployeeId)
+    const isSelf = viewerIsActivityAudience(
+      row,
+      viewerEmployeeId,
+      parseMeta(row.meta),
+    )
     pushRow(row, isSelf ? 'self' : 'org')
   }
 
   for (const row of scopedRows || []) {
-    const isSelf =
-      viewerEmployeeId &&
-      String(row.subjectEmployeeId || '') === String(viewerEmployeeId)
+    const isSelf = viewerIsActivityAudience(
+      row,
+      viewerEmployeeId,
+      parseMeta(row.meta),
+    )
     pushRow(row, isSelf ? 'self' : 'org')
   }
 
@@ -356,7 +362,8 @@ async function buildEmployeeDashboard(req, res) {
         : getEmployeeRecentActivities(employeeId),
       findHolidayActivityRows(RECENT_ACTIVITY_LIMIT),
       findLeaveDecisionActivityRows(subjectIds, RECENT_ACTIVITY_LIMIT),
-      findPersonalSubjectActivityRows(employeeId, RECENT_ACTIVITY_LIMIT),
+      // Dept heads: include team subjects so hire/profile/dept/attendance notices appear.
+      findPersonalSubjectActivityRows(subjectIds, RECENT_ACTIVITY_LIMIT),
       namedApprover || isTeamLead
         ? findAwaitingApproverLeaveActivities(
             { employeeId },
@@ -370,11 +377,14 @@ async function buildEmployeeDashboard(req, res) {
     holidayRows,
     employeeId,
     RECENT_ACTIVITY_LIMIT,
-    [
-      ...(awaitingRows || []),
-      ...(leaveDecisionRows || []),
-      ...(subjectRows || []),
-    ],
+    withSelfOrTeamAudience(
+      [
+        ...(awaitingRows || []),
+        ...(leaveDecisionRows || []),
+        ...(subjectRows || []),
+      ],
+      employeeId,
+    ),
   )
 
   const marked = stats.attendanceMarkedMonth || 0
