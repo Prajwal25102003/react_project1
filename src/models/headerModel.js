@@ -1,3 +1,4 @@
+import { ROLES } from "./authModel.js";
 import { STATUS_TONE, getStatusClass } from "./statusStylesModel.js";
 import { createSeenStateHelpers } from "../utils/seenState.js";
 
@@ -42,6 +43,17 @@ export function mapHeaderUser(authUser) {
   };
 }
 
+/** Soft header bar tint by login role (dept head = employee + flag). */
+export function getHeaderBarClass(authUser) {
+  const role = authUser?.role;
+  if (role === ROLES.ADMIN) return "bg-error-50";
+  if (role === ROLES.HR) return "bg-brand-50";
+  if (role === ROLES.EMPLOYEE && authUser?.isDepartmentHead) {
+    return "bg-warning-50";
+  }
+  return "bg-white";
+}
+
 /**
  * Extract resource ID from notification/activity ID.
  * IDs can be like "leave-LR-001", "att-123", "ACT-01", or just "LR-001".
@@ -81,23 +93,55 @@ export function getNotificationPath(notification) {
   }
 
   if (category === "attendance") {
-    return attId ? `/attendance?id=${attId}` : "/attendance";
+    if (attId) return `/attendance?id=${attId}`;
+    const employeeId = notification?.subjectEmployeeId;
+    return employeeId
+      ? `/attendance?employeeId=${encodeURIComponent(employeeId)}`
+      : "/attendance";
   }
 
   if (category === "employees") {
-    return "/employees";
+    const eventType = String(notification?.eventType || "");
+    const title = String(notification?.title || "");
+    if (
+      eventType === "employee.leave_balances" ||
+      /leave balance/i.test(title)
+    ) {
+      return "/leave-requests";
+    }
+    const employeeId = notification?.subjectEmployeeId;
+    return employeeId
+      ? `/employees?id=${encodeURIComponent(employeeId)}`
+      : "/employees";
   }
 
   if (category === "departments") {
-    return "/departments";
+    const departmentId = notification?.departmentId;
+    return departmentId
+      ? `/departments?id=${encodeURIComponent(departmentId)}`
+      : "/departments";
   }
 
   if (category === "holidays") {
+    const holidayId = notification?.holidayId;
+    const holidayDate = notification?.holidayDate;
+    if (holidayId) {
+      return `/holidays?id=${encodeURIComponent(holidayId)}`;
+    }
+    if (holidayDate) {
+      return `/holidays?date=${encodeURIComponent(holidayDate)}`;
+    }
     return "/holidays";
   }
 
   // Default: stay on dashboard
   return null;
+}
+
+function activityIdSortKey(id) {
+  const match = String(id || "").match(/^ACT-(\d+)$/i);
+  if (match) return Number(match[1]);
+  return 0;
 }
 
 export function mapNotifications(notifications) {
@@ -107,11 +151,26 @@ export function mapNotifications(notifications) {
       title: notification.title || "",
       description: notification.description || "",
       category: notification.category || "",
+      activityTime: notification.activityTime || null,
       time: notification.time || "",
       status: notification.status || "Info",
+      eventType: notification.eventType || null,
       audience: notification.audience || null,
       direction: notification.direction || null,
+      directionLabel: notification.directionLabel || null,
       leaveRequestId: notification.leaveRequestId || null,
+      subjectEmployeeId: notification.subjectEmployeeId || null,
+      departmentId: notification.departmentId || null,
+      departmentName: notification.departmentName || null,
+      holidayId: notification.holidayId || null,
+      holidayDate: notification.holidayDate || null,
+      attendanceId: notification.attendanceId || null,
+      attendanceIds: Array.isArray(notification.attendanceIds)
+        ? notification.attendanceIds.map(String).filter(Boolean)
+        : [],
+      employeeIds: Array.isArray(notification.employeeIds)
+        ? notification.employeeIds.map(String).filter(Boolean)
+        : [],
       fromLop: Number(notification.fromLop || 0) || 0,
       willUseLop: Boolean(notification.willUseLop),
       statusClass: getStatusClass(
@@ -135,8 +194,9 @@ const {
 export { getSeenNotificationIds, markNotificationsSeen };
 
 /**
- * Latest N notifications always display. Unseen → isNew; they stay unread
+ * Latest 25 notifications always display. Unseen → isNew; they stay unread
  * until the user interacts with (clicks) that notification.
+ * Order is newest first (activityTime), then older below.
  */
 export function withNotificationSeenState(notifications, userKey) {
   const list = notifications || [];
@@ -145,10 +205,17 @@ export function withNotificationSeenState(notifications, userKey) {
 
   const seenSet = new Set(getSeenNotificationIds(userKey));
 
-  return list.map((item) => ({
-    ...item,
-    isNew: Boolean(item.id) && !seenSet.has(String(item.id)),
-  }));
+  return list
+    .map((item) => ({
+      ...item,
+      isNew: Boolean(item.id) && !seenSet.has(String(item.id)),
+    }))
+    .sort((a, b) => {
+      const tb = new Date(b.activityTime || 0).getTime();
+      const ta = new Date(a.activityTime || 0).getTime();
+      if (tb !== ta) return tb - ta;
+      return activityIdSortKey(b.id) - activityIdSortKey(a.id);
+    });
 }
 
 export function notificationDotTone(status) {

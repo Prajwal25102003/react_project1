@@ -56,6 +56,14 @@ export function calculateWorkingHours(checkIn, checkOut) {
   return String(Number((diff / 60).toFixed(2)));
 }
 
+/** Display ISO YYYY-MM-DD as DD/MM/YYYY. */
+export function formatAttendanceDateLabel(isoDate) {
+  const text = String(isoDate || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const [year, month, day] = text.split("-");
+  return `${day}/${month}/${year}`;
+}
+
 /**
  * Format decimal hours for display, e.g. 8.5 → "8 hours 30 minutes",
  * 8.83 → "8 hours 50 minutes".
@@ -83,8 +91,11 @@ export function formatWorkingHoursLabel(value) {
 }
 
 export function mapAttendanceRecord(record) {
+  const date = record.date || "";
   return {
     ...record,
+    date,
+    dateLabel: formatAttendanceDateLabel(date),
     workingHoursLabel: formatWorkingHoursLabel(record.workingHours),
     statusClass: getStatusClass(ATTENDANCE_STATUS, record.status, "Absent"),
   };

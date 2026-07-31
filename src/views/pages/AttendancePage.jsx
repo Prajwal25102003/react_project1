@@ -3,7 +3,33 @@ import DataTable from "../components/DataTable.jsx";
 import ListPageShell from "../components/ListPageShell.jsx";
 import AttendanceDeleteModal from "./AttendanceDeleteModal.jsx";
 
-function ImportStatsBanner({ stats, onDismiss }) {
+function AttendanceScopeTabs({ value, options, onChange }) {
+  if (!options?.length) return null;
+
+  return (
+    <div className="flex items-center gap-0.5 rounded-lg bg-gray-100 p-0.5">
+      {options.map((option) => {
+        const active = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={
+              active
+                ? "inline-flex items-center rounded-md bg-white px-3 py-1.5 text-theme-sm font-medium text-gray-800 shadow-theme-xs"
+                : "inline-flex items-center rounded-md px-3 py-1.5 text-theme-sm font-medium text-gray-500 hover:text-gray-700"
+            }
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ImportStatsBanner({ stats }) {
   if (!stats) return null;
 
   const saved = (stats.imported || 0) + (stats.updated || 0);
@@ -14,36 +40,25 @@ function ImportStatsBanner({ stats, onDismiss }) {
 
   return (
     <div className={`mb-4 rounded-xl border p-4 ${tone}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium">
-            Import complete — {saved} saved
-            {stats.failed ? `, ${stats.failed} failed` : ""}
-            {stats.skipped ? `, ${stats.skipped} skipped` : ""}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-3 text-theme-sm">
-            <span>New: {stats.imported}</span>
-            <span>Updated: {stats.updated}</span>
-            <span>Present: {stats.present}</span>
-            <span>Absent: {stats.absent}</span>
-            <span>Half Day: {stats.halfDay}</span>
-          </div>
-          {stats.errors?.length ? (
-            <ul className="mt-2 list-disc space-y-0.5 pl-5 text-theme-xs">
-              {stats.errors.slice(0, 5).map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-theme-xs font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50"
-        >
-          Dismiss
-        </button>
+      <p className="text-sm font-medium">
+        Import complete — {saved} saved
+        {stats.failed ? `, ${stats.failed} failed` : ""}
+        {stats.skipped ? `, ${stats.skipped} skipped` : ""}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-3 text-theme-sm">
+        <span>New: {stats.imported}</span>
+        <span>Updated: {stats.updated}</span>
+        <span>Present: {stats.present}</span>
+        <span>Absent: {stats.absent}</span>
+        <span>Half Day: {stats.halfDay}</span>
       </div>
+      {stats.errors?.length ? (
+        <ul className="mt-2 list-disc space-y-0.5 pl-5 text-theme-xs">
+          {stats.errors.slice(0, 5).map((message) => (
+            <li key={message}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -56,6 +71,13 @@ function AttendancePage() {
     table,
     filterDefs,
     isEmployee,
+    listScope,
+    setListScope,
+    listScopeOptions,
+    showingMyAttendance,
+    canManageRecord,
+    hasUnread,
+    markAllAsRead,
     deleteTarget,
     deleting,
     deleteError,
@@ -63,18 +85,22 @@ function AttendancePage() {
     closeDeleteModal,
     confirmDelete,
     importing,
-    importError,
+    importErrors,
     importStats,
     fileInputRef,
     openImportPicker,
     handleImportFile,
-    clearImportStats,
+    onRecordInteract,
   } = useAttendance();
 
-  const pageName = isEmployee ? "My Attendance" : "Attendance";
-  const columns = isEmployee
-    ? table.visibleColumns.filter((column) => column.id !== "actions")
-    : table.visibleColumns;
+  const pageName = showingMyAttendance ? "My Attendance" : "Attendance";
+  const columns = table.visibleColumns.filter((column) => {
+    if (showingMyAttendance && column.id === "employeeName") return false;
+    if ((isEmployee || showingMyAttendance) && column.id === "actions") {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <>
@@ -83,15 +109,50 @@ function AttendancePage() {
         loading={loading}
         error={error}
         loadingLabel="Loading attendance…"
+        actions={
+          hasUnread || listScopeOptions.length ? (
+            <div className="flex flex-wrap items-center gap-3">
+              {hasUnread ? (
+                <button
+                  type="button"
+                  onClick={markAllAsRead}
+                  className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800"
+                >
+                  Mark as read
+                </button>
+              ) : null}
+              <AttendanceScopeTabs
+                value={listScope}
+                options={listScopeOptions}
+                onChange={setListScope}
+              />
+            </div>
+          ) : null
+        }
       >
-        {!isEmployee && importError ? (
-          <div className="mb-4 rounded-xl border border-error-500 bg-error-50 p-4">
-            <p className="text-sm text-error-700">{importError}</p>
+        {!isEmployee && importErrors?.length ? (
+          <div className="mb-4 rounded-xl border border-error-500 bg-error-50 p-4 text-error-700">
+            <p className="text-sm font-medium">
+              Import rejected
+              {importErrors.length > 1
+                ? ` — ${importErrors.length} errors`
+                : ""}
+            </p>
+            <ul className="mt-2 list-disc space-y-0.5 pl-5 text-theme-sm">
+              {importErrors.slice(0, 20).map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+            {importErrors.length > 20 ? (
+              <p className="mt-2 text-theme-xs">
+                Showing first 20 of {importErrors.length} errors.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
         {!isEmployee ? (
-          <ImportStatsBanner stats={importStats} onDismiss={clearImportStats} />
+          <ImportStatsBanner stats={importStats} />
         ) : null}
 
         <DataTable
@@ -99,7 +160,11 @@ function AttendancePage() {
           rows={records}
           search={table.search}
           onSearchChange={table.onSearchChange}
-          searchPlaceholder="Search attendance…"
+          searchPlaceholder={
+            showingMyAttendance
+              ? "Search my attendance…"
+              : "Search attendance…"
+          }
           sort={table.sort}
           onSortChange={table.toggleSort}
           page={table.page}
@@ -115,6 +180,12 @@ function AttendancePage() {
           onColumnFilterChange={table.setColumnFilter}
           onClearFilters={table.clearColumnFilters}
           onExportCsv={() => table.exportCsv("attendance.csv")}
+          onRowClick={onRecordInteract}
+          getRowClassName={(row) =>
+            row.needsAttention
+              ? "bg-brand-25 hover:bg-brand-25"
+              : "bg-white hover:bg-gray-50/80"
+          }
           toolbarStart={
             isEmployee ? null : (
               <>
@@ -137,23 +208,31 @@ function AttendancePage() {
             )
           }
           getActions={
-            isEmployee
+            isEmployee || showingMyAttendance
               ? undefined
-              : (record) => [
-                  {
-                    label: "Edit",
-                    icon: "pencil",
-                    to: `/attendance/${record.id}/edit`,
-                  },
-                  {
-                    label: "Delete",
-                    icon: "trash",
-                    tone: "danger",
-                    onClick: () => openDeleteModal(record),
-                  },
-                ]
+              : (record) => {
+                  if (!canManageRecord(record)) return [];
+                  return [
+                    {
+                      label: "Edit",
+                      icon: "pencil",
+                      to: `/attendance/${record.id}/edit`,
+                      onClick: () => onRecordInteract(record),
+                    },
+                    {
+                      label: "Delete",
+                      icon: "trash",
+                      tone: "danger",
+                      onClick: () => openDeleteModal(record),
+                    },
+                  ];
+                }
           }
-          emptyMessage="No attendance records found."
+          emptyMessage={
+            showingMyAttendance
+              ? "No personal attendance records found."
+              : "No attendance records found."
+          }
         />
       </ListPageShell>
 

@@ -45,7 +45,7 @@ function AssignLeavesModal({
         noValidate
         className="flex min-h-0 flex-1 flex-col"
       >
-        <div className="no-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-1 pb-1">
+        <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-1 pb-1">
           {error ? (
             <p className="text-theme-sm text-error-600">{error}</p>
           ) : null}
@@ -151,7 +151,7 @@ function AssignLeavesModal({
                 }
                 disabled={assigning}
               />
-              <div className="no-scrollbar mt-2 max-h-[min(11rem,22vh)] overflow-y-auto rounded-xl border border-gray-200">
+              <div className="custom-scrollbar mt-2 max-h-[min(11rem,22vh)] overflow-y-auto rounded-xl border border-gray-200">
                 {form.scope === "department" && !form.departmentId ? (
                   <p className="px-3 py-4 text-theme-sm text-gray-500">
                     Select a department to see employees.

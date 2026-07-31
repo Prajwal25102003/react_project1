@@ -1,4 +1,5 @@
 import { STATUS_TONE, getStatusClass } from "./statusStylesModel.js";
+import { formatDateDisplay } from "./datePickerModel.js";
 import {
   isFemaleEmployee,
   isMaternityLeave,
@@ -214,11 +215,26 @@ export function nextStepAfterCurrent(request) {
   return steps[idx + 1];
 }
 
+/** True when this approval is the last hierarchy step (balances deduct on approve). */
+export function isFinalApprovalStep(request) {
+  return Boolean(request) && !nextStepAfterCurrent(request);
+}
+
 /** True when the signed-in user matches the request's current hierarchy step. */
 export function actorMatchesCurrentStep(request, { employeeId, role } = {}) {
   if (!request || request.status !== "Pending") return false;
   const step = currentHierarchyStep(request);
   if (!step) return false;
+  return actorMatchesHierarchyStep(request, step, { employeeId, role });
+}
+
+/** True when actor matches a specific hierarchy step definition. */
+export function actorMatchesHierarchyStep(
+  request,
+  step,
+  { employeeId, role } = {},
+) {
+  if (!request || !step) return false;
 
   if (step.approverKind === "department_head") {
     return Boolean(
@@ -242,6 +258,22 @@ export function actorMatchesCurrentStep(request, { employeeId, role } = {}) {
   }
 
   return false;
+}
+
+/**
+ * True when the user is on a later hierarchy step than the live current step
+ * (earlier approvers still need to act first).
+ */
+export function actorMatchesFutureStep(request, { employeeId, role } = {}) {
+  if (!request || request.status !== "Pending") return false;
+  if (actorMatchesCurrentStep(request, { employeeId, role })) return false;
+  const current = Number(request.currentStep);
+  if (!current) return false;
+
+  return (request.hierarchySteps || []).some((step) => {
+    if (Number(step.stepOrder) <= current) return false;
+    return actorMatchesHierarchyStep(request, step, { employeeId, role });
+  });
 }
 
 export function mapApprovalHistoryEntry(entry) {
@@ -488,8 +520,15 @@ export function mapLeaveRequest(request) {
     request.attachments ?? request.attachmentUrl,
   );
 
+  const startDate = request.startDate || "";
+  const endDate = request.endDate || "";
+
   return {
     ...request,
+    startDate,
+    endDate,
+    startDateLabel: formatDateDisplay(startDate) || startDate,
+    endDateLabel: formatDateDisplay(endDate) || endDate,
     leaveDays: Number.isNaN(leaveDays) ? request.leaveDays : leaveDays,
     halfDaySession: request.halfDaySession || null,
     leaveDaysLabel: formatLeaveDaysLabel(
@@ -551,14 +590,81 @@ export function canAdminRejectRequest(request) {
 }
 
 /** True when the signed-in user can approve or reject this leave request. */
-function canActOnLeaveApproval(request, { employeeId, role } = {}) {
+export function isActionableLeaveApproval(request, { employeeId, role } = {}) {
   return actorMatchesCurrentStep(request, { employeeId, role });
 }
 
 /** How many approval-queue rows still need this user's decision. */
 export function countActionableLeaveApprovals(requests, userContext) {
   return (requests || []).filter((request) =>
-    canActOnLeaveApproval(request, userContext),
+    isActionableLeaveApproval(request, userContext),
+  ).length;
+}
+
+/** Leave request ids that still need this user's decision. */
+export function actionableLeaveApprovalIds(requests, userContext) {
+  return new Set(
+    (requests || [])
+      .filter((request) => isActionableLeaveApproval(request, userContext))
+      .map((request) => request.id),
+  );
+}
+
+/**
+ * Badge counts for My / Employees tabs and the leave-requests nav module.
+ * - employees: requests awaiting this user's approve/reject, or later in their chain
+ * - mine: own Pending leave (open / awaiting others), plus any self-actionable
+ * - total: mine + employees (module sidebar badge)
+ */
+export function leaveScopeNotificationCounts(requests, userContext = {}) {
+  const actionableIds = actionableLeaveApprovalIds(requests, userContext);
+  const myId = userContext.employeeId
+    ? String(userContext.employeeId)
+    : "";
+  let mine = 0;
+  let employees = 0;
+
+  for (const row of requests || []) {
+    const isMine = Boolean(myId) && String(row.employeeId) === myId;
+    if (actionableIds.has(row.id)) {
+      if (isMine) mine += 1;
+      else employees += 1;
+      continue;
+    }
+    if (actorMatchesFutureStep(row, userContext)) {
+      if (isMine) mine += 1;
+      else employees += 1;
+      continue;
+    }
+    if (isMine && row.status === "Pending") {
+      mine += 1;
+    }
+  }
+
+  return { mine, employees, total: mine + employees };
+}
+
+/** Row highlight: actionable, future-chain awaiting, or own open leave. */
+export function leaveRequestNeedsAttention(request, userContext = {}) {
+  if (!request) return false;
+  if (isActionableLeaveApproval(request, userContext)) return true;
+  if (actorMatchesFutureStep(request, userContext)) return true;
+  const myId = userContext.employeeId
+    ? String(userContext.employeeId)
+    : "";
+  return (
+    Boolean(myId) &&
+    String(request.employeeId) === myId &&
+    request.status === "Pending"
+  );
+}
+
+/** Count actionable + future-chain pending rows (Admin sidebar badge). */
+export function countLeaveApproverAttention(requests, userContext) {
+  return (requests || []).filter(
+    (request) =>
+      isActionableLeaveApproval(request, userContext) ||
+      actorMatchesFutureStep(request, userContext),
   ).length;
 }
 

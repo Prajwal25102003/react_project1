@@ -1,10 +1,11 @@
 import {
   findEmployeeActivityRows,
   findTeamActivityRows,
+  findTeamEmployeeIds,
 } from './dashboardModel.js'
 import { query } from '../config/db.js'
 
-export async function findNotificationsForOrg(limit = 10) {
+export async function findNotificationsForOrg(limit = 25) {
   const result = await query(
     `SELECT
       id,
@@ -26,38 +27,13 @@ export async function findNotificationsForOrg(limit = 10) {
   return result.rows
 }
 
-/** Org feed for Admin: modules + HR leave only (not all employee leave). */
-export async function findNotificationsForAdmin(limit = 10) {
-  const result = await query(
-    `SELECT
-      id,
-      title,
-      description,
-      category,
-      activity_time AS "activityTime",
-      status,
-      event_type AS "eventType",
-      subject_employee_id AS "subjectEmployeeId",
-      actor_employee_id AS "actorEmployeeId",
-      meta
-    FROM recent_activities
-    WHERE category <> 'Leave'
-       OR (
-         category = 'Leave'
-         AND subject_employee_id IS NOT NULL
-         AND EXISTS (
-           SELECT 1
-           FROM users u
-           WHERE u.employee_id = recent_activities.subject_employee_id
-             AND u.role = 'hr'
-         )
-       )
-    ORDER BY activity_time DESC
-    LIMIT $1`,
-    [limit],
-  )
-
-  return result.rows
+/**
+ * Org feed for Admin: same as org-wide feed so the leave approval stepper
+ * is fully visible (submit → forward → approve/reject) for every employee,
+ * plus all module activities.
+ */
+export async function findNotificationsForAdmin(limit = 25) {
+  return findNotificationsForOrg(limit)
 }
 
 /** Org-wide holiday calendar changes (add / edit / delete / release). */
@@ -84,31 +60,133 @@ export async function findHolidayActivityRows(limit = 10) {
   return result.rows
 }
 
-function mergeActivityFeeds(primaryRows, secondaryRows, limit) {
-  const seen = new Set()
-  const merged = []
+function parseMeta(meta) {
+  if (!meta) return {}
+  if (typeof meta === 'string') {
+    try {
+      return JSON.parse(meta) || {}
+    } catch {
+      return {}
+    }
+  }
+  return meta
+}
 
-  for (const row of [...(primaryRows || []), ...(secondaryRows || [])]) {
-    const id = String(row.id)
-    if (seen.has(id)) continue
-    seen.add(id)
-    merged.push(row)
+function leaveRequestKey(row) {
+  const meta = parseMeta(row.meta)
+  if (meta.leaveRequestId) return String(meta.leaveRequestId)
+  const match = String(row.id || '').match(/^leave-(.+)$/i)
+  return match ? match[1] : null
+}
+
+function isLeaveFeedRow(row) {
+  return (
+    String(row?.category || '') === 'Leave' ||
+    String(row?.eventType || '').startsWith('leave.')
+  )
+}
+
+/**
+ * Merge feeds by id. For the same leave request, keep only the newest row
+ * (prefer real recent_activities over synthetic leave-{id} rows).
+ *
+ * Default: sliding window of `limit` newest messages — older ones drop out
+ * as newer ones fill the slots.
+ *
+ * When reservePersonalLeave is set, keep personal Leave rows in the feed even
+ * if older holiday announcements would otherwise push them out of the limit.
+ */
+export function mergeActivityFeeds(
+  rowGroups,
+  limit,
+  { reservePersonalLeave = false } = {},
+) {
+  const byId = new Map()
+  const leaveBest = new Map()
+
+  for (const rows of rowGroups) {
+    for (const row of rows || []) {
+      const leaveKey = isLeaveFeedRow(row) ? leaveRequestKey(row) : null
+      if (leaveKey) {
+        const existing = leaveBest.get(leaveKey)
+        if (!existing) {
+          leaveBest.set(leaveKey, row)
+          continue
+        }
+        const rowSynthetic = String(row.id || '').startsWith('leave-')
+        const existingSynthetic = String(existing.id || '').startsWith('leave-')
+        const rowTime = new Date(row.activityTime || 0).getTime()
+        const existingTime = new Date(existing.activityTime || 0).getTime()
+        // Always prefer the newer timestamp so forwards replace older submit rows.
+        if (rowTime !== existingTime) {
+          if (rowTime > existingTime) leaveBest.set(leaveKey, row)
+          continue
+        }
+        if (existingSynthetic && !rowSynthetic) {
+          leaveBest.set(leaveKey, row)
+        } else if (!existingSynthetic && rowSynthetic) {
+          // keep recorded decision activity
+        }
+        continue
+      }
+
+      const id = String(row.id)
+      if (!byId.has(id)) byId.set(id, row)
+    }
   }
 
+  const merged = [...byId.values(), ...leaveBest.values()]
   merged.sort((a, b) => {
     const ta = new Date(a.activityTime || 0).getTime()
     const tb = new Date(b.activityTime || 0).getTime()
     return tb - ta
   })
 
-  return merged.slice(0, limit)
+  // Sliding window: newest `limit` only — older messages leave the feed.
+  if (!reservePersonalLeave) {
+    return merged.slice(0, limit)
+  }
+
+  const personalLeave = merged.filter(
+    (row) =>
+      isLeaveFeedRow(row) &&
+      String(row.audience || '').toLowerCase() === 'self',
+  )
+  const rest = merged.filter(
+    (row) =>
+      !(
+        isLeaveFeedRow(row) &&
+        String(row.audience || '').toLowerCase() === 'self'
+      ),
+  )
+  const leaveSlots = Math.min(
+    personalLeave.length,
+    Math.max(3, Math.ceil(limit / 2)),
+  )
+  const selected = [
+    ...personalLeave.slice(0, leaveSlots),
+    ...rest.slice(0, Math.max(0, limit - leaveSlots)),
+  ]
+  selected.sort((a, b) => {
+    const ta = new Date(a.activityTime || 0).getTime()
+    const tb = new Date(b.activityTime || 0).getTime()
+    return tb - ta
+  })
+  return selected.slice(0, limit)
 }
 
 function withSelfOrTeamAudience(rows, viewerEmployeeId) {
   return (rows || []).map((row) => {
+    const meta = parseMeta(row.meta)
+    const inEmployeeIds = Array.isArray(meta.employeeIds)
+      ? meta.employeeIds.some(
+          (id) => String(id) === String(viewerEmployeeId || ''),
+        )
+      : false
     const isSelf =
-      viewerEmployeeId &&
-      String(row.subjectEmployeeId || '') === String(viewerEmployeeId)
+      Boolean(viewerEmployeeId) &&
+      (String(row.subjectEmployeeId || '') === String(viewerEmployeeId) ||
+        inEmployeeIds)
     return {
       ...row,
       audience: isSelf ? 'self' : 'org',
@@ -116,35 +194,164 @@ function withSelfOrTeamAudience(rows, viewerEmployeeId) {
   })
 }
 
+/** Leave decision/submit activities from recent_activities for these employees. */
+export async function findLeaveDecisionActivityRows(employeeIds, limit = 10) {
+  const ids = [...new Set((employeeIds || []).filter(Boolean))]
+  if (ids.length === 0) return []
+
+  const result = await query(
+    `SELECT
+      id,
+      title,
+      description,
+      category,
+      activity_time AS "activityTime",
+      status,
+      event_type AS "eventType",
+      subject_employee_id AS "subjectEmployeeId",
+      actor_employee_id AS "actorEmployeeId",
+      meta
+    FROM recent_activities
+    WHERE category = 'Leave'
+      AND subject_employee_id = ANY($1::varchar[])
+    ORDER BY activity_time DESC
+    LIMIT $2`,
+    [ids, limit],
+  )
+
+  return result.rows
+}
+
+/**
+ * Newest activity per leave request id, then the top `limit` by time.
+ * Older leave messages drop out of the sliding window as newer ones arrive.
+ */
+export async function findLeaveActivityRowsForLeaveIds(leaveIds, limit = 25) {
+  const ids = [...new Set((leaveIds || []).filter(Boolean).map(String))]
+  if (ids.length === 0) return []
+
+  const result = await query(
+    `SELECT
+      id,
+      title,
+      description,
+      category,
+      "activityTime",
+      status,
+      "eventType",
+      "subjectEmployeeId",
+      "actorEmployeeId",
+      meta
+    FROM (
+      SELECT DISTINCT ON (meta->>'leaveRequestId')
+        id,
+        title,
+        description,
+        category,
+        activity_time AS "activityTime",
+        status,
+        event_type AS "eventType",
+        subject_employee_id AS "subjectEmployeeId",
+        actor_employee_id AS "actorEmployeeId",
+        meta
+      FROM recent_activities
+      WHERE category = 'Leave'
+        AND meta->>'leaveRequestId' = ANY($1::varchar[])
+      ORDER BY meta->>'leaveRequestId', activity_time DESC
+    ) latest
+    ORDER BY "activityTime" DESC
+    LIMIT $2`,
+    [ids, limit],
+  )
+
+  return result.rows
+}
+
+/**
+ * Module notices aimed at this employee: profile updates, leave-balance grants,
+ * and bulk actions that list them in meta.employeeIds.
+ */
+export async function findPersonalSubjectActivityRows(employeeId, limit = 10) {
+  if (!employeeId) return []
+
+  const result = await query(
+    `SELECT
+      id,
+      title,
+      description,
+      category,
+      activity_time AS "activityTime",
+      status,
+      event_type AS "eventType",
+      subject_employee_id AS "subjectEmployeeId",
+      actor_employee_id AS "actorEmployeeId",
+      meta
+    FROM recent_activities
+    WHERE category IN ('Employees', 'Departments', 'Attendance')
+      AND (
+        subject_employee_id = $1
+        OR (
+          meta IS NOT NULL
+          AND jsonb_typeof(meta->'employeeIds') = 'array'
+          AND meta->'employeeIds' ? $1
+        )
+      )
+    ORDER BY activity_time DESC
+    LIMIT $2`,
+    [employeeId, limit],
+  )
+
+  return result.rows
+}
+
 /**
  * Personal attendance/leave plus holiday calendar changes so employees
  * get Holidays sidebar badges and see what admin changed.
  */
-export async function findNotificationsForEmployee(employeeId, limit = 10) {
-  const [personalRows, holidayRows] = await Promise.all([
-    findEmployeeActivityRows(employeeId, limit),
-    findHolidayActivityRows(limit),
-  ])
+export async function findNotificationsForEmployee(employeeId, limit = 25) {
+  const [personalRows, holidayRows, leaveDecisionRows, subjectRows] =
+    await Promise.all([
+      findEmployeeActivityRows(employeeId, limit),
+      findHolidayActivityRows(limit),
+      findLeaveDecisionActivityRows([employeeId], limit),
+      findPersonalSubjectActivityRows(employeeId, limit),
+    ])
 
   return mergeActivityFeeds(
-    withSelfOrTeamAudience(personalRows, employeeId),
-    (holidayRows || []).map((row) => ({ ...row, audience: 'org' })),
+    [
+      withSelfOrTeamAudience(leaveDecisionRows, employeeId),
+      withSelfOrTeamAudience(subjectRows, employeeId),
+      withSelfOrTeamAudience(personalRows, employeeId),
+      (holidayRows || []).map((row) => ({ ...row, audience: 'org' })),
+    ],
     limit,
+    { reservePersonalLeave: true },
   )
 }
 
 /**
  * Team lead: own + department employees' attendance/leave, plus holidays.
  */
-export async function findNotificationsForTeamLead(headEmployeeId, limit = 15) {
-  const [teamRows, holidayRows] = await Promise.all([
-    findTeamActivityRows(headEmployeeId, limit),
-    findHolidayActivityRows(limit),
-  ])
+export async function findNotificationsForTeamLead(headEmployeeId, limit = 25) {
+  const teamIds = await findTeamEmployeeIds(headEmployeeId)
+  const subjectIds = [...new Set([headEmployeeId, ...(teamIds || [])])]
+
+  const [teamRows, holidayRows, leaveDecisionRows, subjectRows] =
+    await Promise.all([
+      findTeamActivityRows(headEmployeeId, limit),
+      findHolidayActivityRows(limit),
+      findLeaveDecisionActivityRows(subjectIds, limit),
+      findPersonalSubjectActivityRows(headEmployeeId, limit),
+    ])
 
   return mergeActivityFeeds(
-    withSelfOrTeamAudience(teamRows, headEmployeeId),
-    (holidayRows || []).map((row) => ({ ...row, audience: 'org' })),
+    [
+      withSelfOrTeamAudience(leaveDecisionRows, headEmployeeId),
+      withSelfOrTeamAudience(subjectRows, headEmployeeId),
+      withSelfOrTeamAudience(teamRows, headEmployeeId),
+      (holidayRows || []).map((row) => ({ ...row, audience: 'org' })),
+    ],
     limit,
+    { reservePersonalLeave: true },
   )
 }

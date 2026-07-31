@@ -3,13 +3,15 @@ import { useLocation } from "react-router-dom";
 import {
   applyNavBadges,
   countNavBadgesFromNotifications,
+  countPersonalLeaveBalanceBadges,
+  countPersonalLeaveOutcomeBadges,
 } from "../models/navBadgesModel.js";
 import {
   getNavGroups,
   isNavItemActive,
   userCanApproveLeaves,
 } from "../models/navModel.js";
-import { countActionableLeaveApprovals } from "../models/leaveRequestsModel.js";
+import { countLeaveApproverAttention, leaveScopeNotificationCounts } from "../models/leaveRequestsModel.js";
 import { fetchLeaveRequests } from "../services/leaveRequestsService.js";
 import { NOTIFICATIONS_REFRESH_EVENT } from "../utils/notificationsRefresh.js";
 import { useAuth } from "./authContext.jsx";
@@ -29,14 +31,22 @@ export function useNav(notifications = []) {
     }
 
     try {
-      const scope = user?.role === "admin" ? "admin-hr" : "approvals";
+      // Match Leave Requests page data: unified includes My + Employees.
+      const scope = user?.role === "admin" ? "admin" : "unified";
       const requests = await fetchLeaveRequests(scope);
-      setLeaveApprovalsBadge(
-        countActionableLeaveApprovals(requests, {
-          employeeId: user?.employeeId,
-          role: user?.role,
-        }),
-      );
+      const userContext = {
+        employeeId: user?.employeeId,
+        role: user?.role,
+      };
+      if (user?.role === "admin") {
+        setLeaveApprovalsBadge(
+          countLeaveApproverAttention(requests, userContext),
+        );
+      } else {
+        setLeaveApprovalsBadge(
+          leaveScopeNotificationCounts(requests, userContext).total,
+        );
+      }
     } catch {
       setLeaveApprovalsBadge(0);
     }
@@ -70,9 +80,13 @@ export function useNav(notifications = []) {
         role: user?.role,
       }),
     };
-    if (canApproveLeaves && leaveApprovalsBadge > 0) {
+    // Approvers: module badge = actionable leave + personal outcomes + balance grants.
+    // Replace notification-based open-leave count so pending is not double-counted.
+    if (canApproveLeaves) {
       badgeCounts["leave-requests"] =
-        (badgeCounts["leave-requests"] || 0) + leaveApprovalsBadge;
+        leaveApprovalsBadge +
+        countPersonalLeaveOutcomeBadges(notifications) +
+        countPersonalLeaveBalanceBadges(notifications);
     }
     return applyNavBadges(baseGroups, badgeCounts);
   }, [user, notifications, canApproveLeaves, leaveApprovalsBadge]);

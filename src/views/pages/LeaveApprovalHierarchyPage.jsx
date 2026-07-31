@@ -21,6 +21,7 @@ function LeaveApprovalHierarchyPage() {
     updateField,
     updateStep,
     addStep,
+    canAddStep,
     removeStep,
     moveStep,
     submitForm,
@@ -84,6 +85,7 @@ function LeaveApprovalHierarchyPage() {
         onChange={updateField}
         onStepChange={updateStep}
         onAddStep={addStep}
+        canAddStep={canAddStep}
         onRemoveStep={removeStep}
         onMoveStep={moveStep}
         onSubmit={submitForm}

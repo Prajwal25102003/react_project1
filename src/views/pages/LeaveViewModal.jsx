@@ -1,7 +1,9 @@
 import ModalShell from "../components/ModalShell.jsx";
 import LeaveBalancePanel from "../components/LeaveBalancePanel.jsx";
 import LeaveApprovalStepper from "../components/LeaveApprovalStepper.jsx";
+import HoverTooltip from "../components/HoverTooltip.jsx";
 import StatusPill from "../components/StatusPill.jsx";
+import { ActionIcon } from "../icons/ActionIcons.jsx";
 import { LABEL_CLASS } from "../../models/formLayoutModel.js";
 import { normalizeLeaveBalances } from "../../models/leaveBalancesModel.js";
 import {
@@ -10,11 +12,19 @@ import {
   formatLeaveDaysLabel,
 } from "../../models/leaveRequestsModel.js";
 
-function DetailItem({ label, children }) {
+function DetailItem({ label, children, valueAlign = "start" }) {
   return (
-    <div className="min-w-0 rounded-xl border border-gray-100 bg-gray-50/50 px-3.5 py-2.5">
-      <p className="mb-1 text-theme-xs font-medium text-gray-500">{label}</p>
-      <div className="text-theme-sm font-medium text-gray-800">{children}</div>
+    <div className="flex h-full min-w-0 flex-col rounded-xl border border-gray-100 bg-gray-50/50 px-3.5 py-2.5">
+      <p className="mb-1.5 shrink-0 text-theme-xs font-medium text-gray-500">
+        {label}
+      </p>
+      <div
+        className={`flex min-h-8 flex-1 items-center text-theme-sm font-medium text-gray-800 ${
+          valueAlign === "center" ? "justify-center" : "justify-start"
+        }`}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -34,6 +44,7 @@ function LeaveViewModal({
   direction = null,
   onClose,
   onApprove = null,
+  onReject = null,
 }) {
   if (!request) return null;
 
@@ -50,6 +61,7 @@ function LeaveViewModal({
   const approvalSteps = buildLeaveApprovalSteps(request);
   const directionLabel =
     direction === "sent" ? "Sent" : direction === "received" ? "Received" : null;
+  const showActions = Boolean(onApprove || onReject);
 
   return (
     <ModalShell onClose={onClose}>
@@ -81,10 +93,14 @@ function LeaveViewModal({
         </div>
       </div>
 
-      <div className="no-scrollbar max-h-[min(58vh,520px)] space-y-4 overflow-y-auto px-1">
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-          <DetailItem label="Employee ID">{request.employeeId || "—"}</DetailItem>
-          <DetailItem label="Leave Type">{request.leaveType || "—"}</DetailItem>
+      <div className="custom-scrollbar max-h-[min(58vh,520px)] space-y-4 overflow-y-auto px-1">
+        <div className="grid grid-cols-[repeat(2,minmax(0,1fr))] items-stretch gap-2.5 sm:grid-cols-[repeat(3,minmax(0,1fr))]">
+          <DetailItem label="Employee ID">
+            <span className="truncate">{request.employeeId || "—"}</span>
+          </DetailItem>
+          <DetailItem label="Leave Type">
+            <span className="truncate">{request.leaveType || "—"}</span>
+          </DetailItem>
           <DetailItem label="Days">
             {Number(request.leaveDays) === 0.5 ? (
               <span className="inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
@@ -99,25 +115,70 @@ function LeaveViewModal({
                 ) : null}
               </span>
             ) : (
-              request.leaveDaysLabel ||
-              formatLeaveDaysLabel(request.leaveDays, request.halfDaySession)
+              <span className="tabular-nums">
+                {request.leaveDaysLabel ||
+                  formatLeaveDaysLabel(
+                    request.leaveDays,
+                    request.halfDaySession,
+                  )}
+              </span>
             )}
           </DetailItem>
-          <DetailItem label="Start Date">{request.startDate || "—"}</DetailItem>
-          <DetailItem label="End Date">
-            {Number(request.leaveDays) === 0.5
-              ? request.startDate || "—"
-              : request.endDate || "—"}
+          <DetailItem label="Start Date">
+            <span className="tabular-nums">
+              {request.startDateLabel || request.startDate || "—"}
+            </span>
           </DetailItem>
-          <DetailItem label="Status">
-            {onApprove ? (
-              <button
-                type="button"
-                onClick={onApprove}
-                className="inline-flex max-w-full cursor-pointer items-center rounded-full bg-warning-50 px-2.5 py-0.5 text-theme-xs font-medium leading-4 text-warning-700 transition hover:bg-warning-100"
-              >
-                Approve now
-              </button>
+          <DetailItem label="End Date">
+            <span className="tabular-nums">
+              {Number(request.leaveDays) === 0.5
+                ? request.startDateLabel || request.startDate || "—"
+                : request.endDateLabel || request.endDate || "—"}
+            </span>
+          </DetailItem>
+          <DetailItem
+            label={showActions ? "Action" : "Status"}
+            valueAlign="center"
+          >
+            {showActions ? (
+              <div className="flex flex-nowrap items-center justify-center gap-2.5">
+                {onApprove ? (
+                  <HoverTooltip
+                    content="Approve"
+                    onlyWhenTruncated={false}
+                    compact
+                    className="inline-flex"
+                  >
+                    <button
+                      type="button"
+                      onClick={onApprove}
+                      aria-label="Approve"
+                      className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
+                    >
+                      <span className="sr-only">Approve</span>
+                      <ActionIcon name="check-circle" size={35} />
+                    </button>
+                  </HoverTooltip>
+                ) : null}
+                {onReject ? (
+                  <HoverTooltip
+                    content="Reject"
+                    onlyWhenTruncated={false}
+                    compact
+                    className="inline-flex"
+                  >
+                    <button
+                      type="button"
+                      onClick={onReject}
+                      aria-label="Reject"
+                      className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
+                    >
+                      <span className="sr-only">Reject</span>
+                      <ActionIcon name="x-circle" />
+                    </button>
+                  </HoverTooltip>
+                ) : null}
+              </div>
             ) : (
               <StatusPill
                 label={request.statusLabel || request.status}

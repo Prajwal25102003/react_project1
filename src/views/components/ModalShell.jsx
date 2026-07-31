@@ -28,7 +28,7 @@ function ModalShell({
         className="fixed inset-0 z-[99999] border-0 bg-black/20"
         onClick={onClose}
       />
-      <div className="pointer-events-none fixed inset-0 z-[99999] flex items-start justify-center overflow-y-auto px-6 py-8 sm:items-center">
+      <div className="custom-scrollbar pointer-events-none fixed inset-0 z-[99999] flex items-start justify-center overflow-y-auto px-6 py-8 sm:items-center">
         <div
           className={`pointer-events-auto ${panelClassName}`.trim()}
           role="dialog"

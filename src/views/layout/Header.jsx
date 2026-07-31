@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { NavIcon } from "../icons/NavIcon.jsx";
+import HoverTooltip from "../components/HoverTooltip.jsx";
 import StatusPill from "../components/StatusPill.jsx";
 import UserAvatar from "../components/UserAvatar.jsx";
 import { notificationDotTone } from "../../models/headerModel.js";
@@ -18,6 +19,7 @@ function Header({
   notificationsRef,
   onAcknowledgeNotification,
   user,
+  barClassName,
   userOpen,
   onToggleUserMenu,
   userMenuItems,
@@ -25,7 +27,9 @@ function Header({
   onSignOut,
 }) {
   return (
-    <header className="sticky top-0 z-99999 flex w-full min-w-0 max-w-full border-gray-200 bg-white lg:border-b">
+    <header
+      className={`sticky top-0 z-99999 flex w-full min-w-0 max-w-full border-gray-200 ${barClassName || "bg-white"} lg:border-b`}
+    >
       <div className="flex grow flex-col items-center justify-between lg:flex-row lg:px-6">
         <div className="flex w-full items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-4">
           <button
@@ -194,7 +198,7 @@ function Header({
                     </button>
                   </div>
 
-                  <ul className="custom-scrollbar flex max-h-[22.5rem] flex-col overflow-y-auto">
+                  <ul className="custom-scrollbar flex max-h-[22.5rem] flex-col overflow-y-auto pb-2">
                     {notificationsLoading ? (
                       <li className="px-4.5 py-8 text-center">
                         <p className="text-theme-sm text-gray-500">
@@ -247,16 +251,22 @@ function Header({
                               </span>
                               <span className="block min-w-0 flex-1">
                                 <span className="mb-0.5 flex items-start justify-between gap-2">
-                                  <span className="block min-w-0 text-theme-xs text-gray-500">
+                                  <HoverTooltip
+                                    content={
+                                      notification.description ||
+                                      notification.title
+                                    }
+                                    className="block min-w-0 text-theme-xs text-gray-500"
+                                  >
                                     <span className="block truncate font-medium text-gray-800">
                                       {notification.title}
                                     </span>
                                     {notification.description ? (
-                                      <span className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-gray-500">
+                                      <span className="mt-0.5 line-clamp-3 text-[11px] leading-snug text-gray-500 sm:line-clamp-2">
                                         {notification.description}
                                       </span>
                                     ) : null}
-                                  </span>
+                                  </HoverTooltip>
                                   {notification.isNew ? (
                                     <span className="mt-0.5 shrink-0 rounded-full bg-success-500 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
                                       New
@@ -264,6 +274,24 @@ function Header({
                                   ) : null}
                                 </span>
                                 <span className="flex flex-wrap items-center gap-1.5 text-[11px] leading-none text-gray-400">
+                                  {notification.directionLabel ? (
+                                    <>
+                                      <span
+                                        className={
+                                          notification.directionLabel ===
+                                          "Forwarded"
+                                            ? "font-medium text-brand-500"
+                                            : notification.directionLabel ===
+                                                "Sent"
+                                              ? "font-medium text-brand-500"
+                                              : "font-medium text-gray-600"
+                                        }
+                                      >
+                                        {notification.directionLabel}
+                                      </span>
+                                      <span className="h-0.5 w-0.5 rounded-full bg-gray-300" />
+                                    </>
+                                  ) : null}
                                   <span>{notification.category}</span>
                                   <span className="h-0.5 w-0.5 rounded-full bg-gray-300" />
                                   <span>{notification.time}</span>

@@ -5,6 +5,7 @@ export const ATTENDANCE_SEARCH_KEYS = [
   "employeeId",
   "employeeName",
   "date",
+  "dateLabel",
   "checkIn",
   "checkOut",
   "workingHours",
@@ -46,7 +47,7 @@ export const ATTENDANCE_COLUMNS = [
   {
     id: "date",
     header: "Date",
-    accessor: "date",
+    accessor: "dateLabel",
     type: "text",
     sortable: true,
     nowrap: true,

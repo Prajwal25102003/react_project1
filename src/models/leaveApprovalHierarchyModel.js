@@ -32,6 +32,9 @@ export const APPROVER_KIND_OPTIONS = [
   { value: "admin", label: "Admin" },
 ];
 
+/** Max steps = unique approver types (Team Lead, HR, Admin). */
+export const MAX_HIERARCHY_STEPS = APPROVER_KIND_OPTIONS.length;
+
 /** Select value for a step (flattens role + approverRole into hr|admin). */
 export function approverTypeSelectValue(step) {
   if (step?.approverKind === "role") {
@@ -142,7 +145,11 @@ export function validateHierarchyForm({ name, steps }) {
     };
   }
 
-  const signatures = [];
+  if (steps.length > MAX_HIERARCHY_STEPS) {
+    fieldErrors.steps = `At most ${MAX_HIERARCHY_STEPS} steps are allowed (one per approver type)`;
+  }
+
+  const seen = new Set();
   steps.forEach((step, index) => {
     const key = `step-${index}`;
     const kind = String(step?.approverKind || "").trim();
@@ -150,23 +157,20 @@ export function validateHierarchyForm({ name, steps }) {
       fieldErrors[key] = "Select a valid approver type";
       return;
     }
+    let signature = "department_head";
     if (kind === "role") {
       const role = String(step?.approverRole || "").trim();
       if (!["hr", "admin"].includes(role)) {
         fieldErrors[key] = "Select HR or Admin";
         return;
       }
-      signatures.push(`role:${role}`);
-    } else {
-      signatures.push("department_head");
+      signature = `role:${role}`;
     }
 
-    if (
-      signatures.length > 1 &&
-      signatures[signatures.length - 1] === signatures[signatures.length - 2]
-    ) {
-      fieldErrors[key] = "Consecutive duplicate approvers are not allowed";
+    if (seen.has(signature)) {
+      fieldErrors[key] = "Each approver type can only appear once";
     }
+    seen.add(signature);
   });
 
   const keys = Object.keys(fieldErrors);

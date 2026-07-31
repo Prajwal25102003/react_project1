@@ -25,6 +25,7 @@ function LeaveHierarchyFormModal({
   onChange,
   onStepChange,
   onAddStep,
+  canAddStep = true,
   onRemoveStep,
   onMoveStep,
   onSubmit,
@@ -39,32 +40,33 @@ function LeaveHierarchyFormModal({
         CATEGORY_DESCRIPTIONS[hierarchy.category] ||
         `Configure the approval chain for ${CATEGORY_LABELS[hierarchy.category] || hierarchy.category}.`
       }
+      panelClassName="relative mx-auto my-6 flex max-h-[calc(100vh-6rem)] w-full min-w-0 max-w-[min(600px,calc(100vw-4rem))] flex-col overflow-hidden rounded-3xl bg-white p-5 sm:p-6"
     >
       <form
-        className="space-y-5 px-2"
+        className="flex min-h-0 flex-1 flex-col"
         onSubmit={onSubmit}
         noValidate
       >
-        {error ? (
-          <p className="text-theme-sm text-error-600">{error}</p>
-        ) : null}
+        <div className="shrink-0 space-y-4 px-1">
+          {error ? (
+            <p className="text-theme-sm text-error-600">{error}</p>
+          ) : null}
 
-        <div>
-          <label className={LABEL_CLASS} htmlFor="hierarchy-name">
-            Name
-            <RequiredMark />
-          </label>
-          <input
-            id="hierarchy-name"
-            value={form.name}
-            onChange={(event) => onChange("name", event.target.value)}
-            className={fieldErrors.name ? INPUT_ERROR_CLASS : INPUT_CLASS}
-            placeholder="Employee leave"
-          />
-          <FieldError message={fieldErrors.name} />
-        </div>
+          <div>
+            <label className={LABEL_CLASS} htmlFor="hierarchy-name">
+              Name
+              <RequiredMark />
+            </label>
+            <input
+              id="hierarchy-name"
+              value={form.name}
+              onChange={(event) => onChange("name", event.target.value)}
+              className={fieldErrors.name ? INPUT_ERROR_CLASS : INPUT_CLASS}
+              placeholder="Employee leave"
+            />
+            <FieldError message={fieldErrors.name} />
+          </div>
 
-        <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium text-gray-700">
               Approval steps
@@ -73,15 +75,23 @@ function LeaveHierarchyFormModal({
             <button
               type="button"
               onClick={onAddStep}
-              title="Add step"
+              disabled={!canAddStep}
+              title={
+                canAddStep
+                  ? "Add step"
+                  : "Each approver type can only appear once"
+              }
               aria-label="Add step"
-              className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
+              className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <PlusIcon />
             </button>
           </div>
           <FieldError message={fieldErrors.steps} />
+        </div>
 
+        {/* Cap at ~3 step cards; extra steps scroll inside this area only. */}
+        <div className="custom-scrollbar mt-3 max-h-[25.5rem] min-h-0 space-y-3 overflow-y-auto overscroll-contain px-1 pb-1">
           {(form.steps || []).map((step, index) => {
             const stepError = fieldErrors[`step-${index}`];
             return (
@@ -151,7 +161,7 @@ function LeaveHierarchyFormModal({
           })}
         </div>
 
-        <div className="flex items-center justify-center">
+        <div className="flex shrink-0 items-center justify-center border-t border-gray-100 pt-4">
           <button
             type="submit"
             disabled={saving}

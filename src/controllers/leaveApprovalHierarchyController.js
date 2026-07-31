@@ -10,6 +10,7 @@ import {
   applyApproverType,
   emptyHierarchyStep,
   formatStepsSummary,
+  MAX_HIERARCHY_STEPS,
   stepsToForm,
   toHierarchyPayload,
   validateHierarchyForm,
@@ -92,10 +93,13 @@ export function useLeaveApprovalHierarchy() {
   }
 
   function addStep() {
-    setForm((current) => ({
-      ...current,
-      steps: [...current.steps, emptyHierarchyStep()],
-    }));
+    setForm((current) => {
+      if ((current.steps || []).length >= MAX_HIERARCHY_STEPS) return current;
+      return {
+        ...current,
+        steps: [...current.steps, emptyHierarchyStep()],
+      };
+    });
   }
 
   function removeStep(index) {
@@ -171,6 +175,7 @@ export function useLeaveApprovalHierarchy() {
     updateField,
     updateStep,
     addStep,
+    canAddStep: (form.steps || []).length < MAX_HIERARCHY_STEPS,
     removeStep,
     moveStep,
     submitForm,

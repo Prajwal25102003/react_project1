@@ -2,6 +2,7 @@ import { query } from '../config/db.js'
 import {
   findStepsByHierarchyIds,
   firstActionableStepOrder,
+  stepDisplayLabel,
 } from './leaveApprovalHierarchyModel.js'
 
 const LEAVE_SELECT = `
@@ -195,6 +196,46 @@ export async function refreshPendingStepOneHierarchySnapshots(
        WHERE id = $1`,
       [row.id, nextCurrentStep],
     )
+
+    const nextStep = (steps || []).find(
+      (step) => Number(step.stepOrder) === Number(nextCurrentStep),
+    )
+    if (nextStep) {
+      const hierarchyLabels = (steps || [])
+        .slice()
+        .sort((a, b) => Number(a.stepOrder) - Number(b.stepOrder))
+        .map((step) => stepDisplayLabel(step))
+        .filter(Boolean)
+      const currentApprover = {
+        approverKind: nextStep.approverKind,
+        approverRole: nextStep.approverRole || null,
+        approverEmployeeId: nextStep.approverEmployeeId || null,
+        departmentHeadId: row.departmentHeadId || null,
+        requesterEmployeeId: row.employeeId,
+        stepLabel: stepDisplayLabel(nextStep),
+        stepOrder: Number(nextStep.stepOrder) || null,
+      }
+      await runner.query(
+        `UPDATE recent_activities
+         SET meta = COALESCE(meta, '{}'::jsonb)
+           || jsonb_build_object(
+                'currentApprover', $2::jsonb,
+                'currentStepLabel', $3::text,
+                'hierarchyLabels', COALESCE($4::jsonb, '[]'::jsonb),
+                'departmentHeadId', to_jsonb($5::text)
+              )
+         WHERE category = 'Leave'
+           AND event_type = 'leave.submitted'
+           AND meta->>'leaveRequestId' = $1`,
+        [
+          row.id,
+          JSON.stringify(currentApprover),
+          currentApprover.stepLabel || '',
+          JSON.stringify(hierarchyLabels),
+          row.departmentHeadId || null,
+        ],
+      )
+    }
     updated += 1
   }
 
@@ -286,6 +327,47 @@ export async function findLeaveRequestsAwaitingActor({
     INNER JOIN leave_request_hierarchy_steps s
       ON s.leave_request_id = lr.id
      AND s.step_order = lr.current_step
+    WHERE lr.status = 'Pending'
+      AND lr.current_step IS NOT NULL
+      AND (
+        (
+          s.approver_kind = 'department_head'
+          AND $2::text IS NOT NULL
+          AND d.head_employee_id = $2
+          AND lr.employee_id <> $2
+        )
+        OR (
+          s.approver_kind = 'role'
+          AND $1::text IS NOT NULL
+          AND s.approver_role = $1
+        )
+        OR (
+          s.approver_kind = 'employee'
+          AND $2::text IS NOT NULL
+          AND s.approver_employee_id = $2
+        )
+      )
+    ORDER BY lr.id DESC`,
+    [role || null, employeeId || null],
+  )
+
+  return withSteps(result.rows)
+}
+
+/**
+ * Pending leaves where this actor appears later in the hierarchy than the
+ * current step (earlier approvers still need to act first).
+ */
+export async function findLeaveRequestsWhereActorIsFutureStep({
+  role = null,
+  employeeId = null,
+} = {}) {
+  const result = await query(
+    `SELECT ${LEAVE_SELECT}
+    ${LEAVE_FROM}
+    INNER JOIN leave_request_hierarchy_steps s
+      ON s.leave_request_id = lr.id
+     AND s.step_order > lr.current_step
     WHERE lr.status = 'Pending'
       AND lr.current_step IS NOT NULL
       AND (

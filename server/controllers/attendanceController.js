@@ -1,3 +1,4 @@
+import pool from '../config/db.js'
 import {
   deleteAttendanceById,
   findAllAttendance,
@@ -62,6 +63,12 @@ function parseAttendancePayload(body) {
   if (checkOut !== '—' && !clockPattern.test(checkOut)) {
     errors.push('Check-out must look like 06:00 PM (or — for absent)')
   }
+  if (status !== 'Absent' && checkIn !== '—' && checkOut === '—') {
+    errors.push('Check-out is required when check-in is provided')
+  }
+  if (status !== 'Absent' && checkOut !== '—' && checkIn === '—') {
+    errors.push('Check-in is required when check-out is provided')
+  }
 
   let workingHours = calculateWorkingHours(checkIn, checkOut)
   if (workingHours === null) workingHours = 0
@@ -88,6 +95,15 @@ function mapAttendanceRow(row) {
     ...row,
     workingHours: workingHours.toFixed(2),
   }
+}
+
+/** HR may manage others' attendance but not their own. */
+function isHrEditingOwnAttendance(user, subjectEmployeeId) {
+  return (
+    user?.role === 'hr' &&
+    Boolean(user?.employeeId) &&
+    String(user.employeeId) === String(subjectEmployeeId)
+  )
 }
 
 export async function getAttendance(req, res) {
@@ -148,9 +164,22 @@ export async function updateAttendanceHandler(req, res) {
       return res.status(400).json({ message: 'Employee not found' })
     }
 
-    if (await employeeHasExcludedLoginRole(record.employeeId)) {
+    if (await employeeHasExcludedLoginRole(record.employeeId, ['admin'])) {
       return res.status(400).json({
-        message: 'Attendance cannot be marked for HR or Admin accounts',
+        message: 'Attendance cannot be marked for Admin accounts',
+      })
+    }
+
+    const existing = await findAttendanceById(req.params.id)
+    if (!existing) {
+      return res.status(404).json({ message: 'Attendance record not found' })
+    }
+    if (
+      isHrEditingOwnAttendance(req.user, existing.employeeId) ||
+      isHrEditingOwnAttendance(req.user, record.employeeId)
+    ) {
+      return res.status(403).json({
+        message: 'You cannot edit your own attendance',
       })
     }
 
@@ -184,6 +213,7 @@ export async function updateAttendanceHandler(req, res) {
         subjectName: updated.employeeName,
         attendanceDate: updated.date,
         attendanceStatus: updated.status,
+        attendanceId: updated.id,
         checkIn: updated.checkIn,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
@@ -206,6 +236,11 @@ export async function deleteAttendanceHandler(req, res) {
     if (!existing) {
       return res.status(404).json({ message: 'Attendance record not found' })
     }
+    if (isHrEditingOwnAttendance(req.user, existing.employeeId)) {
+      return res.status(403).json({
+        message: 'You cannot delete your own attendance',
+      })
+    }
 
     await deleteAttendanceById(req.params.id)
 
@@ -216,11 +251,13 @@ export async function deleteAttendanceHandler(req, res) {
       description: `Attendance for ${existing.employeeName} on ${dateLabel} was removed by ${actorLabel}.`,
       category: 'Attendance',
       status: 'Removed',
+      eventType: 'attendance.removed',
       subjectEmployeeId: existing.employeeId,
       actorEmployeeId: req.user?.employeeId || null,
       meta: {
         subjectName: existing.employeeName,
         attendanceDate: existing.date,
+        attendanceId: existing.id,
         actorName: req.user?.name || null,
         actorRole: req.user?.role || null,
       },
@@ -244,63 +281,123 @@ export async function importAttendanceHandler(req, res) {
       })
     }
 
-    let imported = 0
-    let updated = 0
-    let skipped = 0
-    let failed = 0
-    let present = 0
-    let absent = 0
-    let halfDay = 0
     const errors = []
+    const validated = []
 
+    // Validate every row first — reject the whole file if any row is invalid.
     for (let i = 0; i < records.length; i += 1) {
       const { errors: rowErrors, record } = parseAttendancePayload(records[i])
       if (rowErrors.length > 0) {
-        failed += 1
         errors.push(`Row ${i + 1}: ${rowErrors.join('; ')}`)
         continue
       }
 
       if (!(await employeeExists(record.employeeId))) {
-        skipped += 1
         errors.push(`Row ${i + 1}: employee ${record.employeeId} not found`)
         continue
       }
 
-      if (await employeeHasExcludedLoginRole(record.employeeId)) {
-        skipped += 1
+      if (await employeeHasExcludedLoginRole(record.employeeId, ['admin'])) {
         errors.push(
-          `Row ${i + 1}: attendance cannot be marked for HR/Admin (${record.employeeId})`,
+          `Row ${i + 1}: attendance cannot be marked for Admin (${record.employeeId})`,
         )
         continue
       }
 
-      try {
-        const result = await upsertAttendanceByEmployeeDate(record)
+      if (isHrEditingOwnAttendance(req.user, record.employeeId)) {
+        errors.push(
+          `Row ${i + 1}: you cannot import your own attendance (${record.employeeId})`,
+        )
+        continue
+      }
+
+      validated.push(record)
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        message:
+          errors.length === 1
+            ? errors[0]
+            : `Import rejected — ${errors.length} row error(s) found`,
+        errors: errors.slice(0, 50),
+        stats: {
+          total: records.length,
+          imported: 0,
+          updated: 0,
+          skipped: 0,
+          failed: errors.length,
+          present: 0,
+          absent: 0,
+          halfDay: 0,
+          errors: errors.slice(0, 50),
+        },
+      })
+    }
+
+    let imported = 0
+    let updated = 0
+    let present = 0
+    let absent = 0
+    let halfDay = 0
+    const attendanceIds = []
+    const employeeIds = []
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      for (let i = 0; i < validated.length; i += 1) {
+        const record = validated[i]
+        const result = await upsertAttendanceByEmployeeDate(record, client)
         if (result.action === 'inserted') imported += 1
         else updated += 1
+
+        if (result.id) attendanceIds.push(result.id)
+        if (record.employeeId) employeeIds.push(record.employeeId)
 
         if (record.status === 'Present') present += 1
         else if (record.status === 'Absent') absent += 1
         else if (record.status === 'Half Day') halfDay += 1
-      } catch (error) {
-        failed += 1
-        errors.push(`Row ${i + 1}: ${formatDbError(error)}`)
       }
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({
+        message: `Import rejected — ${formatDbError(error)}`,
+        errors: [formatDbError(error)],
+        stats: {
+          total: records.length,
+          imported: 0,
+          updated: 0,
+          skipped: 0,
+          failed: 1,
+          present: 0,
+          absent: 0,
+          halfDay: 0,
+          errors: [formatDbError(error)],
+        },
+      })
+    } finally {
+      client.release()
     }
 
     const saved = imported + updated
     if (saved > 0) {
       const actorLabel = formatActorLabel(actorFromUser(req.user))
+      const uniqueEmployeeIds = [...new Set(employeeIds.filter(Boolean))]
+      const uniqueAttendanceIds = [...new Set(attendanceIds.filter(Boolean))]
       await createRecentActivity({
         title: 'Attendance Imported',
         description: `${actorLabel} imported ${saved} attendance rows from Excel (${imported} new, ${updated} updated).`,
         category: 'Attendance',
         status: 'Updated',
+        eventType: 'attendance.imported',
         actorEmployeeId: req.user?.employeeId || null,
         meta: {
           imported,
           updated,
+          employeeIds: uniqueEmployeeIds,
+          attendanceIds: uniqueAttendanceIds,
           actorName: req.user?.name || null,
           actorRole: req.user?.role || null,
         },
@@ -312,12 +409,12 @@ export async function importAttendanceHandler(req, res) {
         total: records.length,
         imported,
         updated,
-        skipped,
-        failed,
+        skipped: 0,
+        failed: 0,
         present,
         absent,
         halfDay,
-        errors: errors.slice(0, 20),
+        errors: [],
       },
     })
   } catch (error) {

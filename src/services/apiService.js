@@ -17,7 +17,12 @@ async function parseResponse(response, errorMessage, { skipAuth = false } = {}) 
     if (response.status === 401) {
       handleUnauthorized(skipAuth);
     }
-    throw new Error(data.message || errorMessage);
+    const error = new Error(data.message || errorMessage);
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+      error.errors = data.errors;
+    }
+    error.status = response.status;
+    throw error;
   }
 
   return data;

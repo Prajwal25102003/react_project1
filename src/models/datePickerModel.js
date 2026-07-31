@@ -83,10 +83,12 @@ export function formatDateDisplay(value) {
   if (/^\d{4}$/.test(trimmed)) return trimmed;
   const parsed = parseIsoDate(value);
   if (!parsed) return "";
+  const day = String(parsed.day).padStart(2, "0");
+  const month = String(parsed.monthIndex + 1).padStart(2, "0");
   if (/^\d{4}-\d{2}$/.test(trimmed)) {
-    return `${DATE_PICKER_MONTHS_SHORT[parsed.monthIndex]} ${parsed.year}`;
+    return `${month}/${parsed.year}`;
   }
-  return `${parsed.day} ${DATE_PICKER_MONTHS_SHORT[parsed.monthIndex]} ${parsed.year}`;
+  return `${day}/${month}/${parsed.year}`;
 }
 
 export function getViewMonthFromValue(value) {

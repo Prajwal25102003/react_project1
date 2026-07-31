@@ -31,8 +31,8 @@ export function getHolidayColumns(canManage) {
       sortable: true,
       wrap: true,
       cellClassName: canManage
-        ? "w-[34%] max-w-0"
-        : "w-[40%] max-w-0",
+        ? "w-[42%] min-w-[12rem]"
+        : "w-[46%] min-w-[12rem]",
       mobilePrimary: true,
     },
     {
@@ -43,7 +43,7 @@ export function getHolidayColumns(canManage) {
       sortable: true,
       sortAccessor: "date",
       nowrap: true,
-      cellClassName: canManage ? "w-[16%]" : "w-[22%]",
+      cellClassName: canManage ? "w-[16%]" : "w-[20%]",
       mobilePrimary: true,
     },
     {
@@ -53,7 +53,7 @@ export function getHolidayColumns(canManage) {
       type: "text",
       sortable: true,
       nowrap: true,
-      cellClassName: canManage ? "w-[14%]" : "w-[18%]",
+      cellClassName: canManage ? "w-[12%]" : "w-[16%]",
     },
     {
       id: "type",
@@ -61,7 +61,7 @@ export function getHolidayColumns(canManage) {
       accessor: "type",
       type: "status",
       sortable: true,
-      cellClassName: canManage ? "w-[16%]" : "w-[20%]",
+      cellClassName: canManage ? "w-[14%]" : "w-[18%]",
       mobilePrimary: true,
     },
   ];
@@ -74,7 +74,7 @@ export function getHolidayColumns(canManage) {
       sortable: false,
       hideable: false,
       nowrap: true,
-      cellClassName: "w-[20%]",
+      cellClassName: "w-[16%]",
     });
   }
 

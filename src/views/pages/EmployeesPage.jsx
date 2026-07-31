@@ -94,6 +94,11 @@ function EmployeesPage() {
           onExportCsv={() => table.exportCsv("employees.csv")}
           onRowClick={openViewModal}
           getActions={getEmployeeActions}
+          getRowClassName={(row) =>
+            row.needsAttention
+              ? "bg-brand-25 hover:bg-brand-25"
+              : "bg-white hover:bg-gray-50/80"
+          }
           emptyMessage="No employees found."
         />
       </ListPageShell>

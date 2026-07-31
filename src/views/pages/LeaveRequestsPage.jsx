@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useLeaveRequests } from "../../controllers/leaveRequestsController.js";
+import { formatNavBadgeCount } from "../../models/navBadgesModel.js";
 import { LEAVE_REQUEST_COLUMNS } from "../../models/leaveRequestsTableModel.js";
 import DataTable from "../components/DataTable.jsx";
 import ListPageShell from "../components/ListPageShell.jsx";
@@ -15,6 +16,7 @@ function LeaveScopeTabs({ value, options, onChange }) {
     <div className="flex items-center gap-0.5 rounded-lg bg-gray-100 p-0.5">
       {options.map((option) => {
         const active = value === option.value;
+        const badge = formatNavBadgeCount(option.badge);
         return (
           <button
             key={option.value}
@@ -22,11 +24,19 @@ function LeaveScopeTabs({ value, options, onChange }) {
             onClick={() => onChange(option.value)}
             className={
               active
-                ? "rounded-md bg-white px-3 py-1.5 text-theme-sm font-medium text-gray-800 shadow-theme-xs"
-                : "rounded-md px-3 py-1.5 text-theme-sm font-medium text-gray-500 hover:text-gray-700"
+                ? "inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-theme-sm font-medium text-gray-800 shadow-theme-xs"
+                : "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-theme-sm font-medium text-gray-500 hover:text-gray-700"
             }
           >
             {option.label}
+            {badge ? (
+              <span
+                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-error-50 px-1.5 text-theme-xs font-medium text-error-600"
+                aria-label={`${badge} notifications`}
+              >
+                {badge}
+              </span>
+            ) : null}
           </button>
         );
       })}
@@ -50,6 +60,7 @@ function LeaveRequestsPage() {
     isDepartmentHead,
     decisionTarget,
     decisionStatus,
+    decisionLoading,
     deciding,
     decisionError,
     remarks,
@@ -66,17 +77,17 @@ function LeaveRequestsPage() {
     updateCancelReason,
     confirmCancel,
     viewTarget,
-    viewLoading,
     viewDirection,
     openViewModal,
     closeViewModal,
     canApproveViewTarget,
     approveFromView,
+    rejectFromView,
     getLeaveActions,
   } = useLeaveRequests();
 
   const emptyMessage = isAdmin
-    ? "No HR leave requests found."
+    ? "No leave requests found."
     : listScope === "mine"
       ? "No personal leave requests found."
       : listScope === "employees"
@@ -86,7 +97,7 @@ function LeaveRequestsPage() {
         : "No leave requests found.";
 
   const searchPlaceholder = isAdmin
-    ? "Search HR leave requests…"
+    ? "Search leave approvals…"
     : listScope === "mine"
       ? "Search my leave requests…"
       : listScope === "employees"
@@ -96,7 +107,7 @@ function LeaveRequestsPage() {
         : "Search leave requests…";
 
   const pageName = isAdmin
-    ? "HR Leave Approvals"
+    ? "Leave Approvals"
     : isHr
       ? "Leave Requests"
       : isDepartmentHead
@@ -160,6 +171,11 @@ function LeaveRequestsPage() {
           onExportCsv={() => table.exportCsv("leave-requests.csv")}
           onRowClick={openViewModal}
           getActions={getLeaveActions}
+          getRowClassName={(row) =>
+            row.needsAction
+              ? "bg-brand-25 hover:bg-brand-25"
+              : "bg-white hover:bg-gray-50/80"
+          }
           emptyMessage={emptyMessage}
         />
       </ListPageShell>
@@ -169,12 +185,14 @@ function LeaveRequestsPage() {
         direction={viewDirection}
         onClose={closeViewModal}
         onApprove={canApproveViewTarget ? approveFromView : null}
+        onReject={canApproveViewTarget ? rejectFromView : null}
       />
 
       <LeaveDecisionModal
         request={decisionTarget}
         status={decisionStatus}
         deciding={deciding}
+        loading={decisionLoading}
         error={decisionError}
         remarks={remarks}
         remarksError={remarksError}

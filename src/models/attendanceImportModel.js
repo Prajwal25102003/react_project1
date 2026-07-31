@@ -1,6 +1,8 @@
 import * as XLSX from "xlsx";
 import { ATTENDANCE_STATUSES, calculateWorkingHours } from "./attendanceModel.js";
 
+const CLOCK_PATTERN = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i;
+
 const HEADER_ALIASES = {
   employeeid: "employeeId",
   employee_id: "employeeId",
@@ -140,6 +142,33 @@ export function parseAttendanceImportFile(fileBuffer) {
       return;
     }
 
+    if (status !== "Absent") {
+      if (checkIn !== "—" && !CLOCK_PATTERN.test(checkIn)) {
+        errors.push(
+          `Row ${line}: check-in must look like 09:00 AM (or — for absent)`,
+        );
+        return;
+      }
+      if (checkOut !== "—" && !CLOCK_PATTERN.test(checkOut)) {
+        errors.push(
+          `Row ${line}: check-out must look like 06:00 PM (or — for absent)`,
+        );
+        return;
+      }
+      if (checkIn !== "—" && checkOut === "—") {
+        errors.push(
+          `Row ${line}: check-out is required when check-in is provided`,
+        );
+        return;
+      }
+      if (checkOut !== "—" && checkIn === "—") {
+        errors.push(
+          `Row ${line}: check-in is required when check-out is provided`,
+        );
+        return;
+      }
+    }
+
     let workingHours = calculateWorkingHours(checkIn, checkOut);
     if (workingHours === "") workingHours = "0";
     if (status === "Absent") {
@@ -156,15 +185,20 @@ export function parseAttendanceImportFile(fileBuffer) {
     });
   });
 
+  // Reject the whole file if any row has field errors.
+  if (errors.length > 0) {
+    return { ok: false, rows: [], errors };
+  }
+
   if (rows.length === 0) {
     return {
       ok: false,
       rows: [],
-      errors: errors.length ? errors : ["No valid attendance rows found."],
+      errors: ["No valid attendance rows found."],
     };
   }
 
-  return { ok: true, rows, errors };
+  return { ok: true, rows, errors: [] };
 }
 
 export function summarizeImportResult(result) {

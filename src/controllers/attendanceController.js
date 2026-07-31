@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
+import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
 import { fetchEmployeeById, fetchEmployees } from "../services/employeesService.js";
 import {
   deleteAttendance,
@@ -36,26 +37,152 @@ export function useAttendance() {
   const { user } = useAuth();
   const toast = useToast();
   const isEmployee = user?.role === ROLES.EMPLOYEE;
+  const isHr = user?.role === ROLES.HR;
+  const isAdmin = user?.role === ROLES.ADMIN;
+  const myEmployeeId = user?.employeeId || null;
+  const canFilterMyAttendance = isHr && Boolean(myEmployeeId);
+  const canFilterByEmployee = (isHr || isAdmin) && !isEmployee;
+  const [listScope, setListScope] = useState("all");
+  const [employeeFilterOptions, setEmployeeFilterOptions] = useState([]);
+  const seenUserKey =
+    user?.id || user?.email || user?.employeeId || "";
+  const [searchParams] = useSearchParams();
+  const deepLinkAckedRef = useRef("");
   const { rows, loading, error, reload } = useListData(
     fetchAttendanceRecords,
     "Failed to load attendance",
   );
-  const table = useDataTable(rows, {
+
+  const {
+    acknowledgeAttention,
+    markAllAsRead,
+    hasUnread,
+    withAttention,
+  } = useModuleNotificationAttention({
+    navId: "attendance",
+    role: user?.role,
+    seenUserKey,
+    enabled: Boolean(user),
+  });
+
+  useEffect(() => {
+    if (!canFilterMyAttendance && listScope === "mine") {
+      setListScope("all");
+    }
+  }, [canFilterMyAttendance, listScope]);
+
+  useEffect(() => {
+    if (!canFilterByEmployee) {
+      setEmployeeFilterOptions([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    fetchEmployees({ excludeLoginRoles: ["admin"] })
+      .then((employees) => {
+        if (cancelled) return;
+        setEmployeeFilterOptions(
+          (employees || []).map((employee) => ({
+            value: employee.id,
+            label: employee.id,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setEmployeeFilterOptions([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canFilterByEmployee]);
+
+  const listScopeOptions = useMemo(() => {
+    if (!canFilterMyAttendance) return [];
+    return [
+      { value: "mine", label: "My Attendance" },
+      { value: "all", label: "All" },
+    ];
+  }, [canFilterMyAttendance]);
+
+  const showingMyAttendance = isEmployee || listScope === "mine";
+
+  const filterDefs = useMemo(() => {
+    const defs = [...ATTENDANCE_COLUMN_FILTERS];
+    if (
+      canFilterByEmployee &&
+      !showingMyAttendance &&
+      employeeFilterOptions.length > 0
+    ) {
+      defs.push({
+        id: "employeeId",
+        label: "Employee",
+        options: employeeFilterOptions,
+      });
+    }
+    return defs;
+  }, [
+    canFilterByEmployee,
+    employeeFilterOptions,
+    showingMyAttendance,
+  ]);
+
+  const canManageRecord = useCallback(
+    (record) => {
+      if (isEmployee) return false;
+      if (isHr && myEmployeeId && record?.employeeId === myEmployeeId) {
+        return false;
+      }
+      return true;
+    },
+    [isEmployee, isHr, myEmployeeId],
+  );
+
+  const scopedRows = useMemo(() => {
+    if (!showingMyAttendance || !myEmployeeId) {
+      return rows || [];
+    }
+    return (rows || []).filter((row) => row.employeeId === myEmployeeId);
+  }, [myEmployeeId, rows, showingMyAttendance]);
+
+  const tableSourceRows = useMemo(
+    () => withAttention(scopedRows),
+    [scopedRows, withAttention],
+  );
+
+  const table = useDataTable(tableSourceRows, {
     columns: ATTENDANCE_COLUMNS,
     searchKeys: ATTENDANCE_SEARCH_KEYS,
-    initialVisibleColumnIds: getAttendanceDefaultVisibleIds(isEmployee),
+    initialVisibleColumnIds: getAttendanceDefaultVisibleIds(showingMyAttendance),
   });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState("");
+  const [importErrors, setImportErrors] = useState([]);
   const [importStats, setImportStats] = useState(null);
   const fileInputRef = useRef(null);
 
+  const handleListScopeChange = useCallback(
+    (nextScope) => {
+      setListScope(nextScope);
+      if (nextScope === "mine" && table.columnFilters?.employeeId) {
+        table.setColumnFilter("employeeId", "");
+      }
+    },
+    [table],
+  );
+
+  const acknowledgeRecord = useCallback(
+    (record) => acknowledgeAttention(record),
+    [acknowledgeAttention],
+  );
+
   function openDeleteModal(record) {
+    if (!canManageRecord(record)) return;
     setDeleteError("");
     setDeleteTarget(record);
+    acknowledgeRecord(record);
   }
 
   function closeDeleteModal() {
@@ -63,6 +190,27 @@ export function useAttendance() {
     setDeleteTarget(null);
     setDeleteError("");
   }
+
+  function onRecordInteract(record) {
+    acknowledgeRecord(record);
+  }
+
+  // Deep-link from notification: /attendance?id=… or ?employeeId=…
+  useEffect(() => {
+    const recordId = String(searchParams.get("id") || "").trim();
+    const employeeId = String(searchParams.get("employeeId") || "").trim();
+    const key = recordId || employeeId;
+    if (!key || loading || !rows?.length) return;
+    if (deepLinkAckedRef.current === key) return;
+
+    const match = recordId
+      ? rows.find((row) => String(row.id) === recordId)
+      : rows.find((row) => String(row.employeeId) === employeeId);
+    if (!match) return;
+
+    deepLinkAckedRef.current = key;
+    acknowledgeRecord(match);
+  }, [acknowledgeRecord, loading, rows, searchParams]);
 
   async function confirmDelete() {
     if (!deleteTarget) return;
@@ -82,14 +230,17 @@ export function useAttendance() {
   }
 
   function openImportPicker() {
-    setImportError("");
+    setImportErrors([]);
     fileInputRef.current?.click();
   }
 
-  function clearImportStats() {
-    setImportStats(null);
-    setImportError("");
-  }
+  useEffect(() => {
+    if (!importStats) return undefined;
+    const timer = window.setTimeout(() => {
+      setImportStats(null);
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [importStats]);
 
   async function handleImportFile(event) {
     const file = event.target.files?.[0];
@@ -98,34 +249,33 @@ export function useAttendance() {
 
     try {
       setImporting(true);
-      setImportError("");
+      setImportErrors([]);
       setImportStats(null);
 
       const buffer = await file.arrayBuffer();
       const parsed = parseAttendanceImportFile(buffer);
       if (!parsed.ok) {
-        setImportError(parsed.errors[0] || "Failed to parse Excel file");
+        setImportErrors(
+          parsed.errors?.length
+            ? parsed.errors
+            : ["Failed to parse Excel file"],
+        );
         return;
       }
 
       const stats = summarizeImportResult(
         await importAttendanceRecords(parsed.rows),
       );
-      if (parsed.errors.length) {
-        stats.errors = [...parsed.errors.slice(0, 10), ...(stats.errors || [])].slice(
-          0,
-          20,
-        );
-      }
+
       setImportStats(stats);
-      toast.success(
-        `Attendance imported · ${stats.imported} record(s) processed`,
-      );
       reload();
       requestEmsRefresh();
     } catch (err) {
-      setImportError(err.message || "Failed to import attendance");
-      toast.error(err.message || "Failed to import attendance");
+      setImportErrors(
+        Array.isArray(err.errors) && err.errors.length > 0
+          ? err.errors
+          : [err.message || "Failed to import attendance"],
+      );
     } finally {
       setImporting(false);
     }
@@ -137,27 +287,35 @@ export function useAttendance() {
     error,
     reload,
     table,
-    filterDefs: ATTENDANCE_COLUMN_FILTERS,
+    filterDefs,
     isEmployee,
+    listScope,
+    setListScope: handleListScopeChange,
+    listScopeOptions,
+    showingMyAttendance,
+    canManageRecord,
+    hasUnread,
+    markAllAsRead,
     deleteTarget,
     deleting,
     deleteError,
     openDeleteModal,
     closeDeleteModal,
     confirmDelete,
+    onRecordInteract,
     importing,
-    importError,
+    importErrors,
     importStats,
     fileInputRef,
     openImportPicker,
     handleImportFile,
-    clearImportStats,
   };
 }
 
 export function useAttendanceForm(attendanceId) {
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuth();
   const [form, setForm] = useState({ ...EMPTY_ATTENDANCE_FORM });
   const [fieldErrors, setFieldErrors] = useState({});
   const [employees, setEmployees] = useState([]);
@@ -180,20 +338,45 @@ export function useAttendanceForm(attendanceId) {
         setFieldErrors({});
         const [employeeRows, record] = await Promise.all([
           fetchEmployees({
-            excludeLoginRoles: ["hr", "admin"],
+            excludeLoginRoles: ["admin"],
           }),
           fetchAttendanceById(attendanceId),
         ]);
         if (cancelled) return;
 
-        const options = [...employeeRows];
+        if (
+          user?.role === ROLES.HR &&
+          user?.employeeId &&
+          record.employeeId === user.employeeId
+        ) {
+          toast.error("You cannot edit your own attendance");
+          navigate("/attendance", { replace: true });
+          return;
+        }
+
+        const options = [...employeeRows].filter(
+          (employee) =>
+            !(
+              user?.role === ROLES.HR &&
+              user?.employeeId &&
+              employee.id === user.employeeId
+            ),
+        );
         if (
           record.employeeId &&
           !options.some((employee) => employee.id === record.employeeId)
         ) {
           try {
             const current = await fetchEmployeeById(record.employeeId);
-            options.unshift(current);
+            if (
+              !(
+                user?.role === ROLES.HR &&
+                user?.employeeId &&
+                current.id === user.employeeId
+              )
+            ) {
+              options.unshift(current);
+            }
           } catch {
             /* keep filtered list if lookup fails */
           }
@@ -211,7 +394,7 @@ export function useAttendanceForm(attendanceId) {
     return () => {
       cancelled = true;
     };
-  }, [attendanceId, navigate]);
+  }, [attendanceId, navigate, toast, user?.employeeId, user?.role]);
 
   function updateField(field, value) {
     setForm((current) => {

@@ -225,6 +225,9 @@ body,
   &::-webkit-scrollbar-thumb {
     @apply rounded-full bg-gray-200;
   }
+
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #e4e7ec transparent; /* gray-200 */
 }
 
 @layer base {

@@ -57,7 +57,7 @@ export async function findRecentActivities() {
       meta
     FROM recent_activities
     ORDER BY activity_time DESC
-    LIMIT 15`,
+    LIMIT 25`,
   )
 
   return result.rows
@@ -185,7 +185,7 @@ export async function findTeamEmployeeIds(headEmployeeId) {
  * Attendance + leave activity rows for one or more employees.
  * Meta includes subjectName / leaveType / range so copy can personalize per viewer.
  */
-export async function findActivityRowsForEmployees(employeeIds, limit = 10) {
+export async function findActivityRowsForEmployees(employeeIds, limit = 25) {
   const ids = [...new Set((employeeIds || []).filter(Boolean))]
   if (ids.length === 0) return []
 
@@ -281,7 +281,17 @@ export async function findActivityRowsForEmployees(employeeIds, limit = 10) {
               END || ') has been rejected.'
           END AS description,
           'Leave' AS category,
-          COALESCE(lr.updated_at, lr.created_at, lr.start_date::timestamptz) AS "activityTime",
+          COALESCE(
+            (
+              SELECT MAX(h.created_at)
+              FROM leave_approval_history h
+              WHERE h.leave_request_id = lr.id
+                AND h.action IN ('Approved', 'Rejected', 'Cancelled', 'Submitted')
+            ),
+            lr.updated_at,
+            lr.created_at,
+            lr.start_date::timestamptz
+          ) AS "activityTime",
           CASE
             WHEN lr.status = 'Pending' THEN 'Pending'
             WHEN lr.status = 'Approved' THEN 'Approved'
@@ -326,7 +336,7 @@ export async function findActivityRowsForEmployees(employeeIds, limit = 10) {
   return result.rows
 }
 
-export async function findEmployeeActivityRows(employeeId, limit = 10) {
+export async function findEmployeeActivityRows(employeeId, limit = 25) {
   return findActivityRowsForEmployees([employeeId], limit)
 }
 
@@ -336,10 +346,10 @@ export async function findTeamActivityRows(headEmployeeId, limit = 10) {
 }
 
 export async function getEmployeeRecentActivities(employeeId) {
-  return findEmployeeActivityRows(employeeId, 10)
+  return findEmployeeActivityRows(employeeId, 25)
 }
 
 export async function getTeamRecentActivities(headEmployeeId) {
-  return findTeamActivityRows(headEmployeeId, 15)
+  return findTeamActivityRows(headEmployeeId, 25)
 }
 

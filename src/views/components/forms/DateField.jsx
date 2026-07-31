@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   DATE_PICKER_MONTHS_SHORT,
   DATE_PICKER_WEEKDAYS,
@@ -18,6 +19,9 @@ import {
   yearGridLabel,
 } from "../../../models/datePickerModel.js";
 import { SELECT_TRIGGER_CLASS, SELECT_TRIGGER_ERROR_CLASS } from "../../../models/formLayoutModel.js";
+
+const PANEL_WIDTH = 256; // 16rem
+const PANEL_GAP = 4;
 
 function CalendarIcon() {
   return (
@@ -105,7 +109,10 @@ function DateField({
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState("day");
   const [view, setView] = useState(() => getViewMonthFromValue(value));
+  const [menuStyle, setMenuStyle] = useState(null);
   const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelRef = useRef(null);
   const panelId = useId();
   const todayIso = getTodayIso();
   const todayYear = new Date().getFullYear();
@@ -121,13 +128,55 @@ function DateField({
     setPanel(isYear ? "year" : isMonth ? "month" : "day");
   }, [open, value, isMonth, isYear]);
 
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuStyle(null);
+      return undefined;
+    }
+
+    function updatePosition() {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+
+      const rect = trigger.getBoundingClientRect();
+      const width = Math.min(PANEL_WIDTH, window.innerWidth - 16);
+      const left = Math.min(
+        Math.max(8, rect.left),
+        window.innerWidth - width - 8,
+      );
+      const estimatedHeight = 320;
+      const spaceBelow = window.innerHeight - rect.bottom - PANEL_GAP;
+      const spaceAbove = rect.top - PANEL_GAP;
+      const openUpward =
+        spaceBelow < Math.min(estimatedHeight, 220) && spaceAbove > spaceBelow;
+
+      setMenuStyle({
+        position: "fixed",
+        left,
+        width,
+        zIndex: 100000,
+        ...(openUpward
+          ? { bottom: window.innerHeight - rect.top + PANEL_GAP }
+          : { top: rect.bottom + PANEL_GAP }),
+      });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, panel, isMonth, isYear]);
+
   useEffect(() => {
     if (!open) return undefined;
 
     function handlePointerDown(event) {
-      if (rootRef.current && !rootRef.current.contains(event.target)) {
-        setOpen(false);
-      }
+      const inTrigger = rootRef.current?.contains(event.target);
+      const inPanel = panelRef.current?.contains(event.target);
+      if (!inTrigger && !inPanel) setOpen(false);
     }
 
     function handleKeyDown(event) {
@@ -197,9 +246,270 @@ function DateField({
         ? String(view.year)
         : monthLabel(view.year, view.monthIndex);
 
+  const calendar =
+    open && menuStyle
+      ? createPortal(
+          <div
+            ref={panelRef}
+            id={panelId}
+            role="dialog"
+            aria-label={ariaLabel || "Choose date"}
+            style={menuStyle}
+            className="rounded-xl border border-gray-200 bg-white p-3 shadow-theme-lg"
+          >
+            <div className="mb-2.5 flex items-center justify-between gap-1">
+              <div className="flex items-center gap-0.5">
+                {panel !== "year" && !isMonth && !isYear ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setView((current) =>
+                        shiftYear(current.year, current.monthIndex, -1),
+                      )
+                    }
+                    className={NAV_BTN}
+                    aria-label="Previous year"
+                    title="Previous year"
+                  >
+                    <NavChevron direction="prev" double />
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (panel === "year" || isYear) {
+                      setView((current) =>
+                        shiftYear(current.year, current.monthIndex, -12),
+                      );
+                      return;
+                    }
+                    if (isMonth) {
+                      setView((current) =>
+                        shiftYear(current.year, current.monthIndex, -1),
+                      );
+                      return;
+                    }
+                    setView((current) =>
+                      shiftMonth(current.year, current.monthIndex, -1),
+                    );
+                  }}
+                  className={NAV_BTN}
+                  aria-label={
+                    panel === "year" || isYear
+                      ? "Previous years"
+                      : isMonth
+                        ? "Previous year"
+                        : "Previous month"
+                  }
+                >
+                  <NavChevron direction="prev" />
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (isYear) return;
+                  setPanel((current) =>
+                    current === "year" ? (isMonth ? "month" : "day") : "year",
+                  );
+                }}
+                className="rounded-md px-1.5 py-0.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 hover:text-brand-500"
+                title={isYear ? undefined : "Change year"}
+              >
+                {headerTitle}
+              </button>
+
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (panel === "year" || isYear) {
+                      setView((current) =>
+                        shiftYear(current.year, current.monthIndex, 12),
+                      );
+                      return;
+                    }
+                    if (isMonth) {
+                      setView((current) =>
+                        shiftYear(current.year, current.monthIndex, 1),
+                      );
+                      return;
+                    }
+                    setView((current) =>
+                      shiftMonth(current.year, current.monthIndex, 1),
+                    );
+                  }}
+                  className={NAV_BTN}
+                  aria-label={
+                    panel === "year" || isYear
+                      ? "Next years"
+                      : isMonth
+                        ? "Next year"
+                        : "Next month"
+                  }
+                >
+                  <NavChevron direction="next" />
+                </button>
+                {panel !== "year" && !isMonth && !isYear ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setView((current) =>
+                        shiftYear(current.year, current.monthIndex, 1),
+                      )
+                    }
+                    className={NAV_BTN}
+                    aria-label="Next year"
+                    title="Next year"
+                  >
+                    <NavChevron direction="next" double />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            {panel === "year" || isYear ? (
+              <div className="grid grid-cols-3 gap-1.5">
+                {yearOptions.map((year) => {
+                  const selected =
+                    parseIsoYear(value) === year ||
+                    parseIsoDate(value)?.year === year;
+                  const isCurrent = year === todayYear;
+                  let yearClass = "text-gray-800 hover:bg-gray-50";
+                  if (isCurrent && !selected) {
+                    yearClass =
+                      "bg-brand-50 font-semibold text-brand-600 hover:bg-brand-50";
+                  }
+                  if (selected) {
+                    yearClass =
+                      "bg-brand-500 font-medium text-white hover:bg-brand-500 hover:text-white";
+                  }
+                  return (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() => pickYear(year)}
+                      className={`rounded-md px-1.5 py-2 text-theme-xs font-medium transition-colors ${yearClass}`}
+                    >
+                      {year}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : isMonth ? (
+              <div className="grid grid-cols-3 gap-1.5">
+                {DATE_PICKER_MONTHS_SHORT.map((label, monthIndex) => {
+                  const iso = toIsoMonth(view.year, monthIndex);
+                  const active = value === iso;
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => selectMonth(view.year, monthIndex)}
+                      className={`rounded-md px-1.5 py-2 text-theme-xs font-medium transition-colors ${
+                        active
+                          ? "bg-brand-500 text-white"
+                          : "text-gray-800 hover:bg-gray-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <>
+                <div className="mb-1 grid grid-cols-7 text-center">
+                  {DATE_PICKER_WEEKDAYS.map((label) => (
+                    <div
+                      key={label}
+                      className="py-0.5 text-[11px] font-medium text-gray-500"
+                    >
+                      {label}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-y-0.5 text-center">
+                  {cells.map((cell) => {
+                    const selected = value === cell.iso;
+                    const isToday = cell.iso === todayIso;
+                    let dayClass =
+                      "text-gray-800 hover:bg-gray-50 hover:text-gray-800";
+                    if (cell.outside) {
+                      dayClass = "text-gray-400 hover:bg-gray-50";
+                    }
+                    if (isToday && !selected) {
+                      dayClass =
+                        "bg-brand-50 font-semibold text-brand-600 hover:bg-brand-50";
+                    }
+                    if (selected) {
+                      dayClass =
+                        "bg-brand-500 font-medium text-white hover:bg-brand-500 hover:text-white";
+                    }
+
+                    return (
+                      <button
+                        key={cell.key}
+                        type="button"
+                        onClick={() => {
+                          const parsed = parseIsoDate(cell.iso);
+                          if (!parsed) return;
+                          if (cell.outside) {
+                            setView({
+                              year: parsed.year,
+                              monthIndex: parsed.monthIndex,
+                            });
+                          }
+                          selectDate(
+                            toIsoDate(
+                              parsed.year,
+                              parsed.monthIndex,
+                              parsed.day,
+                            ),
+                          );
+                        }}
+                        className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-theme-xs font-medium transition-colors ${dayClass}`}
+                      >
+                        {cell.day}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-gray-100 pt-2.5">
+              <button
+                type="button"
+                onClick={goToday}
+                className="rounded-md px-2 py-1 text-theme-xs font-medium text-brand-500 hover:bg-brand-50"
+              >
+                {isYear ? "This year" : "Today"}
+              </button>
+              {showClear && value ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onChange?.("");
+                    setOpen(false);
+                  }}
+                  className="rounded-md px-2 py-1 text-theme-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div ref={rootRef} className={`relative min-w-0 w-full ${className}`}>
       <button
+        ref={triggerRef}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -221,260 +531,7 @@ function DateField({
           </span>
         </span>
       </button>
-
-      {open ? (
-        <div
-          id={panelId}
-          role="dialog"
-          aria-label={ariaLabel || "Choose date"}
-          className="absolute left-0 z-50 mt-1 w-[min(16rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-3 shadow-theme-lg"
-        >
-          <div className="mb-2.5 flex items-center justify-between gap-1">
-            <div className="flex items-center gap-0.5">
-              {panel !== "year" && !isMonth && !isYear ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setView((current) =>
-                      shiftYear(current.year, current.monthIndex, -1),
-                    )
-                  }
-                  className={NAV_BTN}
-                  aria-label="Previous year"
-                  title="Previous year"
-                >
-                  <NavChevron direction="prev" double />
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  if (panel === "year" || isYear) {
-                    setView((current) =>
-                      shiftYear(current.year, current.monthIndex, -12),
-                    );
-                    return;
-                  }
-                  if (isMonth) {
-                    setView((current) =>
-                      shiftYear(current.year, current.monthIndex, -1),
-                    );
-                    return;
-                  }
-                  setView((current) =>
-                    shiftMonth(current.year, current.monthIndex, -1),
-                  );
-                }}
-                className={NAV_BTN}
-                aria-label={
-                  panel === "year" || isYear
-                    ? "Previous years"
-                    : isMonth
-                      ? "Previous year"
-                      : "Previous month"
-                }
-              >
-                <NavChevron direction="prev" />
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (isYear) return;
-                setPanel((current) =>
-                  current === "year" ? (isMonth ? "month" : "day") : "year",
-                );
-              }}
-              className="rounded-md px-1.5 py-0.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 hover:text-brand-500"
-              title={isYear ? undefined : "Change year"}
-            >
-              {headerTitle}
-            </button>
-
-            <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  if (panel === "year" || isYear) {
-                    setView((current) =>
-                      shiftYear(current.year, current.monthIndex, 12),
-                    );
-                    return;
-                  }
-                  if (isMonth) {
-                    setView((current) =>
-                      shiftYear(current.year, current.monthIndex, 1),
-                    );
-                    return;
-                  }
-                  setView((current) =>
-                    shiftMonth(current.year, current.monthIndex, 1),
-                  );
-                }}
-                className={NAV_BTN}
-                aria-label={
-                  panel === "year" || isYear
-                    ? "Next years"
-                    : isMonth
-                      ? "Next year"
-                      : "Next month"
-                }
-              >
-                <NavChevron direction="next" />
-              </button>
-              {panel !== "year" && !isMonth && !isYear ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setView((current) =>
-                      shiftYear(current.year, current.monthIndex, 1),
-                    )
-                  }
-                  className={NAV_BTN}
-                  aria-label="Next year"
-                  title="Next year"
-                >
-                  <NavChevron direction="next" double />
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          {panel === "year" || isYear ? (
-            <div className="grid grid-cols-3 gap-1.5">
-              {yearOptions.map((year) => {
-                const selected =
-                  parseIsoYear(value) === year ||
-                  parseIsoDate(value)?.year === year;
-                const isCurrent = year === todayYear;
-                let yearClass = "text-gray-800 hover:bg-gray-50";
-                if (isCurrent && !selected) {
-                  yearClass =
-                    "bg-brand-50 font-semibold text-brand-600 hover:bg-brand-50";
-                }
-                if (selected) {
-                  yearClass =
-                    "bg-brand-500 font-medium text-white hover:bg-brand-500 hover:text-white";
-                }
-                return (
-                  <button
-                    key={year}
-                    type="button"
-                    onClick={() => pickYear(year)}
-                    className={`rounded-md px-1.5 py-2 text-theme-xs font-medium transition-colors ${yearClass}`}
-                  >
-                    {year}
-                  </button>
-                );
-              })}
-            </div>
-          ) : isMonth ? (
-            <div className="grid grid-cols-3 gap-1.5">
-              {DATE_PICKER_MONTHS_SHORT.map((label, monthIndex) => {
-                const iso = toIsoMonth(view.year, monthIndex);
-                const active = value === iso;
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => selectMonth(view.year, monthIndex)}
-                    className={`rounded-md px-1.5 py-2 text-theme-xs font-medium transition-colors ${
-                      active
-                        ? "bg-brand-500 text-white"
-                        : "text-gray-800 hover:bg-gray-50"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <>
-              <div className="mb-1 grid grid-cols-7 text-center">
-                {DATE_PICKER_WEEKDAYS.map((label) => (
-                  <div
-                    key={label}
-                    className="py-0.5 text-[11px] font-medium text-gray-500"
-                  >
-                    {label}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-y-0.5 text-center">
-                {cells.map((cell) => {
-                  const selected = value === cell.iso;
-                  const isToday = cell.iso === todayIso;
-                  let dayClass =
-                    "text-gray-800 hover:bg-gray-50 hover:text-gray-800";
-                  if (cell.outside) {
-                    dayClass = "text-gray-400 hover:bg-gray-50";
-                  }
-                  if (isToday && !selected) {
-                    dayClass =
-                      "bg-brand-50 font-semibold text-brand-600 hover:bg-brand-50";
-                  }
-                  if (selected) {
-                    dayClass =
-                      "bg-brand-500 font-medium text-white hover:bg-brand-500 hover:text-white";
-                  }
-
-                  return (
-                    <button
-                      key={cell.key}
-                      type="button"
-                      onClick={() => {
-                        const parsed = parseIsoDate(cell.iso);
-                        if (!parsed) return;
-                        if (cell.outside) {
-                          setView({
-                            year: parsed.year,
-                            monthIndex: parsed.monthIndex,
-                          });
-                        }
-                        selectDate(
-                          toIsoDate(
-                            parsed.year,
-                            parsed.monthIndex,
-                            parsed.day,
-                          ),
-                        );
-                      }}
-                      className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-theme-xs font-medium transition-colors ${dayClass}`}
-                    >
-                      {cell.day}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-gray-100 pt-2.5">
-            <button
-              type="button"
-              onClick={goToday}
-              className="rounded-md px-2 py-1 text-theme-xs font-medium text-brand-500 hover:bg-brand-50"
-            >
-              {isYear ? "This year" : "Today"}
-            </button>
-            {showClear && value ? (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onChange?.("");
-                  setOpen(false);
-                }}
-                className="rounded-md px-2 py-1 text-theme-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-              >
-                Clear
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {calendar}
     </div>
   );
 }

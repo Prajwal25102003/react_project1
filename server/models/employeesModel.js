@@ -121,10 +121,10 @@ export async function findAllEmployees({ excludeLoginRoles = [] } = {}) {
   return result.rows.map(mapEmployeeRow)
 }
 
-/** True when the employee is linked to an hr/admin login (not attendance-eligible). */
+/** True when the employee is linked to a login role that cannot have attendance. */
 export async function employeeHasExcludedLoginRole(
   employeeId,
-  roles = ['hr', 'admin'],
+  roles = ['admin'],
 ) {
   const result = await query(
     `SELECT 1

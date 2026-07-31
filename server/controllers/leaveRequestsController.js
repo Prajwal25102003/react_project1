@@ -9,6 +9,7 @@ import {
   findLeaveRequestsByEmployeeId,
   findLeaveRequestsForTeamApprovals,
   findLeaveRequestsVisibleToEmployee,
+  findLeaveRequestsWhereActorIsFutureStep,
   findLeaveRequestsWithApproverRole,
   generateNextLeaveRequestId,
   updateLeaveRequestStatus,
@@ -46,6 +47,10 @@ import {
   formatApproverLabel,
   formatDisplayRange,
 } from '../utils/activityCopy.js'
+import {
+  approverMetaFromStep,
+  hierarchyLabelsFromSteps,
+} from '../utils/leaveActivityWorkflow.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import {
   serializeMedicalAttachments,
@@ -63,22 +68,6 @@ const LEAVE_TYPES = new Set([
 
 function formatLeaveRange(startDate, endDate) {
   return formatDisplayRange(startDate, endDate)
-}
-
-/** Snapshot of who should act next — used for notification targeting. */
-function approverMetaFromStep(
-  step,
-  { departmentHeadId = null, requesterEmployeeId = null } = {},
-) {
-  if (!step) return null
-  return {
-    approverKind: step.approverKind,
-    approverRole: step.approverRole || null,
-    approverEmployeeId: step.approverEmployeeId || null,
-    departmentHeadId: departmentHeadId || null,
-    requesterEmployeeId: requesterEmployeeId || null,
-    stepLabel: stepDisplayLabel(step),
-  }
 }
 
 function countCalendarLeaveDays(startDate, endDate) {
@@ -287,26 +276,41 @@ export async function getLeaveRequests(req, res) {
     const canApprove = asHr || asAdmin || isHead || namedApprover
 
     if (asAdmin) {
-      if (scope && scope !== 'admin-hr' && scope !== 'approvals') {
+      // Hierarchy-driven Admin queue: accept legacy "admin-hr" and current "admin".
+      if (
+        scope &&
+        scope !== "admin" &&
+        scope !== "admin-hr" &&
+        scope !== "approvals"
+      ) {
         return res.status(403).json({
-          message: 'Admin can only view leave requests in the Admin approval queue',
+          message: "Admin can only view leave requests in the Admin approval queue",
         })
       }
       const byId = new Map()
+      // Actionable now: current hierarchy step is Admin.
       for (const row of await findLeaveRequestsAwaitingActor({
-        role: 'admin',
+        role: "admin",
         employeeId,
       })) {
         byId.set(row.id, row)
       }
-      // Also show chains that include an Admin step (historical HR leave, etc.).
-      for (const row of await findLeaveRequestsWithApproverRole('admin')) {
+      // Later in chain: Admin step exists but earlier approvers act first.
+      for (const row of await findLeaveRequestsWhereActorIsFutureStep({
+        role: "admin",
+        employeeId,
+      })) {
+        byId.set(row.id, row)
+      }
+      // History/visibility: any request whose snapshot includes an Admin step
+      // (employee / dept-head / HR leave — whatever hierarchy configured).
+      for (const row of await findLeaveRequestsWithApproverRole("admin")) {
         byId.set(row.id, row)
       }
       const leaveRequests = [...byId.values()].sort((a, b) =>
         String(b.id).localeCompare(String(a.id), undefined, { numeric: true }),
       )
-      return res.json({ leaveRequests, scope: 'admin-hr' })
+      return res.json({ leaveRequests, scope: "admin" })
     }
 
     if (scope === 'mine' || (!scope && !canApprove)) {
@@ -357,14 +361,26 @@ export async function getLeaveRequests(req, res) {
         for (const row of await findLeaveRequestsForTeamApprovals(employeeId)) {
           byId.set(row.id, row)
         }
-        // Named-approver rows outside their team still appear when awaiting them.
+        // Named-approver rows outside their team still appear when awaiting them
+        // or when they are later in the chain.
         for (const row of await findLeaveRequestsAwaitingActor({
+          employeeId,
+        })) {
+          byId.set(row.id, row)
+        }
+        for (const row of await findLeaveRequestsWhereActorIsFutureStep({
           employeeId,
         })) {
           byId.set(row.id, row)
         }
       } else {
         for (const row of await findLeaveRequestsAwaitingActor({
+          role: role === 'employee' ? null : role,
+          employeeId,
+        })) {
+          byId.set(row.id, row)
+        }
+        for (const row of await findLeaveRequestsWhereActorIsFutureStep({
           role: role === 'employee' ? null : role,
           employeeId,
         })) {
@@ -559,6 +575,9 @@ export async function createLeaveRequestHandler(req, res) {
         fromSick: allocation.fromSick || 0,
         fromLop: allocation.fromLop || 0,
         willUseLop: Number(allocation.fromLop || 0) > 0,
+        hierarchyLabels: hierarchyLabelsFromSteps(hierarchy.steps),
+        departmentHeadId,
+        currentStepLabel: stepDisplayLabel(currentApproverStep),
         currentApprover: approverMetaFromStep(currentApproverStep, {
           departmentHeadId,
           requesterEmployeeId: created.employeeId,
@@ -729,7 +748,7 @@ export async function updateLeaveRequestStatusHandler(req, res) {
         }
       } else {
         finalStatus = 'Pending'
-        activityTitle = 'Leave Approval Needed'
+        activityTitle = 'Leave Request Forwarded'
         activityStatus = 'Pending'
 
         leaveRequest = await updateLeaveRequestStatus(
@@ -797,6 +816,17 @@ export async function updateLeaveRequestStatusHandler(req, res) {
         stepLabel,
         finalStatus,
         awaitsNext,
+        hierarchyLabels: hierarchyLabelsFromSteps(existing.hierarchySteps),
+        departmentHeadId: deptContext.departmentHeadId,
+        previousApprover: approverMetaFromStep(currentStep, {
+          departmentHeadId: deptContext.departmentHeadId,
+          requesterEmployeeId: leaveRequest.employeeId,
+        }),
+        // Next step is also the live current approver after this forward.
+        currentApprover: approverMetaFromStep(nextApproverStep, {
+          departmentHeadId: deptContext.departmentHeadId,
+          requesterEmployeeId: leaveRequest.employeeId,
+        }),
         nextApprover: approverMetaFromStep(nextApproverStep, {
           departmentHeadId: deptContext.departmentHeadId,
           requesterEmployeeId: leaveRequest.employeeId,
