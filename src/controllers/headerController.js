@@ -155,10 +155,8 @@ export function useHeader() {
     [seenUserKey, navigate],
   );
 
-  const hasUnread = notifications.some(
-    (item) =>
-      item.isNew && String(item.direction || "").toLowerCase() === "received",
-  );
+  // Bell indicator: any unread item in the dropdown (sent or received).
+  const hasUnread = notifications.some((item) => item.isNew);
 
   return {
     menuToggle,
