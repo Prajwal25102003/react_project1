@@ -143,8 +143,8 @@ export async function replaceLeaveRequestHierarchySteps(
 }
 
 /**
- * Apply a newly saved hierarchy to Pending leave still on their first snapshot step
- * (no intermediate approval yet). Mid-flight requests keep their frozen snapshot.
+ * Apply a newly saved hierarchy to Pending leave with no intermediate approval yet.
+ * Mid-flight requests (a non-Submit approval already recorded) keep their frozen snapshot.
  */
 export async function refreshPendingStepOneHierarchySnapshots(
   hierarchyId,
@@ -159,12 +159,7 @@ export async function refreshPendingStepOneHierarchySnapshots(
        lr.id,
        lr.employee_id AS "employeeId",
        d.head_employee_id AS "departmentHeadId",
-       lr.current_step AS "currentStep",
-       (
-         SELECT MIN(s.step_order)
-         FROM leave_request_hierarchy_steps s
-         WHERE s.leave_request_id = lr.id
-       ) AS "firstStep"
+       lr.current_step AS "currentStep"
      FROM leave_requests lr
      INNER JOIN employees e ON e.id = lr.employee_id
      LEFT JOIN departments d ON d.id = e.department_id
@@ -181,23 +176,53 @@ export async function refreshPendingStepOneHierarchySnapshots(
     [hierarchyId],
   )
 
+  if (result.rows.length === 0) return 0
+
+  const leaveRequestIds = result.rows.map((row) => row.id)
+
+  await runner.query(
+    `DELETE FROM leave_request_hierarchy_steps
+     WHERE leave_request_id = ANY($1::text[])`,
+    [leaveRequestIds],
+  )
+
+  const values = []
+  const params = []
+  let p = 1
+  for (const leaveRequestId of leaveRequestIds) {
+    for (const step of steps) {
+      values.push(`($${p++}, $${p++}, $${p++}, $${p++}, $${p++})`)
+      params.push(
+        leaveRequestId,
+        step.stepOrder,
+        step.approverKind,
+        step.approverRole || null,
+        step.approverEmployeeId || null,
+      )
+    }
+  }
+  if (values.length > 0) {
+    await runner.query(
+      `INSERT INTO leave_request_hierarchy_steps (
+        leave_request_id, step_order, approver_kind, approver_role, approver_employee_id
+      ) VALUES ${values.join(', ')}`,
+      params,
+    )
+  }
+
+  const hierarchyLabels = (steps || [])
+    .slice()
+    .sort((a, b) => Number(a.stepOrder) - Number(b.stepOrder))
+    .map((step) => stepDisplayLabel(step))
+    .filter(Boolean)
+
   let updated = 0
   for (const row of result.rows) {
-    const firstStep =
-      row.firstStep === null || row.firstStep === undefined
-        ? null
-        : Number(row.firstStep)
-    const currentStep = Number(row.currentStep)
-
-    // Still waiting on the first snapshot step (or missing snapshot → treat as step-1).
-    if (firstStep != null && currentStep !== firstStep) continue
-
     const nextCurrentStep = firstActionableStepOrder(steps, {
       employeeId: row.employeeId,
       departmentHeadId: row.departmentHeadId || null,
     })
 
-    await replaceLeaveRequestHierarchySteps(row.id, steps, client)
     await runner.query(
       `UPDATE leave_requests
        SET current_step = $2,
@@ -210,11 +235,6 @@ export async function refreshPendingStepOneHierarchySnapshots(
       (step) => Number(step.stepOrder) === Number(nextCurrentStep),
     )
     if (nextStep) {
-      const hierarchyLabels = (steps || [])
-        .slice()
-        .sort((a, b) => Number(a.stepOrder) - Number(b.stepOrder))
-        .map((step) => stepDisplayLabel(step))
-        .filter(Boolean)
       const currentApprover = {
         approverKind: nextStep.approverKind,
         approverRole: nextStep.approverRole || null,
@@ -635,7 +655,6 @@ export async function cancelLeaveRequest(
     `UPDATE leave_requests
      SET status = 'Cancelled',
          cancellation_reason = $2,
-         current_step = NULL,
          updated_at = NOW()
      WHERE id = $1
        ${ownershipClause}

@@ -1,5 +1,6 @@
 import { ROLES } from "./authModel.js";
 import { STATUS_TONE, getStatusClass } from "./statusStylesModel.js";
+import { isRemovalOnlyNotification } from "./navBadgesModel.js";
 import { createSeenStateHelpers } from "../utils/seenState.js";
 
 const NOTIFICATION_STATUS = {
@@ -94,9 +95,17 @@ function viewerMatchesLeaveApproverStep(step, viewer = {}) {
  * Leave details deep-link only for people on that request's workflow
  * (requester, actor, named audience, or a step in the hierarchy).
  * Uninvolved Admin/HR may still read the notification text.
+ *
+ * Personalized Sent/Received rows are already scoped to this viewer — always
+ * allow opening leave details (including Cancelled / Approved / Rejected).
  */
 export function viewerCanOpenLeaveNotification(notification, viewer = {}) {
   if (!notification || !viewer) return false;
+
+  const direction = String(notification.direction || "").toLowerCase();
+  if (direction === "sent" || direction === "received") {
+    return true;
+  }
 
   if (samePersonId(viewer.employeeId, notification.subjectEmployeeId)) {
     return true;
@@ -110,10 +119,6 @@ export function viewerCanOpenLeaveNotification(notification, viewer = {}) {
     viewer.employeeId &&
     audienceIds.some((id) => samePersonId(viewer.employeeId, id))
   ) {
-    return true;
-  }
-
-  if (String(notification.direction || "").toLowerCase() === "sent") {
     return true;
   }
 
@@ -169,6 +174,17 @@ export function getNotificationPath(notification, viewer = null) {
     return `/leave-requests?${params.toString()}`;
   }
 
+  // Removals stay in the feed only — the record is gone, so skip module deep-links.
+  if (
+    (category === "attendance" ||
+      category === "employees" ||
+      category === "departments" ||
+      category === "holidays") &&
+    isRemovalOnlyNotification(notification)
+  ) {
+    return null;
+  }
+
   if (category === "attendance") {
     if (attId) return `/attendance?id=${attId}`;
     const employeeId = notification?.subjectEmployeeId;
@@ -202,11 +218,13 @@ export function getNotificationPath(notification, viewer = null) {
   if (category === "holidays") {
     const holidayId = notification?.holidayId;
     const holidayDate = notification?.holidayDate;
-    if (holidayId) {
-      return `/holidays?id=${encodeURIComponent(holidayId)}`;
-    }
-    if (holidayDate) {
-      return `/holidays?date=${encodeURIComponent(holidayDate)}`;
+    if (holidayId || holidayDate) {
+      const params = new URLSearchParams();
+      if (holidayId) params.set("id", holidayId);
+      // Include date so the page can open the right year/month without
+      // filtering the full holiday list down to a single day.
+      if (holidayDate) params.set("date", holidayDate);
+      return `/holidays?${params.toString()}`;
     }
     return "/holidays";
   }

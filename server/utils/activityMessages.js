@@ -400,9 +400,10 @@ function leaveSubmittedCopy({
       description: `${subjectName} applied for ${leaveType}${period}. This request is with ${reviewer} right now. You do not need to take any action yet. After ${reviewer} approves, it will be sent to you.${chain}${allocation}`,
     }
   }
+  // Overseers (Admin/HR) and other inbound viewers — received + waiting.
   return {
-    title: 'Leave Request Submitted',
-    description: `${leaveType} request from ${subjectName}${period} was submitted and is${awaiting}.${allocation}`,
+    title: 'Leave Request Received',
+    description: `${leaveType} request from ${subjectName}${period} has been received and is${awaiting}.${chain}${allocation}`,
   }
 }
 

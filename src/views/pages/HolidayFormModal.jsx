@@ -1,5 +1,6 @@
 import ModalShell from "../components/ModalShell.jsx";
 import { FieldError, RequiredMark } from "../components/forms/FormHelpers.jsx";
+import DateField from "../components/forms/DateField.jsx";
 import SelectField from "../components/forms/SelectField.jsx";
 import { HOLIDAY_TYPES } from "../../models/holidaysModel.js";
 import {
@@ -61,12 +62,15 @@ function HolidayFormModal({
                 Date
                 <RequiredMark />
               </label>
-              <input
-                id="holiday-date"
-                type="date"
+              <DateField
                 value={form.date}
-                onChange={(event) => onChange("date", event.target.value)}
-                className={fieldErrors.date ? INPUT_ERROR_CLASS : INPUT_CLASS}
+                onChange={(nextValue) => onChange("date", nextValue)}
+                ariaLabel="Holiday date"
+                hasError={Boolean(fieldErrors.date)}
+                placeholder="Select date"
+                showClear={false}
+                showToday={false}
+                compact
               />
               <FieldError message={fieldErrors.date} />
             </div>

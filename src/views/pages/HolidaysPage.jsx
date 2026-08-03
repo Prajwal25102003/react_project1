@@ -30,6 +30,7 @@ function HolidaysPage() {
     calendarMonth,
     calendarMonthLabel,
     selectedCalendarDate,
+    isListDateFiltered,
     selectCalendarDate,
     onHolidayInteract,
     shiftCalendar,
@@ -263,7 +264,7 @@ function HolidaysPage() {
                           : undefined
                       }
                       emptyMessage={
-                        selectedCalendarDate
+                        isListDateFiltered
                           ? "No holidays on this date."
                           : canManage
                             ? canRelease

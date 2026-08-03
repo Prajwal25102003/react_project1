@@ -154,7 +154,7 @@ export async function enrichLeaveActivityRows(rows = []) {
   )
 
   function stepLabelFromHistory(step, fallback = '') {
-    if (step === 'TeamLead') return 'Dept Head'
+    if (step === 'TeamLead') return 'Team Lead'
     if (step === 'HR') return 'HR'
     if (step === 'Admin') return 'Admin'
     return fallback

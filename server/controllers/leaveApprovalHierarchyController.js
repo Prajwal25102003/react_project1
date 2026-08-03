@@ -1,18 +1,27 @@
+import pool from '../config/db.js'
 import {
   findAllHierarchiesWithSteps,
   findHierarchyByCategory,
   HIERARCHY_CATEGORIES,
+  HIERARCHY_NAME_MAX_LENGTH,
   APPROVER_ROLES,
   replaceHierarchySteps,
+  maxStepsForCategory,
   CATEGORY_LABELS,
 } from '../models/leaveApprovalHierarchyModel.js'
 import { refreshPendingStepOneHierarchySnapshots } from '../models/leaveRequestsModel.js'
 import { formatDbError } from '../utils/formatDbError.js'
 
-function parseStepsPayload(body) {
+function parseStepsPayload(body, category = '') {
   const errors = []
   const name = String(body?.name ?? '').trim()
   const rawSteps = Array.isArray(body?.steps) ? body.steps : null
+
+  if (!name) {
+    errors.push('Name is required')
+  } else if (name.length > HIERARCHY_NAME_MAX_LENGTH) {
+    errors.push(`Name must be ${HIERARCHY_NAME_MAX_LENGTH} characters or fewer`)
+  }
 
   if (!rawSteps) {
     errors.push('steps array is required')
@@ -23,10 +32,11 @@ function parseStepsPayload(body) {
     errors.push('At least one approval step is required')
   }
 
-  if (rawSteps.length > APPROVER_ROLES.length + 1) {
-    // Team Lead + each role in APPROVER_ROLES (hr, admin)
+  const maxSteps = maxStepsForCategory(category)
+
+  if (rawSteps.length > maxSteps) {
     errors.push(
-      `At most ${APPROVER_ROLES.length + 1} approval steps are allowed (one per approver type)`,
+      `At most ${maxSteps} approval steps are allowed (one per approver type)`,
     )
   }
 
@@ -54,6 +64,29 @@ function parseStepsPayload(body) {
         return
       }
       approverRole = role
+    }
+
+    // Same person / same role cannot approve their own leave category.
+    // HR leave requester is the HR department head — Team Lead would be themselves.
+    if (category === 'hr') {
+      if (kind === 'role' && approverRole === 'hr') {
+        errors.push(
+          `Step ${stepOrder}: HR leave cannot use HR as an approver`,
+        )
+        return
+      }
+      if (kind === 'department_head') {
+        errors.push(
+          `Step ${stepOrder}: HR leave cannot use Team Lead (that is the HR head themselves)`,
+        )
+        return
+      }
+    }
+    if (category === 'department_head' && kind === 'department_head') {
+      errors.push(
+        `Step ${stepOrder}: Team lead leave cannot use Team Lead as an approver`,
+      )
+      return
     }
 
     const signature =
@@ -115,21 +148,44 @@ export async function updateLeaveApprovalHierarchy(req, res) {
       })
     }
 
-    const { errors, name, steps } = parseStepsPayload(req.body)
+    const { errors, name, steps } = parseStepsPayload(req.body, category)
     if (errors.length > 0) {
       return res.status(400).json({ message: errors.join('; ') })
     }
 
-    const hierarchy = await replaceHierarchySteps(category, {
-      name: name || CATEGORY_LABELS[category],
-      steps,
-    })
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
 
-    // New leave + Pending still on step 1 get the new chain.
-    // Mid-flight (step 1 already approved) keeps its frozen snapshot.
-    await refreshPendingStepOneHierarchySnapshots(hierarchy.id, hierarchy.steps)
+      const hierarchy = await replaceHierarchySteps(
+        category,
+        {
+          name: name || CATEGORY_LABELS[category],
+          steps,
+        },
+        client,
+      )
 
-    res.json({ hierarchy })
+      // New leave + Pending with no intermediate approvals get the new chain.
+      // Mid-flight (a step already approved) keeps its frozen snapshot.
+      await refreshPendingStepOneHierarchySnapshots(
+        hierarchy.id,
+        hierarchy.steps,
+        client,
+      )
+
+      await client.query('COMMIT')
+      res.json({ hierarchy })
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK')
+      } catch {
+        // Connection may already be aborted.
+      }
+      throw error
+    } finally {
+      client.release()
+    }
   } catch (error) {
     if (error.statusCode === 404) {
       return res.status(404).json({ message: error.message })

@@ -8,9 +8,9 @@ import {
 } from "../services/leaveApprovalHierarchyService.js";
 import {
   applyApproverType,
+  approverOptionsForStep,
   emptyHierarchyStep,
-  formatStepsSummary,
-  MAX_HIERARCHY_STEPS,
+  maxStepsForCategory,
   stepsToForm,
   toHierarchyPayload,
   validateHierarchyForm,
@@ -19,6 +19,19 @@ import {
   LEAVE_HIERARCHY_COLUMNS,
   LEAVE_HIERARCHY_SEARCH_KEYS,
 } from "../models/leaveApprovalHierarchyTableModel.js";
+
+function remapStepFieldErrors(fieldErrors, mapIndex) {
+  const next = { ...fieldErrors };
+  const remapped = {};
+  for (const [key, value] of Object.entries(fieldErrors)) {
+    const match = /^step-(\d+)$/.exec(key);
+    if (!match) continue;
+    delete next[key];
+    const newIndex = mapIndex(Number(match[1]));
+    if (newIndex != null) remapped[`step-${newIndex}`] = value;
+  }
+  return { ...next, ...remapped };
+}
 
 export function useLeaveApprovalHierarchy() {
   const toast = useToast();
@@ -36,19 +49,30 @@ export function useLeaveApprovalHierarchy() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: "", steps: [emptyHierarchyStep()] });
+  const [form, setForm] = useState({
+    name: "",
+    steps: [emptyHierarchyStep("employee")],
+  });
   const [fieldErrors, setFieldErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
   function openEditModal(hierarchy) {
+    const { steps, remapped } = stepsToForm(
+      hierarchy.steps,
+      hierarchy.category,
+    );
     setEditing(hierarchy);
     setForm({
       name: hierarchy.name || "",
-      steps: stepsToForm(hierarchy.steps),
+      steps,
     });
     setFieldErrors({});
-    setFormError("");
+    setFormError(
+      remapped
+        ? "Some steps were adjusted because they used types that are no longer allowed. Review before saving."
+        : "",
+    );
     setFormOpen(true);
   }
 
@@ -93,41 +117,58 @@ export function useLeaveApprovalHierarchy() {
   }
 
   function addStep() {
+    const category = editing?.category || "employee";
     setForm((current) => {
-      if ((current.steps || []).length >= MAX_HIERARCHY_STEPS) return current;
+      const maxSteps = maxStepsForCategory(category);
+      if ((current.steps || []).length >= maxSteps) return current;
       return {
         ...current,
-        steps: [...current.steps, emptyHierarchyStep()],
+        steps: [...current.steps, emptyHierarchyStep(category, current.steps)],
       };
     });
   }
 
   function removeStep(index) {
-    setForm((current) => {
-      if (current.steps.length <= 1) return current;
-      return {
-        ...current,
-        steps: current.steps.filter((_, i) => i !== index),
-      };
-    });
+    if ((form.steps || []).length <= 1) return;
+
+    setForm((current) => ({
+      ...current,
+      steps: current.steps.filter((_, i) => i !== index),
+    }));
+    setFieldErrors((current) =>
+      remapStepFieldErrors(current, (i) => {
+        if (i === index) return null;
+        if (i > index) return i - 1;
+        return i;
+      }),
+    );
   }
 
   function moveStep(index, direction) {
+    const target = index + direction;
+    const stepCount = (form.steps || []).length;
+    if (target < 0 || target >= stepCount) return;
+
     setForm((current) => {
-      const target = index + direction;
-      if (target < 0 || target >= current.steps.length) return current;
       const steps = [...current.steps];
       const [item] = steps.splice(index, 1);
       steps.splice(target, 0, item);
       return { ...current, steps };
     });
+    setFieldErrors((current) =>
+      remapStepFieldErrors(current, (i) => {
+        if (i === index) return target;
+        if (i === target) return index;
+        return i;
+      }),
+    );
   }
 
   async function submitForm(event) {
     event?.preventDefault?.();
     if (!editing?.category) return;
 
-    const validation = validateHierarchyForm(form);
+    const validation = validateHierarchyForm(form, editing.category);
     if (!validation.ok) {
       setFieldErrors(validation.fieldErrors);
       setFormError(validation.message);
@@ -153,13 +194,13 @@ export function useLeaveApprovalHierarchy() {
     }
   }
 
-  const displayRows = (table.rows || []).map((row) => ({
-    ...row,
-    stepsSummary: formatStepsSummary(row.steps),
-  }));
+  const editingCategory = editing?.category || "employee";
+  const stepApproverOptions = (form.steps || []).map((_, index) =>
+    approverOptionsForStep(editingCategory, form.steps, index),
+  );
 
   return {
-    hierarchies: displayRows,
+    hierarchies: table.rows,
     loading,
     error,
     reload,
@@ -175,7 +216,9 @@ export function useLeaveApprovalHierarchy() {
     updateField,
     updateStep,
     addStep,
-    canAddStep: (form.steps || []).length < MAX_HIERARCHY_STEPS,
+    canAddStep:
+      (form.steps || []).length < maxStepsForCategory(editingCategory),
+    stepApproverOptions,
     removeStep,
     moveStep,
     submitForm,

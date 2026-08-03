@@ -171,7 +171,7 @@ export function isRequesterAdmin(request) {
 
 export function hierarchyStepLabel(step) {
   if (!step) return "Approver";
-  if (step.approverKind === "department_head") return "Dept Head";
+  if (step.approverKind === "department_head") return "Team Lead";
   if (step.approverKind === "role" && step.approverRole === "hr") return "HR";
   if (step.approverKind === "role" && step.approverRole === "admin") {
     return "Admin";
@@ -280,7 +280,7 @@ export function mapApprovalHistoryEntry(entry) {
   const stepLabel =
     {
       Submit: "Requested",
-      TeamLead: "Dept Head",
+      TeamLead: "Team Lead",
       HR: "HR",
       Admin: "Admin",
       HigherAuthority: "Higher Authority",
@@ -407,7 +407,7 @@ export function buildLeaveApprovalSteps(request) {
         { id: "submit", label: "Requested", historySteps: ["Submit"] },
         {
           id: "teamLead",
-          label: "Dept Head",
+          label: "Team Lead",
           historySteps: ["TeamLead"],
           approverKind: "department_head",
         },
@@ -440,16 +440,11 @@ export function buildLeaveApprovalSteps(request) {
     currentIndex = Math.min(2, defs.length - 1);
   } else if (status === "Approved") {
     currentIndex = defs.length - 1;
-  } else if (status === "Rejected" || status === "Cancelled") {
-    terminalState = status === "Rejected" ? "rejected" : "cancelled";
+  } else if (status === "Rejected") {
+    terminalState = "rejected";
     const failEntry = [...history]
       .reverse()
-      .find(
-        (entry) =>
-          entry.action === "Rejected" ||
-          entry.action === "Cancelled" ||
-          entry.step === "Cancel",
-      );
+      .find((entry) => entry.action === "Rejected");
 
     let failIndex = failEntry?.step
       ? defs.findIndex((step) =>
@@ -457,12 +452,30 @@ export function buildLeaveApprovalSteps(request) {
         )
       : -1;
 
-    if (failEntry?.step === "Cancel" || failEntry?.action === "Cancelled") {
-      failIndex = 0;
-    } else if (failIndex < 0) {
-      failIndex = 1;
-    }
+    if (failIndex < 0) failIndex = 1;
     currentIndex = failIndex;
+  } else if (status === "Cancelled") {
+    // Show progress through approvals that completed, then Cancelled at the
+    // step that was waiting when the requester cancelled.
+    terminalState = "cancelled";
+    if (request.currentStep != null) {
+      const idx = defs.findIndex(
+        (step) => Number(step.stepOrder) === Number(request.currentStep),
+      );
+      currentIndex = idx >= 0 ? idx : 1;
+    } else {
+      let lastApprovedIdx = 0;
+      for (const entry of history) {
+        if (entry.action !== "Approved" || entry.step === "Submit") continue;
+        const idx = defs.findIndex((step) =>
+          (step.historySteps || []).includes(entry.step),
+        );
+        if (idx > lastApprovedIdx) lastApprovedIdx = idx;
+      }
+      // Next step after last approval (or first approver if none yet).
+      const lastApproverIdx = Math.max(defs.length - 2, 1);
+      currentIndex = Math.min(lastApprovedIdx + 1, lastApproverIdx);
+    }
   }
 
   return defs.map((step, index) => {
@@ -482,13 +495,10 @@ export function buildLeaveApprovalSteps(request) {
     }
 
     if (step.id === "submit") {
-      if (terminalState === "cancelled" && currentIndex === 0) {
-        state = "cancelled";
-        label = "Cancelled";
-      } else {
-        state = "completed";
-        label = "Requested";
-      }
+      state = "completed";
+      label = "Requested";
+    } else if (terminalState === "cancelled" && index === currentIndex) {
+      label = "Cancelled";
     }
 
     if (step.id === "done" && status === "Approved") {
@@ -498,7 +508,10 @@ export function buildLeaveApprovalSteps(request) {
     return {
       id: step.id,
       label,
-      name: resolveApprovalStepName(step, request, history),
+      name:
+        state === "cancelled"
+          ? null
+          : resolveApprovalStepName(step, request, history),
       state,
     };
   });
@@ -674,11 +687,19 @@ export function countLeaveApproverAttention(requests, userContext) {
   ).length;
 }
 
-/** Whether this user may cancel the leave request in its current status. */
-export function canCancelLeaveRequest(request, { employeeId } = {}) {
+/** Whether this user may cancel the leave request in its current status.
+ * Only the employee who raised it may cancel. Approvers (Admin / HR / Team Lead)
+ * use Approve or Reject — they never get Cancel on someone else's leave.
+ */
+export function canCancelLeaveRequest(request, { employeeId, role } = {}) {
   if (!request) return false;
   if (request.status !== "Pending") return false;
-  return Boolean(employeeId) && request.employeeId === employeeId;
+  if (!employeeId || String(request.employeeId) !== String(employeeId)) {
+    return false;
+  }
+  // Admin is not a leave requester in this app; block Cancel on the admin queue.
+  if (role === "admin") return false;
+  return true;
 }
 
 export function calculateLeaveDays(

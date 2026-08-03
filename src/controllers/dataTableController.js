@@ -5,6 +5,7 @@ import {
   downloadCsv,
   getVisibleColumns,
   nextSortState,
+  pageForRowId,
   processTableRows,
   rowsToCsv,
 } from "../models/dataTableModel.js";
@@ -26,6 +27,8 @@ export function useDataTable(rows, options = {}) {
     pageSize: initialPageSize = DEFAULT_PAGE_SIZE,
     initialVisibleColumnIds,
     initialColumnFilters = EMPTY_COLUMN_FILTERS,
+    /** When set, keep this row's page in view (e.g. notification deep-link). */
+    focusRowId = null,
   } = options;
 
   const [search, setSearch] = useState("");
@@ -57,8 +60,29 @@ export function useDataTable(rows, options = {}) {
   });
 
   useEffect(() => {
+    if (focusRowId) return;
     setPage(1);
-  }, [search, sort.id, sort.direction, pageSize, columnFilters]);
+  }, [search, sort.id, sort.direction, pageSize, columnFilters, focusRowId]);
+
+  useEffect(() => {
+    if (!focusRowId) return;
+    const targetPage = pageForRowId(rows, focusRowId, {
+      search,
+      searchKeys,
+      columnFilters,
+      sort,
+      pageSize,
+    });
+    if (targetPage > 0) setPage(targetPage);
+  }, [
+    columnFilters,
+    focusRowId,
+    pageSize,
+    rows,
+    search,
+    searchKeys,
+    sort,
+  ]);
 
   useEffect(() => {
     if (page !== table.page) setPage(table.page);

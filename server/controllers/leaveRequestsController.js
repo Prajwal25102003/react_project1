@@ -237,15 +237,9 @@ async function canViewLeaveRequest(req, existing) {
   const employeeId = req.user?.employeeId || null
 
   if (existing.employeeId === employeeId) return true
-  if (isHr(role)) return true
+  // Staff can open leave details from notifications (including Cancelled).
+  if (isHr(role) || isAdmin(role)) return true
   if (actorCanActOnRequest(existing, { role, employeeId })) return true
-
-  if (isAdmin(role)) {
-    return (existing.hierarchySteps || []).some(
-      (step) =>
-        step.approverKind === 'role' && step.approverRole === 'admin',
-    )
-  }
 
   if (employeeId && existing.departmentHeadId === employeeId) return true
 
@@ -517,8 +511,23 @@ export async function createLeaveRequestHandler(req, res) {
 
     const hierarchy = await findActiveHierarchyByCategory(category)
     if (!hierarchy || !hierarchy.steps?.length) {
-      return res.status(500).json({
+      return res.status(400).json({
         message: 'Leave approval hierarchy is not configured',
+      })
+    }
+
+    const needsTeamLead = hierarchy.steps.some(
+      (step) => step.approverKind === 'department_head',
+    )
+    const requesterIsHead = Boolean(
+      leaveRequest.employeeId &&
+        departmentHeadId &&
+        String(leaveRequest.employeeId) === String(departmentHeadId),
+    )
+    if (needsTeamLead && !requesterIsHead && !departmentHeadId) {
+      return res.status(400).json({
+        message:
+          'Cannot submit leave: your department has no team lead assigned. Ask an admin to set a department head, then try again.',
       })
     }
 
@@ -830,6 +839,14 @@ export async function cancelLeaveRequestHandler(req, res) {
       })
     }
 
+    // Admin uses approve/reject only — never cancel leave requests.
+    if (isAdmin(role)) {
+      return res.status(403).json({
+        message:
+          'Admin cannot cancel leave requests. Use approve or reject when it is your turn.',
+      })
+    }
+
     if (!isManager && !req.user?.employeeId) {
       return res.status(403).json({
         message: 'Your account is not linked to an employee record',
@@ -853,6 +870,8 @@ export async function cancelLeaveRequestHandler(req, res) {
 
     const isOwner = existing.employeeId === req.user?.employeeId
 
+    // Only the employee who raised the request may cancel it.
+    // HR / Team Lead / Admin use approve or reject instead.
     if (!isOwner) {
       return res.status(403).json({
         message: isManager
@@ -910,6 +929,8 @@ export async function cancelLeaveRequestHandler(req, res) {
         actorName: actor.actorName,
         actorRole: isManager ? 'hr' : 'employee',
         departmentHeadId: deptContext.departmentHeadId,
+        hierarchyLabels: hierarchyLabelsFromSteps(existing.hierarchySteps),
+        cancelledAtStep: existing.currentStep ?? null,
         employeeIds: employeeIdsFromHierarchySteps(existing.hierarchySteps, {
           departmentHeadId: deptContext.departmentHeadId,
           requesterEmployeeId: leaveRequest.employeeId,

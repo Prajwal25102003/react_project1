@@ -22,7 +22,7 @@ export const CATEGORY_DESCRIPTIONS = {
   employee: "Everyone who is not a department head / team lead uses this chain.",
   department_head:
     "Team leads — department heads outside Human Resources. The HR department head uses HR leave instead.",
-  hr: "Only the Human Resources department head (HR). Other HR staff are employees.",
+  hr: "Only the Human Resources department head. Their Team Lead is themselves, so this chain uses Admin (not HR or Team Lead).",
 };
 
 /** Form select values — HR/Admin map to backend `role` + `approverRole`. */
@@ -35,6 +35,20 @@ export const APPROVER_KIND_OPTIONS = [
 /** Max steps = unique approver types (Team Lead, HR, Admin). */
 export const MAX_HIERARCHY_STEPS = APPROVER_KIND_OPTIONS.length;
 
+/** Matches DB `VARCHAR(120)` on leave_approval_hierarchies.name. */
+export const HIERARCHY_NAME_MAX_LENGTH = 120;
+
+/**
+ * Approver types a hierarchy category must not use for itself.
+ * - HR leave: requester is the HR department head, so HR and Team Lead are
+ *   the same person / self — only Admin can approve.
+ * - Team-lead leave: cannot use Team Lead (self).
+ */
+const SELF_EXCLUDED_APPROVER_VALUES = {
+  hr: new Set(["hr", "department_head"]),
+  department_head: new Set(["department_head"]),
+};
+
 /** Select value for a step (flattens role + approverRole into hr|admin). */
 export function approverTypeSelectValue(step) {
   if (step?.approverKind === "role") {
@@ -42,6 +56,42 @@ export function approverTypeSelectValue(step) {
   }
   if (step?.approverKind === "department_head") return "department_head";
   return "hr";
+}
+
+/** Stable signature used to block duplicate approver types. */
+export function approverTypeSignature(stepOrValue) {
+  if (typeof stepOrValue === "string") {
+    if (stepOrValue === "department_head") return "department_head";
+    if (stepOrValue === "admin") return "role:admin";
+    return "role:hr";
+  }
+  return approverTypeSignature(approverTypeSelectValue(stepOrValue));
+}
+
+/** Approver options allowed for a hierarchy category (excludes self-role). */
+export function approverOptionsForCategory(category) {
+  const excluded = SELF_EXCLUDED_APPROVER_VALUES[category] || new Set();
+  return APPROVER_KIND_OPTIONS.filter((option) => !excluded.has(option.value));
+}
+
+/**
+ * Options for one step: category-allowed types, minus types already used
+ * by other steps (current step's value stays selectable).
+ */
+export function approverOptionsForStep(category, steps, stepIndex) {
+  const allowed = approverOptionsForCategory(category);
+  const usedElsewhere = new Set();
+  (steps || []).forEach((step, index) => {
+    if (index === stepIndex) return;
+    usedElsewhere.add(approverTypeSignature(step));
+  });
+  return allowed.filter(
+    (option) => !usedElsewhere.has(approverTypeSignature(option.value)),
+  );
+}
+
+export function maxStepsForCategory(category) {
+  return Math.max(1, approverOptionsForCategory(category).length);
 }
 
 /** Apply a flat approver-type select value onto a step. */
@@ -57,12 +107,22 @@ export function applyApproverType(step, value) {
   return next;
 }
 
-export function emptyHierarchyStep() {
-  return {
-    approverKind: "role",
-    approverRole: "hr",
-    approverEmployeeId: "",
-  };
+/** First unused approver type for this category (defaults to Admin / Team Lead). */
+export function emptyHierarchyStep(category = "employee", steps = []) {
+  const used = new Set((steps || []).map((step) => approverTypeSignature(step)));
+  const options = approverOptionsForCategory(category);
+  const next =
+    options.find((option) => !used.has(approverTypeSignature(option.value))) ||
+    options[0] ||
+    APPROVER_KIND_OPTIONS[0];
+  return applyApproverType(
+    {
+      approverKind: "role",
+      approverRole: "hr",
+      approverEmployeeId: "",
+    },
+    next.value,
+  );
 }
 
 export function formatUpdatedAtLabel(value) {
@@ -116,25 +176,59 @@ export function formatStepsSummary(steps) {
   return steps.map((step) => formatStepLabel(step)).join(" → ");
 }
 
-export function stepsToForm(steps) {
-  if (!steps?.length) return [emptyHierarchyStep()];
-  return steps.map((step) => {
-    // Legacy named-employee steps are not editable — default to HR.
+export function stepsToForm(steps, category = "employee") {
+  const allowedValues = new Set(
+    approverOptionsForCategory(category).map((option) => option.value),
+  );
+  if (!steps?.length) {
+    return { steps: [emptyHierarchyStep(category)], remapped: false };
+  }
+
+  const mapped = [];
+  const seen = new Set();
+  let remapped = false;
+
+  for (const step of steps) {
+    // Legacy named-employee steps are not editable — pick next unused type.
+    let next;
     if (step.approverKind === "employee") {
-      return emptyHierarchyStep();
+      next = emptyHierarchyStep(category, mapped);
+      remapped = true;
+    } else {
+      next = {
+        approverKind: step.approverKind || "role",
+        approverRole: step.approverRole || "hr",
+        approverEmployeeId: "",
+      };
     }
-    return {
-      approverKind: step.approverKind || "role",
-      approverRole: step.approverRole || "hr",
-      approverEmployeeId: "",
-    };
-  });
+
+    const value = approverTypeSelectValue(next);
+    if (!allowedValues.has(value) || seen.has(approverTypeSignature(value))) {
+      next = emptyHierarchyStep(category, mapped);
+      remapped = true;
+    }
+    const signature = approverTypeSignature(next);
+    if (seen.has(signature)) {
+      remapped = true;
+      continue;
+    }
+    seen.add(signature);
+    mapped.push(next);
+  }
+
+  return {
+    steps: mapped.length > 0 ? mapped : [emptyHierarchyStep(category)],
+    remapped: remapped || mapped.length === 0,
+  };
 }
 
-export function validateHierarchyForm({ name, steps }) {
+export function validateHierarchyForm({ name, steps }, category = "employee") {
   const fieldErrors = {};
   const trimmedName = String(name || "").trim();
   if (!trimmedName) fieldErrors.name = "Name is required";
+  else if (trimmedName.length > HIERARCHY_NAME_MAX_LENGTH) {
+    fieldErrors.name = `Name must be ${HIERARCHY_NAME_MAX_LENGTH} characters or fewer`;
+  }
 
   if (!Array.isArray(steps) || steps.length === 0) {
     fieldErrors.steps = "At least one approval step is required";
@@ -145,28 +239,31 @@ export function validateHierarchyForm({ name, steps }) {
     };
   }
 
-  if (steps.length > MAX_HIERARCHY_STEPS) {
-    fieldErrors.steps = `At most ${MAX_HIERARCHY_STEPS} steps are allowed (one per approver type)`;
+  const maxSteps = maxStepsForCategory(category);
+  if (steps.length > maxSteps) {
+    fieldErrors.steps = `At most ${maxSteps} steps are allowed for this hierarchy`;
   }
 
+  const allowedValues = new Set(
+    approverOptionsForCategory(category).map((option) => option.value),
+  );
   const seen = new Set();
   steps.forEach((step, index) => {
     const key = `step-${index}`;
-    const kind = String(step?.approverKind || "").trim();
-    if (!["department_head", "role"].includes(kind)) {
-      fieldErrors[key] = "Select a valid approver type";
+    const value = approverTypeSelectValue(step);
+    if (!allowedValues.has(value)) {
+      if (category === "hr" && (value === "hr" || value === "department_head")) {
+        fieldErrors[key] =
+          "HR leave can only use Admin (HR/Team Lead would be self-approval)";
+      } else if (category === "department_head" && value === "department_head") {
+        fieldErrors[key] = "Team lead leave cannot use Team Lead as an approver";
+      } else {
+        fieldErrors[key] = "Select a valid approver type";
+      }
       return;
     }
-    let signature = "department_head";
-    if (kind === "role") {
-      const role = String(step?.approverRole || "").trim();
-      if (!["hr", "admin"].includes(role)) {
-        fieldErrors[key] = "Select HR or Admin";
-        return;
-      }
-      signature = `role:${role}`;
-    }
 
+    const signature = approverTypeSignature(value);
     if (seen.has(signature)) {
       fieldErrors[key] = "Each approver type can only appear once";
     }

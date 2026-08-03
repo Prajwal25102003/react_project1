@@ -54,13 +54,21 @@ export function attentionKeysFromNotification(notification, navId) {
         .filter(Boolean)
         .map(String);
     case "leave-requests": {
-      // Only closed personal outcomes — pending approvals use needsAction.
+      // Closed personal outcomes + open leave still awaiting action/visibility.
       const status = String(notification.status || "");
-      if (status !== "Rejected" && status !== "Approved") return [];
-      if (String(notification.direction || "").toLowerCase() !== "received") {
-        return [];
+      const direction = String(notification.direction || "").toLowerCase();
+      if (status === "Rejected" || status === "Approved") {
+        if (direction !== "received") return [];
+        return [notification.leaveRequestId].filter(Boolean).map(String);
       }
-      return [notification.leaveRequestId].filter(Boolean).map(String);
+      if (
+        status === "Pending" ||
+        status === "TeamLeadApproved" ||
+        LEAVE_APPROVAL_STATUSES.has(status)
+      ) {
+        return [notification.leaveRequestId].filter(Boolean).map(String);
+      }
+      return [];
     }
     default:
       return [];

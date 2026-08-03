@@ -23,7 +23,8 @@ export function isRemovalOnlyNotification(notification) {
     (eventType.endsWith(".removed") || eventType.endsWith(".deleted")) &&
     (category === "attendance" ||
       category === "employees" ||
-      category === "departments")
+      category === "departments" ||
+      category === "holidays")
   ) {
     return true;
   }
@@ -60,6 +61,18 @@ export function isRemovalOnlyNotification(notification) {
       status === "removed" ||
       title.includes("department removed") ||
       title.includes("department deleted")
+    ) {
+      return true;
+    }
+  }
+
+  if (category === "holidays") {
+    if (
+      eventType === "holiday.removed" ||
+      status === "removed" ||
+      title.includes("holiday removed") ||
+      title.includes("removed from calendar") ||
+      (text.includes("holiday") && text.includes("removed"))
     ) {
       return true;
     }

@@ -63,6 +63,12 @@ export function useHolidays() {
   const [year, setYear] = useState(currentYear);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
+  /** Calendar-day spotlight from notification deep-links (does not filter the list). */
+  const [spotlightCalendarDate, setSpotlightCalendarDate] = useState(null);
+  /** Row keys highlighted like unread attention (`needsAttention` / brand-25). */
+  const [spotlightHolidayKeys, setSpotlightHolidayKeys] = useState(() => new Set());
+  /** Keeps the holiday list paged to this row while spotlight is active. */
+  const [focusHolidayId, setFocusHolidayId] = useState(null);
   const [holidays, setHolidays] = useState([]);
   const [calendar, setCalendar] = useState(null);
   const [calendars, setCalendars] = useState([]);
@@ -109,15 +115,31 @@ export function useHolidays() {
     if (!selectedCalendarDate) return holidays;
     return holidays.filter((holiday) => holiday.date === selectedCalendarDate);
   }, [holidays, selectedCalendarDate]);
-  const tableRows = useMemo(
-    () => withAttention(filteredHolidays),
-    [filteredHolidays, withAttention],
-  );
+  const tableRows = useMemo(() => {
+    const rows = withAttention(filteredHolidays);
+    if (!spotlightHolidayKeys.size) return rows;
+    return rows.map((row) => ({
+      ...row,
+      needsAttention:
+        Boolean(row.needsAttention) ||
+        spotlightHolidayKeys.has(String(row.id || "")) ||
+        spotlightHolidayKeys.has(String(row.date || "")),
+    }));
+  }, [filteredHolidays, spotlightHolidayKeys, withAttention]);
   const table = useDataTable(tableRows, {
     columns,
     searchKeys: HOLIDAY_SEARCH_KEYS,
     pageSize: 5,
+    focusRowId: focusHolidayId,
   });
+  const tableRef = useRef(table);
+  tableRef.current = table;
+
+  function clearHolidaySpotlight() {
+    setSpotlightCalendarDate(null);
+    setSpotlightHolidayKeys(new Set());
+    setFocusHolidayId(null);
+  }
 
   const yearOptions = useMemo(
     () => buildYearOptions(currentYear, calendars, { canManage }),
@@ -193,28 +215,72 @@ export function useHolidays() {
     loadCalendars();
   }, [loadCalendars]);
 
+  // Deep-link from notifications/activities (employees + admin): page + highlight.
   useEffect(() => {
-    if (canManage || loading || !holidays?.length) return;
+    if (loading) return;
     const holidayId = String(searchParams.get("id") || "").trim();
     const holidayDate = String(searchParams.get("date") || "").trim();
     const key = holidayId || holidayDate;
     if (!key || deepLinkAckedRef.current === key) return;
 
-    const match = holidayId
-      ? holidays.find((row) => String(row.id) === holidayId)
-      : holidays.find((row) => String(row.date) === holidayDate);
+    // Open the holiday's year first when the date is known (existing holidays
+    // in another year won't be in the current list until year reloads).
+    if (/^\d{4}-\d{2}-\d{2}$/.test(holidayDate)) {
+      const targetYear = Number(holidayDate.slice(0, 4));
+      if (
+        Number.isFinite(targetYear) &&
+        targetYear >= currentYear &&
+        targetYear <= HOLIDAY_RELEASE_MAX_YEAR &&
+        targetYear !== year
+      ) {
+        setSelectedCalendarDate(null);
+        setYear(targetYear);
+        return;
+      }
+    }
+
+    if (!holidays?.length) return;
+
+    const normalizeId = (value) =>
+      String(value || "")
+        .trim()
+        .replace(/\s+/g, "-");
+    const match =
+      (holidayId
+        ? holidays.find(
+            (row) => normalizeId(row.id) === normalizeId(holidayId),
+          )
+        : null) ||
+      (holidayDate
+        ? holidays.find((row) => String(row.date) === holidayDate)
+        : null);
     if (!match) return;
 
     deepLinkAckedRef.current = key;
+    // Keep the full holiday list; page + highlight the added row (brand-25).
+    setSelectedCalendarDate(null);
+    tableRef.current.clearColumnFilters();
+    tableRef.current.onSearchChange("");
+    const keys = [match.id, match.date].filter(Boolean).map(String);
+    setSpotlightHolidayKeys(new Set(keys));
+    setFocusHolidayId(match.id ? String(match.id) : null);
     if (match.date) {
-      setSelectedCalendarDate(match.date);
+      setSpotlightCalendarDate(match.date);
       const month = Number(String(match.date).slice(5, 7)) - 1;
       if (Number.isFinite(month) && month >= 0 && month <= 11) {
         setCalendarMonth(month);
       }
     }
+    // Feed may already be marked seen from the click — local spotlight still shows.
     acknowledgeAttention(match);
-  }, [acknowledgeAttention, canManage, holidays, loading, searchParams]);
+  }, [
+    acknowledgeAttention,
+    currentYear,
+    holidays,
+    loading,
+    searchParams,
+    year,
+  ]);
 
   const upcoming = useMemo(() => getUpcomingHolidays(holidays), [holidays]);
   const isYearReleased = calendar?.status === CALENDAR_STATUS.RELEASED;
@@ -229,6 +295,7 @@ export function useHolidays() {
       return;
     }
     setSelectedCalendarDate(null);
+    clearHolidaySpotlight();
     setYear(value);
     setCalendarMonth((current) => {
       if (value === year) return current;
@@ -249,11 +316,13 @@ export function useHolidays() {
     // Do not navigate outside current year … 2030.
     if (nextYear < currentYear || nextYear > HOLIDAY_RELEASE_MAX_YEAR) return;
     setSelectedCalendarDate(null);
+    clearHolidaySpotlight();
     setCalendarMonth(nextMonth);
     if (nextYear !== year) setYear(nextYear);
   }
 
   function selectCalendarDate(isoDate) {
+    clearHolidaySpotlight();
     setSelectedCalendarDate(isoDate || null);
     if (!isoDate || canManage) return;
     for (const holiday of holidays) {
@@ -263,6 +332,7 @@ export function useHolidays() {
 
   function onHolidayInteract(holiday) {
     acknowledgeAttention(holiday);
+    clearHolidaySpotlight();
   }
 
   function openCreateModal() {
@@ -282,6 +352,7 @@ export function useHolidays() {
     setFormError("");
     setFormOpen(true);
     acknowledgeAttention(holiday);
+    clearHolidaySpotlight();
   }
 
   function closeFormModal() {
@@ -342,6 +413,7 @@ export function useHolidays() {
     setDeleteError("");
     setDeleteTarget(holiday);
     acknowledgeAttention(holiday);
+    clearHolidaySpotlight();
   }
 
   function closeDeleteModal() {
@@ -525,7 +597,8 @@ export function useHolidays() {
     recentChanges,
     calendarMonth,
     calendarMonthLabel: `${MONTH_NAMES[calendarMonth]} ${year}`,
-    selectedCalendarDate,
+    selectedCalendarDate: selectedCalendarDate || spotlightCalendarDate,
+    isListDateFiltered: Boolean(selectedCalendarDate),
     selectCalendarDate,
     onHolidayInteract,
     shiftCalendar,
