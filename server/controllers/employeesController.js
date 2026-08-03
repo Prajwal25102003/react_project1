@@ -399,9 +399,7 @@ export async function createEmployeeHandler(req, res) {
     const created = await findEmployeeById(id)
 
     const actorLabel = formatActorLabel(actorFromUser(req.user))
-    const audience = await buildEmployeeAudienceMeta(created, {
-      findDepartmentById,
-    })
+    const audience = await buildEmployeeAudienceMeta(created)
     await createRecentActivity({
       title: wantsAdmin ? 'Admin Added' : 'New Employee Added',
       description: wantsAdmin
@@ -619,7 +617,6 @@ export async function updateEmployeeHandler(req, res) {
     }
 
     const audience = await buildEmployeeAudienceMeta(updated, {
-      findDepartmentById,
       previousDepartmentId: previous.departmentId,
     })
     await createRecentActivity({
@@ -700,9 +697,7 @@ export async function deleteEmployeeHandler(req, res) {
       }
 
       const actorLabel = formatActorLabel(actorFromUser(req.user))
-      const adminAudience = await buildEmployeeAudienceMeta(existing, {
-        findDepartmentById,
-      })
+      const adminAudience = await buildEmployeeAudienceMeta(existing)
       await createRecentActivity({
         title: 'Admin Removed',
         description: `${existing.name}'s admin access was removed by ${actorLabel}.`,
@@ -730,9 +725,7 @@ export async function deleteEmployeeHandler(req, res) {
     }
 
     const actorLabel = formatActorLabel(actorFromUser(req.user))
-    const removedAudience = await buildEmployeeAudienceMeta(existing, {
-      findDepartmentById,
-    })
+    const removedAudience = await buildEmployeeAudienceMeta(existing)
     await createRecentActivity({
       title: 'Employee Removed',
       description: `${existing.name} was removed from the employee directory by ${actorLabel}.`,
@@ -863,7 +856,6 @@ export async function assignLeaveBalancesHandler(req, res) {
 
     const audienceEmployeeIds = await expandEmployeeIdsWithDepartmentHeads(
       result.employeeIds,
-      { findEmployeeById, findDepartmentById },
     )
     await createRecentActivity({
       title: 'Leave Balances Updated',

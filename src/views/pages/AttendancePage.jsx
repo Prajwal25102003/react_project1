@@ -69,6 +69,7 @@ function AttendancePage() {
     loading,
     error,
     table,
+    displayColumns,
     filterDefs,
     isEmployee,
     listScope,
@@ -94,13 +95,6 @@ function AttendancePage() {
   } = useAttendance();
 
   const pageName = showingMyAttendance ? "My Attendance" : "Attendance";
-  const columns = table.visibleColumns.filter((column) => {
-    if (showingMyAttendance && column.id === "employeeName") return false;
-    if ((isEmployee || showingMyAttendance) && column.id === "actions") {
-      return false;
-    }
-    return true;
-  });
 
   return (
     <>
@@ -156,7 +150,7 @@ function AttendancePage() {
         ) : null}
 
         <DataTable
-          columns={columns}
+          columns={displayColumns}
           rows={records}
           search={table.search}
           onSearchChange={table.onSearchChange}

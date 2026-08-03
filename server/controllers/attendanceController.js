@@ -1,19 +1,17 @@
-import pool from '../config/db.js'
 import {
-  attendanceExistsForEmployeeDate,
   deleteAttendanceById,
   findAllAttendance,
   findAttendanceByEmployeeId,
   findAttendanceById,
-  insertAttendanceByEmployeeDate,
+  findExistingAttendanceKeys,
+  importAttendanceRecords,
   normalizeAttendanceDays,
   updateAttendance,
 } from '../models/attendanceModel.js'
-import { findDepartmentById } from '../models/departmentsModel.js'
 import {
-  employeeExists,
-  employeeHasExcludedLoginRole,
   findEmployeeById,
+  findEmployeeIdsWithLoginRoles,
+  findExistingEmployeeIds,
 } from '../models/employeesModel.js'
 import { createRecentActivity } from '../models/recentActivitiesModel.js'
 import {
@@ -218,9 +216,9 @@ export async function updateAttendanceHandler(req, res) {
     }
 
     const subject = await findEmployeeById(updated.employeeId)
-    const audience = await buildEmployeeAudienceMeta(subject || { id: updated.employeeId }, {
-      findDepartmentById,
-    })
+    const audience = await buildEmployeeAudienceMeta(
+      subject || { id: updated.employeeId },
+    )
     await createRecentActivity({
       title: 'Attendance Marked',
       description,
@@ -272,7 +270,6 @@ export async function deleteAttendanceHandler(req, res) {
     const subject = await findEmployeeById(existing.employeeId)
     const audience = await buildEmployeeAudienceMeta(
       subject || { id: existing.employeeId },
-      { findDepartmentById },
     )
     await createRecentActivity({
       title: 'Attendance Removed',
@@ -335,7 +332,8 @@ export async function importAttendanceHandler(req, res) {
         .map(([key]) => key),
     )
 
-    // Pass 2: validate every row — reject the whole file if any row is invalid.
+    // Pass 2a: parse + local validation (no DB yet).
+    const candidateEmployeeIds = []
     for (let i = 0; i < records.length; i += 1) {
       const { errors: rowErrors, record } = parseAttendancePayload(records[i])
       const duplicateKey = `${record.employeeId}|${record.date}`
@@ -359,18 +357,6 @@ export async function importAttendanceHandler(req, res) {
         continue
       }
 
-      if (!(await employeeExists(record.employeeId))) {
-        errors.push(`Row ${i + 1}: employee ${record.employeeId} not found`)
-        continue
-      }
-
-      if (await employeeHasExcludedLoginRole(record.employeeId, ['admin'])) {
-        errors.push(
-          `Row ${i + 1}: attendance cannot be marked for Admin (${record.employeeId})`,
-        )
-        continue
-      }
-
       if (isHrEditingOwnAttendance(req.user, record.employeeId)) {
         errors.push(
           `Row ${i + 1}: you cannot import your own attendance (${record.employeeId})`,
@@ -378,14 +364,41 @@ export async function importAttendanceHandler(req, res) {
         continue
       }
 
-      if (await attendanceExistsForEmployeeDate(record.employeeId, record.date)) {
+      candidateEmployeeIds.push(record.employeeId)
+      validated.push({ rowNumber: i + 1, record })
+    }
+
+    // Pass 2b: batch DB lookups for employee existence, admin role, attendance.
+    const [existingEmployeeIds, adminEmployeeIds, existingAttendanceKeys] =
+      await Promise.all([
+        findExistingEmployeeIds(candidateEmployeeIds),
+        findEmployeeIdsWithLoginRoles(candidateEmployeeIds, ['admin']),
+        findExistingAttendanceKeys(validated.map((row) => row.record)),
+      ])
+
+    const accepted = []
+    for (const { rowNumber, record } of validated) {
+      if (!existingEmployeeIds.has(String(record.employeeId))) {
+        errors.push(`Row ${rowNumber}: employee ${record.employeeId} not found`)
+        continue
+      }
+
+      if (adminEmployeeIds.has(String(record.employeeId))) {
         errors.push(
-          `Row ${i + 1}: attendance for ${formatImportDateLabel(record.date)} already exists for ${record.employeeId}`,
+          `Row ${rowNumber}: attendance cannot be marked for Admin (${record.employeeId})`,
         )
         continue
       }
 
-      validated.push(record)
+      const attendanceKey = `${record.employeeId}|${record.date}`
+      if (existingAttendanceKeys.has(attendanceKey)) {
+        errors.push(
+          `Row ${rowNumber}: attendance for ${formatImportDateLabel(record.date)} already exists for ${record.employeeId}`,
+        )
+        continue
+      }
+
+      accepted.push(record)
     }
 
     if (errors.length > 0) {
@@ -413,43 +426,20 @@ export async function importAttendanceHandler(req, res) {
     let present = 0
     let absent = 0
     let halfDay = 0
-    const attendanceIds = []
-    const employeeIds = []
+    let attendanceIds = []
+    let employeeIds = []
 
-    const client = await pool.connect()
     try {
-      await client.query('BEGIN')
-      for (let i = 0; i < validated.length; i += 1) {
-        const record = validated[i]
-        // Import is insert-only — existing employee+date rows are rejected above.
-        if (
-          await attendanceExistsForEmployeeDate(
-            record.employeeId,
-            record.date,
-            client,
-          )
-        ) {
-          throw Object.assign(
-            new Error(
-              `attendance for ${formatImportDateLabel(record.date)} already exists for ${record.employeeId}`,
-            ),
-            { code: 'ATTENDANCE_EXISTS' },
-          )
-        }
-
-        const result = await insertAttendanceByEmployeeDate(record, client)
-        imported += 1
-
-        if (result.id) attendanceIds.push(result.id)
-        if (record.employeeId) employeeIds.push(record.employeeId)
-
+      const result = await importAttendanceRecords(accepted)
+      imported = accepted.length
+      attendanceIds = result.attendanceIds
+      employeeIds = result.employeeIds
+      for (const record of accepted) {
         if (record.status === 'Present') present += 1
         else if (record.status === 'Absent') absent += 1
         else if (record.status === 'Half Day') halfDay += 1
       }
-      await client.query('COMMIT')
     } catch (error) {
-      await client.query('ROLLBACK')
       const message =
         error.code === 'ATTENDANCE_EXISTS'
           ? error.message
@@ -469,16 +459,11 @@ export async function importAttendanceHandler(req, res) {
           errors: [message],
         },
       })
-    } finally {
-      client.release()
     }
 
     if (imported > 0) {
       const actorLabel = formatActorLabel(actorFromUser(req.user))
-      const audience = await buildImportAudienceMeta(employeeIds, {
-        findEmployeeById,
-        findDepartmentById,
-      })
+      const audience = await buildImportAudienceMeta(employeeIds)
       const uniqueAttendanceIds = [...new Set(attendanceIds.filter(Boolean))]
       await createRecentActivity({
         title: 'Attendance Imported',

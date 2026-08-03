@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   clearSession,
   getStoredToken,
@@ -6,11 +13,13 @@ import {
   storeSession,
 } from "../models/authModel.js";
 import { fetchCurrentUser, signIn as signInRequest } from "../services/authService.js";
+import { AUTH_UNAUTHORIZED_EVENT } from "../utils/authEvents.js";
 import { SESSION_REFRESH_EVENT } from "../utils/sessionRefresh.js";
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
+/** Auth state + actions for AuthProvider (view shell owns JSX). */
+export function useAuthProviderValue() {
   const [user, setUser] = useState(() => getStoredUser());
   const [token, setToken] = useState(() => getStoredToken());
   const [loading, setLoading] = useState(() => Boolean(getStoredToken()));
@@ -92,21 +101,37 @@ export function AuthProvider({ children }) {
     };
   }, [token, refreshUser]);
 
-  async function login(email, password) {
+  const logout = useCallback(() => {
+    clearSession();
+    setToken("");
+    setUser(null);
+  }, []);
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      setToken("");
+      setUser(null);
+      const path = window.location.pathname;
+      if (path !== "/signin" && !path.startsWith("/signin/")) {
+        window.location.assign("/signin");
+      }
+    }
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => {
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    };
+  }, []);
+
+  const login = useCallback(async (email, password) => {
     const result = await signInRequest(email, password);
     storeSession(result.token, result.user);
     setToken(result.token);
     setUser(result.user);
     return result.user;
-  }
+  }, []);
 
-  function logout() {
-    clearSession();
-    setToken("");
-    setUser(null);
-  }
-
-  const value = useMemo(
+  return useMemo(
     () => ({
       user,
       token,
@@ -116,11 +141,11 @@ export function AuthProvider({ children }) {
       logout,
       refreshUser,
     }),
-    [user, token, loading, refreshUser],
+    [user, token, loading, login, logout, refreshUser],
   );
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
+export { AuthContext };
 
 export function useAuth() {
   const ctx = useContext(AuthContext);

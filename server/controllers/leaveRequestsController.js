@@ -1,8 +1,10 @@
 import {
+  approveLeaveRequestAndDeductBalances,
   cancelLeaveRequest,
   createLeaveApprovalHistoryEntry,
   createLeaveRequest,
   findAllLeaveRequests,
+  findEmployeeDepartmentContext,
   findLeaveApprovalHistory,
   findLeaveRequestById,
   findLeaveRequestsAwaitingActor,
@@ -18,7 +20,6 @@ import { findEmployeeById } from '../models/employeesModel.js'
 import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
 import {
   computeLeaveDeduction,
-  deductEmployeeLeaveBalances,
   getEmployeeLeaveBalances,
 } from '../models/leaveBalancesModel.js'
 import {
@@ -57,8 +58,6 @@ import {
   serializeMedicalAttachments,
   validateMedicalAttachmentsInput,
 } from '../utils/medicalAttachments.js'
-import pool, { query } from '../config/db.js'
-
 const LEAVE_TYPES = new Set([
   'Sick Leave',
   'Casual Leave',
@@ -596,22 +595,6 @@ export async function createLeaveRequestHandler(req, res) {
   }
 }
 
-async function findEmployeeDepartmentContext(employeeId) {
-  const result = await query(
-    `SELECT
-       d.head_employee_id AS "departmentHeadId",
-       d.name AS "departmentName"
-     FROM employees e
-     LEFT JOIN departments d ON d.id = e.department_id
-     WHERE e.id = $1`,
-    [employeeId],
-  )
-  return {
-    departmentHeadId: result.rows[0]?.departmentHeadId || null,
-    departmentName: result.rows[0]?.departmentName || null,
-  }
-}
-
 export async function updateLeaveRequestStatusHandler(req, res) {
   try {
     const status = String(req.body?.status ?? '').trim()
@@ -723,33 +706,15 @@ export async function updateLeaveRequestStatusHandler(req, res) {
         activityTitle = 'Leave Request Approved'
         activityStatus = 'Approved'
 
-        const client = await pool.connect()
-        try {
-          await client.query('BEGIN')
-          leaveRequest = await updateLeaveRequestStatus(
-            req.params.id,
-            'Approved',
-            ['Pending'],
-            { rejectionReason: '', currentStep: null, client },
-          )
-          if (!leaveRequest) {
-            await client.query('ROLLBACK')
-            return res.status(400).json({
-              message: 'Leave request status could not be updated',
-            })
-          }
-          deductionAllocation = await deductEmployeeLeaveBalances(
-            leaveRequest.employeeId,
-            leaveRequest.leaveType,
-            leaveRequest.leaveDays,
-            client,
-          )
-          await client.query('COMMIT')
-        } catch (balanceError) {
-          await client.query('ROLLBACK')
-          throw balanceError
-        } finally {
-          client.release()
+        const approved = await approveLeaveRequestAndDeductBalances(
+          req.params.id,
+        )
+        leaveRequest = approved.leaveRequest
+        deductionAllocation = approved.deductionAllocation
+        if (!leaveRequest) {
+          return res.status(400).json({
+            message: 'Leave request status could not be updated',
+          })
         }
       } else {
         finalStatus = 'Pending'

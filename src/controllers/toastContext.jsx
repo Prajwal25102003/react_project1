@@ -16,7 +16,8 @@ import {
 
 const ToastContext = createContext(null);
 
-export function ToastProvider({ children }) {
+/** Toast queue state for ToastProvider (view shell owns JSX). */
+export function useToastProviderValue() {
   const [toasts, setToasts] = useState([]);
   const timersRef = useRef(new Map());
 
@@ -47,38 +48,34 @@ export function ToastProvider({ children }) {
     [clearTimer],
   );
 
-  const push = useCallback(
-    (tone, message, durationMs = TOAST_DURATION_MS) => {
-      const next = buildToast(tone, message);
-      setToasts((current) => [next, ...current].slice(0, TOAST_QUEUE_MAX));
+  const push = useCallback((tone, message, durationMs = TOAST_DURATION_MS) => {
+    const next = buildToast(tone, message);
+    setToasts((current) => [next, ...current].slice(0, TOAST_QUEUE_MAX));
 
-      if (durationMs > 0) {
-        const timer = window.setTimeout(() => {
-          timersRef.current.delete(next.id);
-          setToasts((current) =>
-            current.filter((item) => item.id !== next.id),
-          );
-        }, durationMs);
-        timersRef.current.set(next.id, timer);
-      }
+    if (durationMs > 0) {
+      const timer = window.setTimeout(() => {
+        timersRef.current.delete(next.id);
+        setToasts((current) =>
+          current.filter((item) => item.id !== next.id),
+        );
+      }, durationMs);
+      timersRef.current.set(next.id, timer);
+    }
 
-      return next.id;
-    },
-    [],
-  );
+    return next.id;
+  }, []);
 
   const success = useCallback((message) => push("success", message), [push]);
   const error = useCallback((message) => push("error", message), [push]);
   const warning = useCallback((message) => push("warning", message), [push]);
   const info = useCallback((message) => push("info", message), [push]);
 
-  /** Convenience for create / update / delete success toasts. */
   const crudSuccess = useCallback(
     (entity, action) => success(crudSuccessMessage(entity, action)),
     [success],
   );
 
-  const value = useMemo(
+  return useMemo(
     () => ({
       toast: toasts[0] || null,
       toasts,
@@ -92,11 +89,9 @@ export function ToastProvider({ children }) {
     }),
     [toasts, push, success, error, warning, info, crudSuccess, dismiss],
   );
-
-  return (
-    <ToastContext.Provider value={value}>{children}</ToastContext.Provider>
-  );
 }
+
+export { ToastContext };
 
 export function useToast() {
   const ctx = useContext(ToastContext);

@@ -1,6 +1,8 @@
 /**
  * Helpers for targeting recent_activities / notifications to the right viewers.
  */
+import { findDepartmentHeadRowsByIds } from '../models/departmentsModel.js'
+import { findEmployeeDepartmentRowsByIds } from '../models/employeesModel.js'
 
 export function uniqueIds(...groups) {
   const ids = []
@@ -16,24 +18,24 @@ export function uniqueEmployeeIds(...groups) {
   return uniqueIds(...groups)
 }
 
+async function resolveDepartmentHeads(departmentIds) {
+  const rows = await findDepartmentHeadRowsByIds(departmentIds)
+  return rows
+    .map((row) => row.headEmployeeId)
+    .filter(Boolean)
+}
+
 /**
  * Build department + employeeIds audience for an employee subject.
  * Includes the subject and department head(s) for current/previous departments.
  */
 export async function buildEmployeeAudienceMeta(
   employee,
-  { findDepartmentById, previousDepartmentId = null } = {},
+  { previousDepartmentId = null } = {},
 ) {
   const departmentId = employee?.departmentId || null
   const departmentIds = uniqueIds(departmentId, previousDepartmentId)
-  const headIds = []
-
-  if (typeof findDepartmentById === 'function') {
-    for (const id of departmentIds) {
-      const dept = await findDepartmentById(id)
-      if (dept?.headEmployeeId) headIds.push(dept.headEmployeeId)
-    }
-  }
+  const headIds = await resolveDepartmentHeads(departmentIds)
 
   return {
     departmentId,
@@ -67,26 +69,15 @@ export function employeeIdsFromHierarchySteps(
  * Expand a list of employee ids with each person's department head
  * (e.g. bulk attendance import).
  */
-export async function expandEmployeeIdsWithDepartmentHeads(
-  employeeIds,
-  { findEmployeeById, findDepartmentById } = {},
-) {
+export async function expandEmployeeIdsWithDepartmentHeads(employeeIds) {
   const base = uniqueIds(employeeIds)
-  if (
-    typeof findEmployeeById !== 'function' ||
-    typeof findDepartmentById !== 'function'
-  ) {
-    return base
-  }
+  if (base.length === 0) return base
 
-  const headIds = []
-  for (const id of base) {
-    const employee = await findEmployeeById(id)
-    if (!employee?.departmentId) continue
-    const dept = await findDepartmentById(employee.departmentId)
-    if (dept?.headEmployeeId) headIds.push(dept.headEmployeeId)
-  }
-
+  const employees = await findEmployeeDepartmentRowsByIds(base)
+  const departmentIds = uniqueIds(
+    employees.map((row) => row.departmentId),
+  )
+  const headIds = await resolveDepartmentHeads(departmentIds)
   return uniqueIds(base, headIds)
 }
 
@@ -94,27 +85,19 @@ export async function expandEmployeeIdsWithDepartmentHeads(
  * Audience meta for bulk attendance import:
  * subjects + their department heads, and the departments involved.
  */
-export async function buildImportAudienceMeta(
-  employeeIds,
-  { findEmployeeById, findDepartmentById } = {},
-) {
+export async function buildImportAudienceMeta(employeeIds) {
   const base = uniqueIds(employeeIds)
-  const departmentIds = []
-  const headIds = []
-
-  if (typeof findEmployeeById === 'function') {
-    for (const id of base) {
-      const employee = await findEmployeeById(id)
-      if (!employee?.departmentId) continue
-      departmentIds.push(employee.departmentId)
-      if (typeof findDepartmentById === 'function') {
-        const dept = await findDepartmentById(employee.departmentId)
-        if (dept?.headEmployeeId) headIds.push(dept.headEmployeeId)
-      }
-    }
+  if (base.length === 0) {
+    return { departmentId: null, departmentIds: [], employeeIds: [] }
   }
 
+  const employees = await findEmployeeDepartmentRowsByIds(base)
+  const departmentIds = uniqueIds(
+    employees.map((row) => row.departmentId),
+  )
+  const headIds = await resolveDepartmentHeads(departmentIds)
   const departments = uniqueIds(departmentIds)
+
   return {
     departmentId: departments[0] || null,
     departmentIds: departments,

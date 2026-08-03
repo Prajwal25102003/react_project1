@@ -1,4 +1,5 @@
-import { query } from '../config/db.js'
+import pool, { query } from '../config/db.js'
+import { deductEmployeeLeaveBalances } from './leaveBalancesModel.js'
 import {
   findStepsByHierarchyIds,
   firstActionableStepOrder,
@@ -645,4 +646,60 @@ export async function cancelLeaveRequest(
 
   if (result.rowCount === 0) return null
   return findLeaveRequestById(id)
+}
+
+/** Requester's current department head + department name. */
+export async function findEmployeeDepartmentContext(employeeId) {
+  if (!employeeId) {
+    return { departmentHeadId: null, departmentName: null }
+  }
+
+  const result = await query(
+    `SELECT
+       d.head_employee_id AS "departmentHeadId",
+       d.name AS "departmentName"
+     FROM employees e
+     LEFT JOIN departments d ON d.id = e.department_id
+     WHERE e.id = $1`,
+    [employeeId],
+  )
+
+  return {
+    departmentHeadId: result.rows[0]?.departmentHeadId || null,
+    departmentName: result.rows[0]?.departmentName || null,
+  }
+}
+
+/**
+ * Final approve: mark Approved and deduct leave balances in one transaction.
+ * @returns {{ leaveRequest: object, deductionAllocation: object }}
+ */
+export async function approveLeaveRequestAndDeductBalances(id) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const leaveRequest = await updateLeaveRequestStatus(
+      id,
+      'Approved',
+      ['Pending'],
+      { rejectionReason: '', currentStep: null, client },
+    )
+    if (!leaveRequest) {
+      await client.query('ROLLBACK')
+      return { leaveRequest: null, deductionAllocation: null }
+    }
+    const deductionAllocation = await deductEmployeeLeaveBalances(
+      leaveRequest.employeeId,
+      leaveRequest.leaveType,
+      leaveRequest.leaveDays,
+      client,
+    )
+    await client.query('COMMIT')
+    return { leaveRequest, deductionAllocation }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }

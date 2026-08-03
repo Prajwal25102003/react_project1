@@ -308,3 +308,47 @@ export async function employeeExists(employeeId) {
   )
   return result.rowCount > 0
 }
+
+/** Existing employee ids from a candidate list (one round-trip). */
+export async function findExistingEmployeeIds(employeeIds) {
+  const ids = [...new Set((employeeIds || []).map(String).filter(Boolean))]
+  if (ids.length === 0) return new Set()
+
+  const result = await query(
+    `SELECT id FROM employees WHERE id = ANY($1::varchar[])`,
+    [ids],
+  )
+  return new Set(result.rows.map((row) => String(row.id)))
+}
+
+/** Lightweight id → departmentId map for audience targeting. */
+export async function findEmployeeDepartmentRowsByIds(employeeIds) {
+  const ids = [...new Set((employeeIds || []).map(String).filter(Boolean))]
+  if (ids.length === 0) return []
+
+  const result = await query(
+    `SELECT id, department_id AS "departmentId"
+     FROM employees
+     WHERE id = ANY($1::varchar[])`,
+    [ids],
+  )
+  return result.rows
+}
+
+/** Employee ids linked to any of the given login roles. */
+export async function findEmployeeIdsWithLoginRoles(
+  employeeIds,
+  roles = ['admin'],
+) {
+  const ids = [...new Set((employeeIds || []).map(String).filter(Boolean))]
+  if (ids.length === 0 || !roles?.length) return new Set()
+
+  const result = await query(
+    `SELECT DISTINCT employee_id AS id
+     FROM users
+     WHERE employee_id = ANY($1::varchar[])
+       AND role = ANY($2::text[])`,
+    [ids, roles],
+  )
+  return new Set(result.rows.map((row) => String(row.id)))
+}
