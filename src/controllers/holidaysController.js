@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useToast } from "./toastContext.jsx";
+import { useNotifications } from "./notificationsContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
 import { ROLES } from "../models/authModel.js";
@@ -16,9 +17,6 @@ import {
   toReleaseRow,
   validateReleaseRows,
 } from "../models/holidayCalendarModel.js";
-import {
-  withNotificationSeenState,
-} from "../models/headerModel.js";
 import {
   EMPTY_HOLIDAY_FORM,
   getUpcomingHolidays,
@@ -40,9 +38,7 @@ import {
   releaseHolidayCalendar,
   updateHoliday,
 } from "../services/holidaysService.js";
-import { fetchNotifications } from "../services/notificationsService.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
-import { NOTIFICATIONS_REFRESH_EVENT } from "../utils/notificationsRefresh.js";
 
 const MONTH_NAMES = [
   "January",
@@ -61,6 +57,7 @@ const MONTH_NAMES = [
 
 export function useHolidays() {
   const { user } = useAuth();
+  const { notifications } = useNotifications();
   const canManage = user?.role === ROLES.ADMIN;
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -71,11 +68,15 @@ export function useHolidays() {
   const [calendars, setCalendars] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [recentChanges, setRecentChanges] = useState([]);
   const seenUserKey = user?.id || user?.email || user?.employeeId || "";
   const [searchParams] = useSearchParams();
   const deepLinkAckedRef = useRef("");
   const toast = useToast();
+
+  const recentChanges = useMemo(() => {
+    if (canManage || !seenUserKey) return [];
+    return mapHolidayChangeNotifications(notifications);
+  }, [canManage, notifications, seenUserKey]);
 
   const { acknowledgeAttention, withAttention } = useModuleNotificationAttention({
     navId: "holidays",
@@ -191,39 +192,6 @@ export function useHolidays() {
   useEffect(() => {
     loadCalendars();
   }, [loadCalendars]);
-
-  // Employees/HR: chips for unread holiday changes; row interact marks them read.
-  // Admin: no chips / no sidebar badge — confirmation stays in the header bell only.
-  useEffect(() => {
-    if (canManage || !seenUserKey) {
-      setRecentChanges([]);
-      return undefined;
-    }
-
-    let cancelled = false;
-
-    async function loadHolidayChanges() {
-      try {
-        const items = await fetchNotifications(user);
-        if (cancelled) return;
-        const withSeen = withNotificationSeenState(items, seenUserKey);
-        setRecentChanges(mapHolidayChangeNotifications(withSeen));
-      } catch {
-        if (!cancelled) setRecentChanges([]);
-      }
-    }
-
-    loadHolidayChanges();
-
-    function handleRefresh() {
-      loadHolidayChanges();
-    }
-    window.addEventListener(NOTIFICATIONS_REFRESH_EVENT, handleRefresh);
-    return () => {
-      cancelled = true;
-      window.removeEventListener(NOTIFICATIONS_REFRESH_EVENT, handleRefresh);
-    };
-  }, [canManage, seenUserKey, user]);
 
   useEffect(() => {
     if (canManage || loading || !holidays?.length) return;

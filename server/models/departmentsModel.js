@@ -39,6 +39,20 @@ export async function findDepartmentById(id) {
   return result.rows[0] || null
 }
 
+/** Lightweight id → headEmployeeId rows for audience targeting. */
+export async function findDepartmentHeadRowsByIds(departmentIds) {
+  const ids = [...new Set((departmentIds || []).map(String).filter(Boolean))]
+  if (ids.length === 0) return []
+
+  const result = await query(
+    `SELECT id, head_employee_id AS "headEmployeeId"
+     FROM departments
+     WHERE id = ANY($1::varchar[])`,
+    [ids],
+  )
+  return result.rows
+}
+
 export async function isEmployeeDepartmentHead(employeeId) {
   if (!employeeId) return false
   const result = await query(

@@ -1,5 +1,4 @@
 import { lazy, Suspense } from "react";
-import { AuthProvider } from "./controllers/authContext.jsx";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import {
   GuestRoute,
@@ -7,6 +6,8 @@ import {
   RoleRoute,
 } from "./views/components/ProtectedRoute.jsx";
 import { AppToastProvider } from "./views/components/AppToastProvider.jsx";
+import { AuthProvider } from "./views/components/AuthProvider.jsx";
+import { NotificationsProvider } from "./views/components/NotificationsProvider.jsx";
 import { HR_ADMIN_ROLES, ROLES } from "./models/authModel.js";
 import AppShell from "./views/layout/AppShell.jsx";
 
@@ -123,7 +124,9 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <AppToastProvider>
-          <AppRoutes />
+          <NotificationsProvider>
+            <AppRoutes />
+          </NotificationsProvider>
         </AppToastProvider>
       </BrowserRouter>
     </AuthProvider>

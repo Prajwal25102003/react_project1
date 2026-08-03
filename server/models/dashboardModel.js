@@ -42,7 +42,7 @@ export async function getDashboardStats(period = 'month') {
   }
 }
 
-export async function findRecentActivities() {
+export async function findRecentActivities(limit = 25) {
   const result = await query(
     `SELECT
       id,
@@ -57,7 +57,8 @@ export async function findRecentActivities() {
       meta
     FROM recent_activities
     ORDER BY activity_time DESC
-    LIMIT 25`,
+    LIMIT $1`,
+    [limit],
   )
 
   return result.rows

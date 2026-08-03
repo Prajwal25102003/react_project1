@@ -1,4 +1,4 @@
-import { query } from '../config/db.js'
+import pool, { query } from '../config/db.js'
 
 const ATTENDANCE_SELECT = `
   a.id,
@@ -120,6 +120,34 @@ export async function attendanceExistsForEmployeeDate(
 }
 
 /**
+ * Existing (employeeId|date) keys for a batch of pairs (one round-trip).
+ * @param {{ employeeId: string, date: string }[]} pairs
+ */
+export async function findExistingAttendanceKeys(pairs, client = null) {
+  const list = (pairs || []).filter(
+    (pair) => pair?.employeeId && pair?.date,
+  )
+  if (list.length === 0) return new Set()
+
+  const employeeIds = list.map((pair) => pair.employeeId)
+  const dates = list.map((pair) => pair.date)
+  const runner = client || { query }
+  const existing = await runner.query(
+    `SELECT employee_id AS "employeeId",
+            TO_CHAR(attendance_date, 'YYYY-MM-DD') AS date
+     FROM attendance
+     WHERE (employee_id, attendance_date) IN (
+       SELECT * FROM UNNEST($1::varchar[], $2::date[])
+     )`,
+    [employeeIds, dates],
+  )
+
+  return new Set(
+    existing.rows.map((row) => `${row.employeeId}|${row.date}`),
+  )
+}
+
+/**
  * Insert attendance for (employee_id, attendance_date).
  * Fails if a row for that employee + date already exists.
  * Returns { id }
@@ -188,5 +216,75 @@ export async function upsertAttendanceByEmployeeDate(record, client = null) {
 
   const inserted = await insertAttendanceByEmployeeDate(record, client)
   return { action: 'inserted', id: inserted.id }
+}
+
+/**
+ * Insert-only bulk import inside a transaction.
+ * Rejects if any (employeeId, date) already exists.
+ * @returns {{ attendanceIds: string[], employeeIds: string[] }}
+ */
+export async function importAttendanceRecords(records) {
+  const list = Array.isArray(records) ? records : []
+  if (list.length === 0) {
+    return { attendanceIds: [], employeeIds: [] }
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const existing = await findExistingAttendanceKeys(list, client)
+    if (existing.size > 0) {
+      const [first] = existing
+      const [employeeId, date] = String(first).split('|')
+      const error = new Error(
+        `attendance for ${date} already exists for ${employeeId}`,
+      )
+      error.code = 'ATTENDANCE_EXISTS'
+      throw error
+    }
+
+    const idResult = await client.query(
+      `SELECT COALESCE(
+        MAX(CAST(SUBSTRING(id FROM 5) AS INTEGER)),
+        5000
+      ) AS max_num
+      FROM attendance
+      WHERE id ~ '^ATT-[0-9]+$'`,
+    )
+    let nextNum = Number(idResult.rows[0].max_num) + 1
+
+    const attendanceIds = []
+    const employeeIds = []
+
+    for (const record of list) {
+      const id = `ATT-${nextNum}`
+      nextNum += 1
+      await client.query(
+        `INSERT INTO attendance (
+          id, employee_id, attendance_date, check_in, check_out, working_hours, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          id,
+          record.employeeId,
+          record.date,
+          record.checkIn,
+          record.checkOut,
+          record.workingHours,
+          record.status,
+        ],
+      )
+      attendanceIds.push(id)
+      if (record.employeeId) employeeIds.push(record.employeeId)
+    }
+
+    await client.query('COMMIT')
+    return { attendanceIds, employeeIds }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 

@@ -1,13 +1,11 @@
 import { API_BASE_URL } from "../config/api.js";
 import { clearSession, getStoredToken } from "../models/authModel.js";
+import { AUTH_UNAUTHORIZED_EVENT } from "../utils/authEvents.js";
 
 function handleUnauthorized(skipAuth) {
   if (skipAuth) return;
   clearSession();
-  const path = window.location.pathname;
-  if (path !== "/signin" && !path.startsWith("/signin/")) {
-    window.location.assign("/signin");
-  }
+  window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
 }
 
 async function parseResponse(response, errorMessage, { skipAuth = false } = {}) {

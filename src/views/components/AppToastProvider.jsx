@@ -1,5 +1,6 @@
-import { ToastProvider, useToast } from "../../controllers/toastContext.jsx";
+import { useToast } from "../../controllers/toastContext.jsx";
 import ToastStack from "../components/ToastStack.jsx";
+import { ToastProvider } from "./ToastProvider.jsx";
 
 function ToastHost() {
   const { toasts } = useToast();

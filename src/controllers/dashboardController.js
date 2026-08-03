@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
+import { useNotifications } from "./notificationsContext.jsx";
 import { fetchDashboard } from "../services/dashboardService.js";
-import { fetchNotifications } from "../services/notificationsService.js";
 import {
   withActivitySeenState,
   withOrgUnreadMessagesMetric,
 } from "../models/dashboardModel.js";
-import { withNotificationSeenState } from "../models/headerModel.js";
 import { DASHBOARD_REFRESH_EVENT } from "../utils/dashboardRefresh.js";
-import {
-  NOTIFICATIONS_REFRESH_EVENT,
-  requestNotificationsRefresh,
-} from "../utils/notificationsRefresh.js";
+import { requestNotificationsRefresh } from "../utils/notificationsRefresh.js";
 import { markFeedItemSeen } from "../utils/feedSeenState.js";
 
 const DASHBOARD_STALE_MS = 60_000;
@@ -32,6 +28,11 @@ const EMPTY = {
 
 export function useDashboard() {
   const { user } = useAuth();
+  const {
+    notifications,
+    markNotificationsSeen,
+    loadNotifications,
+  } = useNotifications();
   const navigate = useNavigate();
   const [data, setData] = useState(EMPTY);
   const [newEmployeesPeriod, setNewEmployeesPeriod] = useState("month");
@@ -44,17 +45,10 @@ export function useDashboard() {
   const periodRef = useRef(newEmployeesPeriod);
   const seenUserKey = user?.id || user?.email || user?.employeeId || "";
 
-  const loadUnreadMessagesMetric = useCallback(async () => {
-    try {
-      const items = withNotificationSeenState(
-        await fetchNotifications(user),
-        seenUserKey,
-      );
-      setData((current) => withOrgUnreadMessagesMetric(current, items));
-    } catch {
-      setData((current) => withOrgUnreadMessagesMetric(current, []));
-    }
-  }, [seenUserKey, user]);
+  const applyUnreadFromNotifications = useCallback(
+    (dashboard) => withOrgUnreadMessagesMetric(dashboard, notifications),
+    [notifications],
+  );
 
   const loadDashboard = useCallback(
     async ({ silent = false, scope } = {}) => {
@@ -72,17 +66,7 @@ export function useDashboard() {
           dashboard.activities,
           seenUserKey,
         );
-
-        let nextDashboard = dashboard;
-        try {
-          const items = withNotificationSeenState(
-            await fetchNotifications(user),
-            seenUserKey,
-          );
-          nextDashboard = withOrgUnreadMessagesMetric(dashboard, items);
-        } catch {
-          nextDashboard = withOrgUnreadMessagesMetric(dashboard, []);
-        }
+        const nextDashboard = applyUnreadFromNotifications(dashboard);
 
         setData((current) => {
           if (metricsOnly && current.variant === "org") {
@@ -117,7 +101,7 @@ export function useDashboard() {
         if (isInitialLoad && !silent) setLoading(false);
       }
     },
-    [newEmployeesPeriod, seenUserKey, user],
+    [applyUnreadFromNotifications, newEmployeesPeriod, seenUserKey, user],
   );
 
   useEffect(() => {
@@ -144,23 +128,11 @@ export function useDashboard() {
     };
   }, [loadDashboard]);
 
+  // Keep unread KPI in sync when the shared notifications store updates.
   useEffect(() => {
-    function handleNotificationsRefresh() {
-      if (!hasLoadedRef.current) return;
-      loadUnreadMessagesMetric();
-    }
-
-    window.addEventListener(
-      NOTIFICATIONS_REFRESH_EVENT,
-      handleNotificationsRefresh,
-    );
-    return () => {
-      window.removeEventListener(
-        NOTIFICATIONS_REFRESH_EVENT,
-        handleNotificationsRefresh,
-      );
-    };
-  }, [loadUnreadMessagesMetric]);
+    if (!hasLoadedRef.current) return;
+    setData((current) => withOrgUnreadMessagesMetric(current, notifications));
+  }, [notifications]);
 
   useEffect(() => {
     function handleWindowFocus() {
@@ -190,6 +162,7 @@ export function useDashboard() {
       const id = message?.id;
       if (!seenUserKey || !id) return;
 
+      markNotificationsSeen([id]);
       markFeedItemSeen(seenUserKey, [id]);
       setMessagesPreview((current) =>
         (current || []).filter((item) => String(item.id) !== String(id)),
@@ -217,7 +190,7 @@ export function useDashboard() {
         navigate(message.href);
       }
     },
-    [seenUserKey, navigate],
+    [seenUserKey, markNotificationsSeen, navigate],
   );
 
   const dismissUnreadMessage = useCallback(
@@ -230,6 +203,7 @@ export function useDashboard() {
       const id = activity?.id;
       if (!seenUserKey || !id) return;
 
+      markNotificationsSeen([id]);
       markFeedItemSeen(seenUserKey, [id]);
       setData((current) => {
         const remaining = (current.unreadMessages || []).filter(
@@ -251,7 +225,7 @@ export function useDashboard() {
         navigate(activity.href);
       }
     },
-    [seenUserKey, navigate],
+    [seenUserKey, markNotificationsSeen, navigate],
   );
 
   const markAllAsRead = useCallback(async () => {
@@ -263,15 +237,9 @@ export function useDashboard() {
     const unreadIds = (data.unreadMessages || [])
       .map((message) => message.id)
       .filter(Boolean);
-
-    let notificationIds = [];
-    try {
-      notificationIds = (await fetchNotifications(user))
-        .map((item) => item.id)
-        .filter(Boolean);
-    } catch {
-      notificationIds = [];
-    }
+    const notificationIds = (notifications || [])
+      .map((item) => item.id)
+      .filter(Boolean);
 
     const allIds = [
       ...new Set(
@@ -281,6 +249,7 @@ export function useDashboard() {
     if (allIds.length === 0) return;
 
     markFeedItemSeen(seenUserKey, allIds);
+    markNotificationsSeen(allIds);
     setMessagesPreview([]);
     setData((current) => ({
       ...withOrgUnreadMessagesMetric(current, []),
@@ -291,7 +260,15 @@ export function useDashboard() {
       unreadMessages: [],
     }));
     requestNotificationsRefresh();
-  }, [seenUserKey, data.activities, data.unreadMessages, user]);
+    loadNotifications({ silent: true, force: true });
+  }, [
+    seenUserKey,
+    data.activities,
+    data.unreadMessages,
+    notifications,
+    markNotificationsSeen,
+    loadNotifications,
+  ]);
 
   const handleMetricAction = useCallback(
     (metric) => {

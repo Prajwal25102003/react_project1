@@ -29,6 +29,7 @@ import {
   ATTENDANCE_COLUMNS,
   ATTENDANCE_SEARCH_KEYS,
   getAttendanceDefaultVisibleIds,
+  getAttendanceDisplayColumns,
 } from "../models/attendanceTableModel.js";
 import { ROLES } from "../models/authModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
@@ -281,12 +282,22 @@ export function useAttendance() {
     }
   }
 
+  const displayColumns = useMemo(
+    () =>
+      getAttendanceDisplayColumns(table.visibleColumns, {
+        showingMyAttendance,
+        isEmployee,
+      }),
+    [table.visibleColumns, showingMyAttendance, isEmployee],
+  );
+
   return {
     records: table.rows,
     loading,
     error,
     reload,
     table,
+    displayColumns,
     filterDefs,
     isEmployee,
     listScope,

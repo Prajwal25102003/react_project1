@@ -101,3 +101,17 @@ export function getAttendanceDefaultVisibleIds(isPersonalList) {
     return true;
   }).map((column) => column.id);
 }
+
+/** Columns shown in the table for the current attendance scope/role. */
+export function getAttendanceDisplayColumns(
+  visibleColumns,
+  { showingMyAttendance = false, isEmployee = false } = {},
+) {
+  return (visibleColumns || []).filter((column) => {
+    if (showingMyAttendance && column.id === "employeeName") return false;
+    if ((isEmployee || showingMyAttendance) && column.id === "actions") {
+      return false;
+    }
+    return true;
+  });
+}

@@ -3,22 +3,33 @@ import {
   findTeamActivityRows,
   findTeamEmployeeIds,
 } from './dashboardModel.js'
+import { isEmployeeDepartmentHead } from './departmentsModel.js'
+import { isNamedLeaveApprover } from './leaveApprovalHierarchyModel.js'
+import {
+  findLeaveRequestsAwaitingActor,
+  findLeaveRequestsWhereActorIsFutureStep,
+} from './leaveRequestsModel.js'
 import { query } from '../config/db.js'
 import { filterAttendanceForEmployeeFeed } from '../utils/notificationAudience.js'
 
-export async function findNotificationsForOrg(limit = 25) {
+const DEFAULT_FEED_LIMIT = 25
+
+const ACTIVITY_SELECT = `
+  id,
+  title,
+  description,
+  category,
+  activity_time AS "activityTime",
+  status,
+  event_type AS "eventType",
+  subject_employee_id AS "subjectEmployeeId",
+  actor_employee_id AS "actorEmployeeId",
+  meta
+`
+
+export async function findNotificationsForOrg(limit = DEFAULT_FEED_LIMIT) {
   const result = await query(
-    `SELECT
-      id,
-      title,
-      description,
-      category,
-      activity_time AS "activityTime",
-      status,
-      event_type AS "eventType",
-      subject_employee_id AS "subjectEmployeeId",
-      actor_employee_id AS "actorEmployeeId",
-      meta
+    `SELECT ${ACTIVITY_SELECT}
     FROM recent_activities
     ORDER BY activity_time DESC
     LIMIT $1`,
@@ -33,24 +44,14 @@ export async function findNotificationsForOrg(limit = 25) {
  * is fully visible (submit → forward → approve/reject) for every employee,
  * plus all module activities.
  */
-export async function findNotificationsForAdmin(limit = 25) {
+export async function findNotificationsForAdmin(limit = DEFAULT_FEED_LIMIT) {
   return findNotificationsForOrg(limit)
 }
 
 /** Org-wide holiday calendar changes (add / edit / delete / release). */
 export async function findHolidayActivityRows(limit = 10) {
   const result = await query(
-    `SELECT
-      id,
-      title,
-      description,
-      category,
-      activity_time AS "activityTime",
-      status,
-      event_type AS "eventType",
-      subject_employee_id AS "subjectEmployeeId",
-      actor_employee_id AS "actorEmployeeId",
-      meta
+    `SELECT ${ACTIVITY_SELECT}
     FROM recent_activities
     WHERE category = 'Holidays'
     ORDER BY activity_time DESC
@@ -201,17 +202,7 @@ export async function findLeaveDecisionActivityRows(employeeIds, limit = 10) {
   if (ids.length === 0) return []
 
   const result = await query(
-    `SELECT
-      id,
-      title,
-      description,
-      category,
-      activity_time AS "activityTime",
-      status,
-      event_type AS "eventType",
-      subject_employee_id AS "subjectEmployeeId",
-      actor_employee_id AS "actorEmployeeId",
-      meta
+    `SELECT ${ACTIVITY_SELECT}
     FROM recent_activities
     WHERE category = 'Leave'
       AND subject_employee_id = ANY($1::varchar[])
@@ -285,17 +276,7 @@ export async function findPersonalSubjectActivityRows(employeeIds, limit = 10) {
   if (ids.length === 0) return []
 
   const result = await query(
-    `SELECT
-      id,
-      title,
-      description,
-      category,
-      activity_time AS "activityTime",
-      status,
-      event_type AS "eventType",
-      subject_employee_id AS "subjectEmployeeId",
-      actor_employee_id AS "actorEmployeeId",
-      meta
+    `SELECT ${ACTIVITY_SELECT}
     FROM recent_activities
     WHERE category IN ('Employees', 'Departments', 'Attendance', 'Leave')
       AND (
@@ -365,7 +346,10 @@ export async function findPersonalSubjectActivityRows(employeeIds, limit = 10) {
  * Personal attendance/leave plus holiday calendar changes so employees
  * get Holidays sidebar badges and see what admin changed.
  */
-export async function findNotificationsForEmployee(employeeId, limit = 25) {
+export async function findNotificationsForEmployee(
+  employeeId,
+  limit = DEFAULT_FEED_LIMIT,
+) {
   const [personalRows, holidayRows, leaveDecisionRows, subjectRows] =
     await Promise.all([
       findEmployeeActivityRows(employeeId, limit),
@@ -395,7 +379,10 @@ export async function findNotificationsForEmployee(employeeId, limit = 25) {
 /**
  * Team lead: own + department employees' attendance/leave, plus holidays.
  */
-export async function findNotificationsForTeamLead(headEmployeeId, limit = 25) {
+export async function findNotificationsForTeamLead(
+  headEmployeeId,
+  limit = DEFAULT_FEED_LIMIT,
+) {
   const teamIds = await findTeamEmployeeIds(headEmployeeId)
   const subjectIds = [...new Set([headEmployeeId, ...(teamIds || [])])]
 
@@ -418,4 +405,171 @@ export async function findNotificationsForTeamLead(headEmployeeId, limit = 25) {
     limit,
     { reservePersonalLeave: true },
   )
+}
+
+function withAudience(rows, audience) {
+  return (rows || []).map((row) => ({
+    ...row,
+    audience: row.audience || audience,
+  }))
+}
+
+/**
+ * Activities for leaves where this actor is current OR later in the chain.
+ * Current → Approval Needed; future → Awaiting Approval (personalized at map time).
+ */
+export async function findChainApproverLeaveActivities(
+  { role = null, employeeId = null },
+  limit = DEFAULT_FEED_LIMIT,
+) {
+  const [awaiting, future] = await Promise.all([
+    findLeaveRequestsAwaitingActor({ role, employeeId }),
+    findLeaveRequestsWhereActorIsFutureStep({ role, employeeId }),
+  ])
+  const awaitingIds = [
+    ...new Set(
+      (awaiting || [])
+        .map((row) => row.id)
+        .filter(Boolean)
+        .map(String),
+    ),
+  ]
+  const futureIds = [
+    ...new Set(
+      (future || [])
+        .map((row) => row.id)
+        .filter(Boolean)
+        .map(String)
+        .filter((id) => !awaitingIds.includes(id)),
+    ),
+  ]
+  if (awaitingIds.length === 0 && futureIds.length === 0) return []
+
+  const [awaitingRows, futureRows] = await Promise.all([
+    findLeaveActivityRowsForLeaveIds(
+      awaitingIds,
+      Math.max(limit, awaitingIds.length),
+    ),
+    findLeaveActivityRowsForLeaveIds(futureIds, limit),
+  ])
+  return [...(awaitingRows || []), ...(futureRows || [])]
+}
+
+/**
+ * Role-aware activity/notification feed used by both /api/notifications
+ * and dashboard recent activities.
+ * @returns {{ rows: object[], viewer: object }}
+ */
+export async function buildActivityFeedForViewer(
+  user,
+  { limit = DEFAULT_FEED_LIMIT } = {},
+) {
+  const role = user?.role
+  const employeeId = user?.employeeId || null
+
+  if (role === 'employee') {
+    if (!employeeId) {
+      const error = new Error(
+        'Your account is not linked to an employee record',
+      )
+      error.status = 403
+      throw error
+    }
+
+    const [isTeamLead, namedApprover] = await Promise.all([
+      isEmployeeDepartmentHead(employeeId),
+      isNamedLeaveApprover(employeeId),
+    ])
+
+    const baseRows = isTeamLead
+      ? await findNotificationsForTeamLead(employeeId, limit)
+      : await findNotificationsForEmployee(employeeId, limit)
+
+    let chainRows = []
+    if (namedApprover || isTeamLead) {
+      chainRows = await findChainApproverLeaveActivities(
+        { employeeId },
+        limit,
+      )
+    }
+
+    const rows = mergeActivityFeeds(
+      [withAudience(chainRows, 'org'), baseRows],
+      limit,
+      { reservePersonalLeave: true },
+    )
+
+    return {
+      rows,
+      viewer: {
+        employeeId,
+        role,
+        name: user?.name || null,
+        isDepartmentHead: isTeamLead,
+      },
+    }
+  }
+
+  if (role === 'admin') {
+    const [orgRows, chainRows] = await Promise.all([
+      findNotificationsForAdmin(limit),
+      findChainApproverLeaveActivities(
+        { role: 'admin', employeeId },
+        limit,
+      ),
+    ])
+    return {
+      rows: mergeActivityFeeds(
+        [withAudience(chainRows, 'org'), withAudience(orgRows, 'org')],
+        limit,
+      ),
+      viewer: {
+        employeeId,
+        role,
+        name: user?.name || null,
+      },
+    }
+  }
+
+  if (role === 'hr') {
+    const [orgRows, chainRows] = await Promise.all([
+      findNotificationsForOrg(limit),
+      findChainApproverLeaveActivities({ role: 'hr', employeeId }, limit),
+    ])
+
+    let rows
+    if (employeeId) {
+      const personalRows = await findNotificationsForEmployee(
+        employeeId,
+        limit,
+      )
+      rows = mergeActivityFeeds(
+        [
+          withAudience(chainRows, 'org'),
+          withAudience(personalRows, 'self'),
+          withAudience(orgRows, 'org'),
+        ],
+        limit,
+        { reservePersonalLeave: true },
+      )
+    } else {
+      rows = mergeActivityFeeds(
+        [withAudience(chainRows, 'org'), withAudience(orgRows, 'org')],
+        limit,
+      )
+    }
+
+    return {
+      rows,
+      viewer: {
+        employeeId,
+        role,
+        name: user?.name || null,
+      },
+    }
+  }
+
+  const error = new Error('Unauthorized')
+  error.status = 403
+  throw error
 }
