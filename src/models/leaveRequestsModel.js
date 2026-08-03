@@ -630,13 +630,29 @@ export function actionableLeaveApprovalIds(requests, userContext) {
 }
 
 /**
+ * True when the viewer oversees leave queues (not only their own requests).
+ * Used so Pending / in-flight rows stay highlighted in team & org lists.
+ */
+export function viewerOverseesLeaveQueue(userContext = {}) {
+  const role = userContext.role;
+  return (
+    role === "hr" ||
+    role === "admin" ||
+    Boolean(userContext.isDepartmentHead) ||
+    Boolean(userContext.isNamedLeaveApprover)
+  );
+}
+
+/**
  * Badge counts for My / Employees tabs and the leave-requests nav module.
- * - employees: requests awaiting this user's approve/reject, or later in their chain
+ * - employees: requests awaiting this user's approve/reject, later in their chain,
+ *   or (for queue overseers) any Pending leave still in flight
  * - mine: own Pending leave (open / awaiting others), plus any self-actionable
  * - total: mine + employees (module sidebar badge)
  */
 export function leaveScopeNotificationCounts(requests, userContext = {}) {
   const actionableIds = actionableLeaveApprovalIds(requests, userContext);
+  const overseesQueue = viewerOverseesLeaveQueue(userContext);
   const myId = userContext.employeeId
     ? String(userContext.employeeId)
     : "";
@@ -657,13 +673,18 @@ export function leaveScopeNotificationCounts(requests, userContext = {}) {
     }
     if (isMine && row.status === "Pending") {
       mine += 1;
+      continue;
+    }
+    // Team / org overseers: Pending leave still in the pipeline stands out.
+    if (!isMine && overseesQueue && row.status === "Pending") {
+      employees += 1;
     }
   }
 
   return { mine, employees, total: mine + employees };
 }
 
-/** Row highlight: actionable, future-chain awaiting, or own open leave. */
+/** Row highlight: actionable, future-chain, own open leave, or overseen Pending. */
 export function leaveRequestNeedsAttention(request, userContext = {}) {
   if (!request) return false;
   if (isActionableLeaveApproval(request, userContext)) return true;
@@ -671,10 +692,16 @@ export function leaveRequestNeedsAttention(request, userContext = {}) {
   const myId = userContext.employeeId
     ? String(userContext.employeeId)
     : "";
-  return (
+  if (
     Boolean(myId) &&
     String(request.employeeId) === myId &&
     request.status === "Pending"
+  ) {
+    return true;
+  }
+  // HR / Admin / Team Lead / named approver: keep in-flight Pending rows visible.
+  return (
+    request.status === "Pending" && viewerOverseesLeaveQueue(userContext)
   );
 }
 

@@ -37,6 +37,8 @@ export function useNav(notifications = []) {
       const userContext = {
         employeeId: user?.employeeId,
         role: user?.role,
+        isDepartmentHead: Boolean(user?.isDepartmentHead),
+        isNamedLeaveApprover: Boolean(user?.isNamedLeaveApprover),
       };
       if (user?.role === "admin") {
         setLeaveApprovalsBadge(
@@ -50,7 +52,13 @@ export function useNav(notifications = []) {
     } catch {
       setLeaveApprovalsBadge(0);
     }
-  }, [canApproveLeaves, user?.employeeId, user?.role]);
+  }, [
+    canApproveLeaves,
+    user?.employeeId,
+    user?.role,
+    user?.isDepartmentHead,
+    user?.isNamedLeaveApprover,
+  ]);
 
   useEffect(() => {
     loadLeaveApprovalsBadge();
