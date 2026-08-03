@@ -90,6 +90,54 @@ export async function expandEmployeeIdsWithDepartmentHeads(
   return uniqueIds(base, headIds)
 }
 
+/**
+ * Audience meta for bulk attendance import:
+ * subjects + their department heads, and the departments involved.
+ */
+export async function buildImportAudienceMeta(
+  employeeIds,
+  { findEmployeeById, findDepartmentById } = {},
+) {
+  const base = uniqueIds(employeeIds)
+  const departmentIds = []
+  const headIds = []
+
+  if (typeof findEmployeeById === 'function') {
+    for (const id of base) {
+      const employee = await findEmployeeById(id)
+      if (!employee?.departmentId) continue
+      departmentIds.push(employee.departmentId)
+      if (typeof findDepartmentById === 'function') {
+        const dept = await findDepartmentById(employee.departmentId)
+        if (dept?.headEmployeeId) headIds.push(dept.headEmployeeId)
+      }
+    }
+  }
+
+  const departments = uniqueIds(departmentIds)
+  return {
+    departmentId: departments[0] || null,
+    departmentIds: departments,
+    employeeIds: uniqueIds(base, headIds),
+  }
+}
+
+/**
+ * Attendance rows for a regular employee feed: only their own mark/remove.
+ * Bulk import notices are org/team-lead scoped (admin/HR/dept head).
+ */
+export function filterAttendanceForEmployeeFeed(rows, employeeId) {
+  const viewer = String(employeeId || '')
+  if (!viewer) return rows || []
+
+  return (rows || []).filter((row) => {
+    if (String(row?.category || '') !== 'Attendance') return true
+    const eventType = String(row?.eventType || '')
+    if (eventType === 'attendance.imported') return false
+    return String(row?.subjectEmployeeId || '') === viewer
+  })
+}
+
 /** True when the viewer is the subject or listed in meta.employeeIds. */
 export function viewerIsActivityAudience(row, viewerEmployeeId, meta = {}) {
   if (!viewerEmployeeId) return false

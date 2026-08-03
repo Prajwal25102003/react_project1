@@ -24,7 +24,7 @@ import {
 import { formatDbError } from '../utils/formatDbError.js'
 import {
   buildEmployeeAudienceMeta,
-  expandEmployeeIdsWithDepartmentHeads,
+  buildImportAudienceMeta,
 } from '../utils/notificationAudience.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 import { calculateWorkingHours } from '../utils/workingHours.js'
@@ -475,10 +475,10 @@ export async function importAttendanceHandler(req, res) {
 
     if (imported > 0) {
       const actorLabel = formatActorLabel(actorFromUser(req.user))
-      const uniqueEmployeeIds = await expandEmployeeIdsWithDepartmentHeads(
-        employeeIds,
-        { findEmployeeById, findDepartmentById },
-      )
+      const audience = await buildImportAudienceMeta(employeeIds, {
+        findEmployeeById,
+        findDepartmentById,
+      })
       const uniqueAttendanceIds = [...new Set(attendanceIds.filter(Boolean))]
       await createRecentActivity({
         title: 'Attendance Imported',
@@ -490,7 +490,9 @@ export async function importAttendanceHandler(req, res) {
         meta: {
           imported,
           updated: 0,
-          employeeIds: uniqueEmployeeIds,
+          departmentId: audience.departmentId,
+          departmentIds: audience.departmentIds,
+          employeeIds: audience.employeeIds,
           attendanceIds: uniqueAttendanceIds,
           actorName: req.user?.name || null,
           actorRole: req.user?.role || null,
