@@ -552,26 +552,25 @@ function attendanceCopy({
   const dateLabel = date ? formatDisplayDate(date) : ''
   const hasCheckIn = checkIn && checkIn !== '—' && checkIn !== '-'
   const byLabel = formatActorLabel({ role: actorRole, name: actorName })
-  const byClause = byLabel ? ` by ${byLabel}` : ''
+  const byClause = byLabel && !isActor ? ` by ${byLabel}` : ''
+  const onDate = dateLabel ? ` on ${dateLabel}` : ''
 
   if (status === 'Absent') {
     if (isActor && !isSubject) {
       return {
         title: 'You Marked Absent',
-        description: dateLabel
-          ? `You marked ${subjectName} Absent on ${dateLabel}.`
-          : `You marked ${subjectName} Absent.`,
+        description: `You marked ${subjectName} Absent${onDate}.`,
+      }
+    }
+    if (isSubject) {
+      return {
+        title: 'Your Attendance Updated',
+        description: `Your attendance has been marked Absent${onDate}${byClause}.`,
       }
     }
     return {
       title: 'Marked Absent',
-      description: isSubject
-        ? dateLabel
-          ? `You were marked Absent on ${dateLabel}${isActor ? '' : byClause}.`
-          : `You were marked Absent${isActor ? '' : byClause}.`
-        : dateLabel
-          ? `${subjectName} was marked Absent on ${dateLabel}${byClause}.`
-          : `${subjectName} was marked Absent${byClause}.`,
+      description: `${subjectName} was marked Absent${onDate}${byClause}.`,
     }
   }
 
@@ -581,24 +580,22 @@ function attendanceCopy({
         title: 'You Recorded Half Day',
         description: hasCheckIn
           ? `You recorded a half day for ${subjectName} at ${checkIn}.`
-          : dateLabel
-            ? `You recorded a half day for ${subjectName} on ${dateLabel}.`
-            : `You recorded a half day for ${subjectName}.`,
+          : `You recorded a half day for ${subjectName}${onDate}.`,
+      }
+    }
+    if (isSubject) {
+      return {
+        title: 'Your Attendance Updated',
+        description: hasCheckIn
+          ? `Your attendance has been marked Half Day at ${checkIn}${byClause}.`
+          : `Your attendance has been marked Half Day${onDate}${byClause}.`,
       }
     }
     return {
       title: 'Half Day Recorded',
-      description: isSubject
-        ? hasCheckIn
-          ? `Half-day attendance recorded at ${checkIn}.`
-          : dateLabel
-            ? `Half-day attendance recorded on ${dateLabel}.`
-            : 'Half-day attendance recorded.'
-        : hasCheckIn
-          ? `${subjectName} recorded a half day at ${checkIn}.`
-          : dateLabel
-            ? `${subjectName} recorded a half day on ${dateLabel}.`
-            : `${subjectName} recorded a half day.`,
+      description: hasCheckIn
+        ? `${subjectName} recorded a half day at ${checkIn}.`
+        : `${subjectName} recorded a half day${onDate}.`,
     }
   }
 
@@ -607,25 +604,57 @@ function attendanceCopy({
       title: 'You Marked Attendance',
       description: hasCheckIn
         ? `You marked ${subjectName} Present at ${checkIn}.`
-        : dateLabel
-          ? `You marked ${subjectName} Present on ${dateLabel}.`
-          : `You marked ${subjectName} Present.`,
+        : `You marked ${subjectName} Present${onDate}.`,
+    }
+  }
+
+  if (isSubject) {
+    return {
+      title: 'Your Attendance Updated',
+      description: hasCheckIn
+        ? `Your attendance has been marked Present at ${checkIn}${byClause}.`
+        : `Your attendance has been marked Present${onDate}${byClause}.`,
     }
   }
 
   return {
     title: 'Attendance Marked',
-    description: isSubject
-      ? hasCheckIn
-        ? `Check-in recorded at ${checkIn}.`
-        : dateLabel
-          ? `Attendance marked Present on ${dateLabel}.`
-          : 'Attendance marked Present.'
-      : hasCheckIn
-        ? `${subjectName} checked in at ${checkIn}.`
-        : dateLabel
-          ? `${subjectName} was marked Present on ${dateLabel}.`
-          : `${subjectName} was marked Present.`,
+    description: hasCheckIn
+      ? `${subjectName} checked in at ${checkIn}.`
+      : `${subjectName} was marked Present${onDate}.`,
+  }
+}
+
+function attendanceRemovedCopy({
+  isActor,
+  isSubject,
+  subjectName,
+  date,
+  actorRole,
+  actorName,
+}) {
+  const dateLabel = date ? formatDisplayDate(date) : ''
+  const onDate = dateLabel ? ` on ${dateLabel}` : ''
+  const byLabel = formatActorLabel({ role: actorRole, name: actorName })
+  const byClause = byLabel ? ` by ${byLabel}` : ''
+
+  if (isActor && !isSubject) {
+    return {
+      title: 'You Removed Attendance',
+      description: `You removed attendance for ${subjectName}${onDate}.`,
+    }
+  }
+
+  if (isSubject) {
+    return {
+      title: 'Your Attendance Removed',
+      description: `Your attendance has been removed${onDate}${byClause}.`,
+    }
+  }
+
+  return {
+    title: 'Attendance Removed',
+    description: `Attendance for ${subjectName}${onDate} was removed${byClause}.`,
   }
 }
 
@@ -1096,6 +1125,18 @@ export function personalizeActivityMessage(row, viewer = {}) {
       status: meta.attendanceStatus || row.status || 'Present',
       date: meta.attendanceDate || '',
       checkIn: meta.checkIn || '',
+      actorRole,
+      actorName,
+    }))
+  } else if (
+    eventType === 'attendance.removed' ||
+    String(row.title || '').toLowerCase() === 'attendance removed'
+  ) {
+    ;({ title, description } = attendanceRemovedCopy({
+      isActor,
+      isSubject,
+      subjectName,
+      date: meta.attendanceDate || '',
       actorRole,
       actorName,
     }))

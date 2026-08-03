@@ -24,7 +24,10 @@ import {
   mergeActivityFeeds,
   withSelfOrTeamAudience,
 } from '../models/notificationsModel.js'
-import { viewerIsActivityAudience } from '../utils/notificationAudience.js'
+import {
+  filterAttendanceForEmployeeFeed,
+  viewerIsActivityAudience,
+} from '../utils/notificationAudience.js'
 import { formatDbError } from '../utils/formatDbError.js'
 import { mapActivityRowsAsync } from '../utils/relativeTime.js'
 
@@ -372,6 +375,10 @@ async function buildEmployeeDashboard(req, res) {
         : Promise.resolve([]),
     ])
 
+  const scopedSubjectRows = isTeamLead
+    ? subjectRows
+    : filterAttendanceForEmployeeFeed(subjectRows, employeeId)
+
   const activityRows = mergeScopedWithHolidays(
     scopedRows,
     holidayRows,
@@ -381,7 +388,7 @@ async function buildEmployeeDashboard(req, res) {
       [
         ...(awaitingRows || []),
         ...(leaveDecisionRows || []),
-        ...(subjectRows || []),
+        ...(scopedSubjectRows || []),
       ],
       employeeId,
     ),

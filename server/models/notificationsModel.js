@@ -4,6 +4,7 @@ import {
   findTeamEmployeeIds,
 } from './dashboardModel.js'
 import { query } from '../config/db.js'
+import { filterAttendanceForEmployeeFeed } from '../utils/notificationAudience.js'
 
 export async function findNotificationsForOrg(limit = 25) {
   const result = await query(
@@ -271,8 +272,9 @@ export async function findLeaveActivityRowsForLeaveIds(leaveIds, limit = 25) {
  * Module notices aimed at one or more employees:
  * - subject_employee_id match
  * - meta.employeeIds contains any of them
- * - meta.departmentId / departmentIds matches their current department(s)
- * Categories: Employees, Departments, Attendance, and Leave (when employeeIds set).
+ * - Departments: departmentId / departmentIds matches viewers' departments
+ * - Attendance: departmentId / departmentIds matches only when a viewer is
+ *   that department's head (team lead), so peers do not see each other's rows
  */
 export async function findPersonalSubjectActivityRows(employeeIds, limit = 10) {
   const ids = [
@@ -304,8 +306,7 @@ export async function findPersonalSubjectActivityRows(employeeIds, limit = 10) {
           AND meta->'employeeIds' ?| $1::text[]
         )
         OR (
-          -- Whole-department notices only for Department events
-          -- (create/update/head change), not every employee/attendance row.
+          -- Whole-department notices for Department events (all members).
           category = 'Departments'
           AND meta IS NOT NULL
           AND meta->>'departmentId' IS NOT NULL
@@ -326,6 +327,29 @@ export async function findPersonalSubjectActivityRows(employeeIds, limit = 10) {
             WHERE e.id = ANY($1::varchar[])
               AND e.department_id IS NOT NULL
               AND meta->'departmentIds' ? e.department_id
+          )
+        )
+        OR (
+          -- Attendance: only the department head receives dept-scoped notices.
+          category = 'Attendance'
+          AND meta IS NOT NULL
+          AND meta->>'departmentId' IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM departments d
+            WHERE d.id = meta->>'departmentId'
+              AND d.head_employee_id = ANY($1::varchar[])
+          )
+        )
+        OR (
+          category = 'Attendance'
+          AND meta IS NOT NULL
+          AND jsonb_typeof(meta->'departmentIds') = 'array'
+          AND EXISTS (
+            SELECT 1
+            FROM departments d
+            WHERE d.head_employee_id = ANY($1::varchar[])
+              AND meta->'departmentIds' ? d.id
           )
         )
       )
@@ -350,10 +374,16 @@ export async function findNotificationsForEmployee(employeeId, limit = 25) {
       findPersonalSubjectActivityRows(employeeId, limit),
     ])
 
+  // Attendance: employee sees only their own mark/remove (not bulk imports).
+  const scopedSubjectRows = filterAttendanceForEmployeeFeed(
+    subjectRows,
+    employeeId,
+  )
+
   return mergeActivityFeeds(
     [
       withSelfOrTeamAudience(leaveDecisionRows, employeeId),
-      withSelfOrTeamAudience(subjectRows, employeeId),
+      withSelfOrTeamAudience(scopedSubjectRows, employeeId),
       withSelfOrTeamAudience(personalRows, employeeId),
       (holidayRows || []).map((row) => ({ ...row, audience: 'org' })),
     ],
