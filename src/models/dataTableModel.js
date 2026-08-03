@@ -1,7 +1,7 @@
 import { isJoiningInHiredPeriod } from "./employeesModel.js";
 
 export const DEFAULT_PAGE_SIZE = 5;
-export const PAGE_SIZE_OPTIONS = [5, 10, 25];
+export const PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
 
 export function getCellValue(row, accessor) {
   if (!accessor) return "";
