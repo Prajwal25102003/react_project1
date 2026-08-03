@@ -270,7 +270,7 @@ export async function getLeaveRequests(req, res) {
     const canApprove = asHr || asAdmin || isHead || namedApprover
 
     if (asAdmin) {
-      // Hierarchy-driven Admin queue: accept legacy "admin-hr" and current "admin".
+      // Admin oversees every leave request (action buttons still gate on current step).
       if (
         scope &&
         scope !== "admin" &&
@@ -278,32 +278,10 @@ export async function getLeaveRequests(req, res) {
         scope !== "approvals"
       ) {
         return res.status(403).json({
-          message: "Admin can only view leave requests in the Admin approval queue",
+          message: "Admin can only view leave requests in the Admin leave list",
         })
       }
-      const byId = new Map()
-      // Actionable now: current hierarchy step is Admin.
-      for (const row of await findLeaveRequestsAwaitingActor({
-        role: "admin",
-        employeeId,
-      })) {
-        byId.set(row.id, row)
-      }
-      // Later in chain: Admin step exists but earlier approvers act first.
-      for (const row of await findLeaveRequestsWhereActorIsFutureStep({
-        role: "admin",
-        employeeId,
-      })) {
-        byId.set(row.id, row)
-      }
-      // History/visibility: any request whose snapshot includes an Admin step
-      // (employee / dept-head / HR leave — whatever hierarchy configured).
-      for (const row of await findLeaveRequestsWithApproverRole("admin")) {
-        byId.set(row.id, row)
-      }
-      const leaveRequests = [...byId.values()].sort((a, b) =>
-        String(b.id).localeCompare(String(a.id), undefined, { numeric: true }),
-      )
+      const leaveRequests = await findAllLeaveRequests()
       return res.json({ leaveRequests, scope: "admin" })
     }
 
