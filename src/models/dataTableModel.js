@@ -166,6 +166,22 @@ export function processTableRows(
   return paginateRows(sorted, page, pageSize);
 }
 
+/** 1-based page that contains `rowId` after search/filter/sort (0 if missing). */
+export function pageForRowId(
+  rows,
+  rowId,
+  { search, searchKeys, columnFilters, sort, pageSize } = {},
+) {
+  if (!rowId) return 0;
+  const searched = filterBySearch(rows, search, searchKeys);
+  const filtered = filterByColumns(searched, columnFilters);
+  const sorted = sortRows(filtered, sort);
+  const index = sorted.findIndex((row) => String(row?.id) === String(rowId));
+  if (index < 0) return 0;
+  const size = Math.max(1, pageSize || DEFAULT_PAGE_SIZE);
+  return Math.floor(index / size) + 1;
+}
+
 export function defaultVisibleColumnIds(columns) {
   return columns.map((column) => column.id);
 }

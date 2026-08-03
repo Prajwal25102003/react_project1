@@ -147,7 +147,11 @@ export function bannerNotificationTitle(message) {
       if (/in progress|forwarded/i.test(original)) {
         return `Leave Request In Progress${lopSuffix}`;
       }
-      if (/sent/i.test(original) || status === "Pending") {
+      if (
+        /received|submitted|waiting/i.test(original) ||
+        /sent/i.test(original) ||
+        status === "Pending"
+      ) {
         return `Leave Request Received${lopSuffix}`;
       }
       if (status === "Approved" || status === "TeamLeadApproved") {

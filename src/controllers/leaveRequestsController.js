@@ -499,6 +499,7 @@ export function useLeaveRequests() {
     if (
       canCancelLeaveRequest(request, {
         employeeId: user?.employeeId,
+        role: user?.role,
       })
     ) {
       actions.push({

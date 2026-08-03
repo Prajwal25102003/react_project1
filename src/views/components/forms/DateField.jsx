@@ -21,6 +21,7 @@ import {
 import { SELECT_TRIGGER_CLASS, SELECT_TRIGGER_ERROR_CLASS } from "../../../models/formLayoutModel.js";
 
 const PANEL_WIDTH = 256; // 16rem
+const PANEL_WIDTH_COMPACT = 212; // ~13.25rem
 const PANEL_GAP = 4;
 
 function CalendarIcon() {
@@ -103,6 +104,8 @@ function DateField({
   hasError = false,
   placeholder,
   showClear = true,
+  showToday = true,
+  compact = false,
 }) {
   const isMonth = type === "month";
   const isYear = type === "year";
@@ -121,6 +124,7 @@ function DateField({
     placeholder ||
     (isYear ? "Select year" : isMonth ? "Select month" : "Select date");
   const yearOptions = getYearGrid(view.year);
+  const panelWidth = compact ? PANEL_WIDTH_COMPACT : PANEL_WIDTH;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -139,12 +143,12 @@ function DateField({
       if (!trigger) return;
 
       const rect = trigger.getBoundingClientRect();
-      const width = Math.min(PANEL_WIDTH, window.innerWidth - 16);
+      const width = Math.min(panelWidth, window.innerWidth - 16);
       const left = Math.min(
         Math.max(8, rect.left),
         window.innerWidth - width - 8,
       );
-      const estimatedHeight = 320;
+      const estimatedHeight = compact ? 260 : 320;
       const spaceBelow = window.innerHeight - rect.bottom - PANEL_GAP;
       const spaceAbove = rect.top - PANEL_GAP;
       const openUpward =
@@ -168,7 +172,7 @@ function DateField({
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [open, panel, isMonth, isYear]);
+  }, [open, panel, isMonth, isYear, panelWidth, compact]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -255,9 +259,15 @@ function DateField({
             role="dialog"
             aria-label={ariaLabel || "Choose date"}
             style={menuStyle}
-            className="rounded-xl border border-gray-200 bg-white p-3 shadow-theme-lg"
+            className={`rounded-xl border border-gray-200 bg-white shadow-theme-lg ${
+              compact ? "p-2" : "p-3"
+            }`}
           >
-            <div className="mb-2.5 flex items-center justify-between gap-1">
+            <div
+              className={`flex items-center justify-between gap-1 ${
+                compact ? "mb-1.5" : "mb-2.5"
+              }`}
+            >
               <div className="flex items-center gap-0.5">
                 {panel !== "year" && !isMonth && !isYear ? (
                   <button
@@ -314,7 +324,9 @@ function DateField({
                     current === "year" ? (isMonth ? "month" : "day") : "year",
                   );
                 }}
-                className="rounded-md px-1.5 py-0.5 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 hover:text-brand-500"
+                className={`rounded-md px-1.5 py-0.5 font-medium text-gray-800 transition-colors hover:bg-gray-50 hover:text-brand-500 ${
+                  compact ? "text-theme-xs" : "text-sm"
+                }`}
                 title={isYear ? undefined : "Change year"}
               >
                 {headerTitle}
@@ -370,7 +382,7 @@ function DateField({
             </div>
 
             {panel === "year" || isYear ? (
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className={`grid grid-cols-3 ${compact ? "gap-1" : "gap-1.5"}`}>
                 {yearOptions.map((year) => {
                   const selected =
                     parseIsoYear(value) === year ||
@@ -390,7 +402,9 @@ function DateField({
                       key={year}
                       type="button"
                       onClick={() => pickYear(year)}
-                      className={`rounded-md px-1.5 py-2 text-theme-xs font-medium transition-colors ${yearClass}`}
+                      className={`rounded-md px-1 text-theme-xs font-medium transition-colors ${
+                        compact ? "py-1.5" : "px-1.5 py-2"
+                      } ${yearClass}`}
                     >
                       {year}
                     </button>
@@ -398,7 +412,7 @@ function DateField({
                 })}
               </div>
             ) : isMonth ? (
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className={`grid grid-cols-3 ${compact ? "gap-1" : "gap-1.5"}`}>
                 {DATE_PICKER_MONTHS_SHORT.map((label, monthIndex) => {
                   const iso = toIsoMonth(view.year, monthIndex);
                   const active = value === iso;
@@ -407,7 +421,9 @@ function DateField({
                       key={label}
                       type="button"
                       onClick={() => selectMonth(view.year, monthIndex)}
-                      className={`rounded-md px-1.5 py-2 text-theme-xs font-medium transition-colors ${
+                      className={`rounded-md px-1 text-theme-xs font-medium transition-colors ${
+                        compact ? "py-1.5" : "px-1.5 py-2"
+                      } ${
                         active
                           ? "bg-brand-500 text-white"
                           : "text-gray-800 hover:bg-gray-50"
@@ -420,11 +436,15 @@ function DateField({
               </div>
             ) : (
               <>
-                <div className="mb-1 grid grid-cols-7 text-center">
+                <div className="mb-0.5 grid grid-cols-7 text-center">
                   {DATE_PICKER_WEEKDAYS.map((label) => (
                     <div
                       key={label}
-                      className="py-0.5 text-[11px] font-medium text-gray-500"
+                      className={`font-medium text-gray-500 ${
+                        compact
+                          ? "py-0.5 text-[10px]"
+                          : "py-0.5 text-[11px]"
+                      }`}
                     >
                       {label}
                     </div>
@@ -469,7 +489,9 @@ function DateField({
                             ),
                           );
                         }}
-                        className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-theme-xs font-medium transition-colors ${dayClass}`}
+                        className={`mx-auto flex items-center justify-center rounded-full text-theme-xs font-medium transition-colors ${
+                          compact ? "h-6 w-6" : "h-7 w-7"
+                        } ${dayClass}`}
                       >
                         {cell.day}
                       </button>
@@ -479,28 +501,38 @@ function DateField({
               </>
             )}
 
-            <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-gray-100 pt-2.5">
-              <button
-                type="button"
-                onClick={goToday}
-                className="rounded-md px-2 py-1 text-theme-xs font-medium text-brand-500 hover:bg-brand-50"
+            {showToday || (showClear && value) ? (
+              <div
+                className={`flex items-center justify-between gap-2 border-t border-gray-100 ${
+                  compact ? "mt-1.5 pt-1.5" : "mt-2.5 pt-2.5"
+                }`}
               >
-                {isYear ? "This year" : "Today"}
-              </button>
-              {showClear && value ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onChange?.("");
-                    setOpen(false);
-                  }}
-                  className="rounded-md px-2 py-1 text-theme-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
+                {showToday ? (
+                  <button
+                    type="button"
+                    onClick={goToday}
+                    className="rounded-md px-2 py-1 text-theme-xs font-medium text-brand-500 hover:bg-brand-50"
+                  >
+                    {isYear ? "This year" : "Today"}
+                  </button>
+                ) : (
+                  <span />
+                )}
+                {showClear && value ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onChange?.("");
+                      setOpen(false);
+                    }}
+                    className="rounded-md px-2 py-1 text-theme-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>,
           document.body,
         )

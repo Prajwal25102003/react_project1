@@ -182,7 +182,7 @@ export function formatActorLabel({ role, name } = {}) {
 
 /**
  * Approver label for leave decisions.
- * Examples: HR Manager, HR Manager Rahul, Dept Head, Team Lead Sarah
+ * Examples: HR Manager, HR Manager Rahul, Team Lead, Team Lead Sarah
  */
 export function formatApproverLabel({ role, name, stepLabel } = {}) {
   const person = firstName(name)

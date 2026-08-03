@@ -8,16 +8,25 @@ export const APPROVER_KINDS = ['department_head', 'role', 'employee']
 export const APPROVER_ROLES = ['hr', 'admin']
 
 export const CATEGORY_LABELS = {
-  employee: 'Employee leave',
-  department_head: 'Department head leave',
-  hr: 'HR leave',
+  employee: 'Employee Leave',
+  department_head: 'Team Lead Leave',
+  hr: 'HR Leave',
 }
 
 export const CATEGORY_APPLIES_TO = {
   employee: 'Employees',
-  department_head: 'Department heads',
+  department_head: 'Team leads (non-HR department heads)',
   hr: 'Human Resources department head only',
 }
+
+/** Matches client `maxStepsForCategory` — one step per allowed approver type. */
+export function maxStepsForCategory(category) {
+  if (category === 'hr') return 1
+  if (category === 'department_head') return APPROVER_ROLES.length
+  return APPROVER_ROLES.length + 1
+}
+
+export const HIERARCHY_NAME_MAX_LENGTH = 120
 
 const HIERARCHY_SELECT = `
   h.id,
@@ -67,7 +76,7 @@ export function historyActorRoleForApprover(step, fallbackRole = 'employee') {
 
 export function stepDisplayLabel(step) {
   if (!step) return 'Approver'
-  if (step.approverKind === 'department_head') return 'Dept Head'
+  if (step.approverKind === 'department_head') return 'Team Lead'
   if (step.approverKind === 'role' && step.approverRole === 'hr') return 'HR'
   if (step.approverKind === 'role' && step.approverRole === 'admin') return 'Admin'
   if (step.approverKind === 'employee') {
@@ -81,11 +90,9 @@ export function stepDisplayLabel(step) {
  * That person alone uses the HR leave chain; other HR staff are employees.
  */
 export function isHrDepartmentHeadRequester({
-  role,
   employeeId,
   departmentHeadId,
   departmentName,
-  requesterIsHr = false,
 } = {}) {
   const hasDepartmentContext =
     departmentName != null || departmentHeadId != null
@@ -99,8 +106,9 @@ export function isHrDepartmentHeadRequester({
     )
   }
 
-  // Fallback when only the login role is available.
-  return role === 'hr' || requesterIsHr
+  // Without department context we cannot confirm HR head vs HR staff.
+  // Prefer the employee chain over miscategorizing non-head HR users.
+  return false
 }
 
 /**
@@ -238,8 +246,9 @@ export async function findAllHierarchiesWithSteps() {
   }))
 }
 
-export async function findHierarchyByCategory(category) {
-  const result = await query(
+export async function findHierarchyByCategory(category, client = null) {
+  const runner = client || { query }
+  const result = await runner.query(
     `SELECT ${HIERARCHY_SELECT}
      FROM leave_approval_hierarchies h
      WHERE h.category = $1
@@ -249,7 +258,7 @@ export async function findHierarchyByCategory(category) {
   const hierarchy = result.rows[0] || null
   if (!hierarchy) return null
 
-  const steps = await findStepsByHierarchyId(hierarchy.id)
+  const steps = await findStepsByHierarchyId(hierarchy.id, client)
   return { ...hierarchy, steps }
 }
 
@@ -269,9 +278,10 @@ export async function findActiveHierarchyByCategory(category) {
   return { ...hierarchy, steps }
 }
 
-export async function findStepsByHierarchyId(hierarchyId) {
+export async function findStepsByHierarchyId(hierarchyId, client = null) {
   if (!hierarchyId) return []
-  const result = await query(
+  const runner = client || { query }
+  const result = await runner.query(
     `SELECT ${STEP_SELECT}
      FROM leave_approval_hierarchy_steps s
      LEFT JOIN employees e ON e.id = s.approver_employee_id
@@ -331,12 +341,17 @@ export async function isNamedLeaveApprover(employeeId) {
   return result.rowCount > 0
 }
 
-export async function replaceHierarchySteps(category, { name, steps }) {
-  const client = await pool.connect()
+/**
+ * Replace steps for a category. Pass `client` to join an outer transaction
+ * (caller owns BEGIN/COMMIT). Without `client`, this function is atomic alone.
+ */
+export async function replaceHierarchySteps(category, { name, steps }, client = null) {
+  const ownsClient = !client
+  const runner = client || (await pool.connect())
   try {
-    await client.query('BEGIN')
+    if (ownsClient) await runner.query('BEGIN')
 
-    const hierarchyResult = await client.query(
+    const hierarchyResult = await runner.query(
       `SELECT id FROM leave_approval_hierarchies WHERE category = $1 LIMIT 1`,
       [category],
     )
@@ -353,7 +368,7 @@ export async function replaceHierarchySteps(category, { name, steps }) {
       CATEGORY_LABELS[category] ||
       category
 
-    await client.query(
+    await runner.query(
       `UPDATE leave_approval_hierarchies
        SET name = $2,
            updated_at = NOW()
@@ -361,32 +376,40 @@ export async function replaceHierarchySteps(category, { name, steps }) {
       [hierarchyId, nextName],
     )
 
-    await client.query(
+    await runner.query(
       `DELETE FROM leave_approval_hierarchy_steps WHERE hierarchy_id = $1`,
       [hierarchyId],
     )
 
-    for (const step of steps) {
-      await client.query(
-        `INSERT INTO leave_approval_hierarchy_steps (
-          hierarchy_id, step_order, approver_kind, approver_role, approver_employee_id
-        ) VALUES ($1, $2, $3, $4, $5)`,
-        [
+    if (steps?.length) {
+      const values = []
+      const params = []
+      let p = 1
+      for (const step of steps) {
+        values.push(`($${p++}, $${p++}, $${p++}, $${p++}, $${p++})`)
+        params.push(
           hierarchyId,
           step.stepOrder,
           step.approverKind,
           step.approverRole || null,
           step.approverEmployeeId || null,
-        ],
+        )
+      }
+      await runner.query(
+        `INSERT INTO leave_approval_hierarchy_steps (
+          hierarchy_id, step_order, approver_kind, approver_role, approver_employee_id
+        ) VALUES ${values.join(', ')}`,
+        params,
       )
     }
 
-    await client.query('COMMIT')
-    return findHierarchyByCategory(category)
+    const updated = await findHierarchyByCategory(category, runner)
+    if (ownsClient) await runner.query('COMMIT')
+    return updated
   } catch (error) {
-    await client.query('ROLLBACK')
+    if (ownsClient) await runner.query('ROLLBACK')
     throw error
   } finally {
-    client.release()
+    if (ownsClient) runner.release()
   }
 }

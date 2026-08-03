@@ -3,7 +3,6 @@ import { FieldError, RequiredMark } from "../components/forms/FormHelpers.jsx";
 import SelectField from "../components/forms/SelectField.jsx";
 import { PlusIcon } from "../icons/ActionIcons.jsx";
 import {
-  APPROVER_KIND_OPTIONS,
   CATEGORY_DESCRIPTIONS,
   CATEGORY_LABELS,
   approverTypeSelectValue,
@@ -26,6 +25,7 @@ function LeaveHierarchyFormModal({
   onStepChange,
   onAddStep,
   canAddStep = true,
+  stepApproverOptions = [],
   onRemoveStep,
   onMoveStep,
   onSubmit,
@@ -63,6 +63,7 @@ function LeaveHierarchyFormModal({
               onChange={(event) => onChange("name", event.target.value)}
               className={fieldErrors.name ? INPUT_ERROR_CLASS : INPUT_CLASS}
               placeholder="Employee leave"
+              maxLength={120}
             />
             <FieldError message={fieldErrors.name} />
           </div>
@@ -79,12 +80,12 @@ function LeaveHierarchyFormModal({
               title={
                 canAddStep
                   ? "Add step"
-                  : "Each approver type can only appear once"
+                  : "All allowed approver types are already used"
               }
-              aria-label="Add step"
-              className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-theme-xs font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <PlusIcon />
+              Add step
             </button>
           </div>
           <FieldError message={fieldErrors.steps} />
@@ -94,6 +95,7 @@ function LeaveHierarchyFormModal({
         <div className="custom-scrollbar mt-3 max-h-[25.5rem] min-h-0 space-y-3 overflow-y-auto overscroll-contain px-1 pb-1">
           {(form.steps || []).map((step, index) => {
             const stepError = fieldErrors[`step-${index}`];
+            const typeOptions = stepApproverOptions[index] || [];
             return (
               <div
                 key={`step-${index}`}
@@ -141,7 +143,7 @@ function LeaveHierarchyFormModal({
                       }
                       ariaLabel={`Step ${index + 1} approver type`}
                       hasError={Boolean(stepError)}
-                      options={APPROVER_KIND_OPTIONS}
+                      options={typeOptions}
                     />
                   </div>
 
@@ -161,13 +163,21 @@ function LeaveHierarchyFormModal({
           })}
         </div>
 
-        <div className="flex shrink-0 items-center justify-center border-t border-gray-100 pt-4">
+        <div className="flex shrink-0 items-center justify-center gap-3 border-t border-gray-100 pt-4">
           <button
             type="submit"
             disabled={saving}
             className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save hierarchy"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:opacity-60"
+          >
+            Cancel
           </button>
         </div>
       </form>
