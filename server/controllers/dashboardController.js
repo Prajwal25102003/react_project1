@@ -5,7 +5,10 @@ import {
   normalizeNewEmployeesPeriod,
 } from '../models/dashboardModel.js'
 import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
-import { findLeaveRequestsForAdminApprovals } from '../models/leaveRequestsModel.js'
+import {
+  findLeaveRequestsAwaitingActor,
+  findLeaveRequestsWhereActorIsFutureStep,
+} from '../models/leaveRequestsModel.js'
 import {
   buildActivityFeedForViewer,
 } from '../models/notificationsModel.js'
@@ -20,13 +23,21 @@ const PERIOD_LABELS = {
 
 const RECENT_ACTIVITY_LIMIT = 25
 
+/** Footer for the pending-leave KPI: actionable vs later-in-chain. */
+function formatPendingLeaveTrend(actionable, inFlow) {
+  if (actionable === 0 && inFlow === 0) return 'all clear'
+  const parts = [`${actionable} needs review`]
+  if (inFlow > 0) parts.push(`${inFlow} in flow`)
+  return parts.join(' · ')
+}
+
 function buildOrgPrimaryMetrics(
   stats,
   periodLabel,
   period = 'month',
   {
     includeLeave = true,
-    leaveLabel = 'Pending Leave',
+    leaveLabel = 'Pending Leave Request',
     leaveHref = '/leave-requests?status=Pending',
   } = {},
 ) {
@@ -38,6 +49,7 @@ function buildOrgPrimaryMetrics(
   const inactiveRate =
     total > 0 ? Number(((inactive / total) * 100).toFixed(1)) : 0
   const pendingLeave = stats.pendingLeaveRequests || 0
+  const pendingLeaveInFlow = stats.pendingLeaveInFlow || 0
   const hiredPeriod = normalizeNewEmployeesPeriod(period)
 
   const metrics = [
@@ -80,7 +92,7 @@ function buildOrgPrimaryMetrics(
       id: 'pending-leave',
       label: leaveLabel,
       value: String(pendingLeave),
-      trend: pendingLeave > 0 ? 'needs review' : 'all clear',
+      trend: formatPendingLeaveTrend(pendingLeave, pendingLeaveInFlow),
       trendUp: pendingLeave === 0,
       href: leaveHref,
     })
@@ -95,22 +107,32 @@ async function buildOrgDashboard(req, res) {
   )
   const periodLabel = PERIOD_LABELS[newEmployeesPeriod]
   const metricsOnly = String(req.query.scope || '') === 'metrics'
-  const isAdminUser = req.user?.role === 'admin'
-  const metricOptions = isAdminUser
+  const viewerRole = req.user?.role
+  const viewerEmployeeId = req.user?.employeeId || null
+  const isApproverRole = viewerRole === 'admin' || viewerRole === 'hr'
+  const metricOptions = isApproverRole
     ? {
         includeLeave: true,
-        leaveLabel: 'Pending HR Leave',
+        leaveLabel: 'Pending Leave Request',
         leaveHref: '/leave-requests?status=Pending',
       }
     : { includeLeave: true }
 
   async function withRoleLeaveStats(baseStats) {
-    if (!isAdminUser) return baseStats
-    const hrLeave = await findLeaveRequestsForAdminApprovals()
-    const pendingHrLeave = (hrLeave || []).filter(
-      (row) => row.status === 'Pending',
-    ).length
-    return { ...baseStats, pendingLeaveRequests: pendingHrLeave }
+    if (!isApproverRole) return baseStats
+    const actor = {
+      role: viewerRole,
+      employeeId: viewerEmployeeId,
+    }
+    const [awaiting, inFlow] = await Promise.all([
+      findLeaveRequestsAwaitingActor(actor),
+      findLeaveRequestsWhereActorIsFutureStep(actor),
+    ])
+    return {
+      ...baseStats,
+      pendingLeaveRequests: (awaiting || []).length,
+      pendingLeaveInFlow: (inFlow || []).length,
+    }
   }
 
   if (metricsOnly) {

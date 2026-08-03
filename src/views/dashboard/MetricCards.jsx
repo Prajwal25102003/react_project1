@@ -163,13 +163,15 @@ function MetricCardBody({ metric, Icon, compact, tone }) {
 
         {metric.trend ? (
           <span
-            className={`flex items-center gap-1 rounded-full py-0.5 pl-2 pr-2.5 text-sm font-medium ${
+            className={`inline-flex max-w-[12rem] items-center gap-1 rounded-full py-0.5 pl-2 pr-2.5 text-right text-sm font-medium leading-snug ${
               metric.trendUp
                 ? "bg-success-50 text-success-600 "
                 : "bg-error-50 text-error-600"
             }`}
           >
-            {metric.trendUp ? <TrendUpIcon /> : <TrendDownIcon />}
+            <span className="shrink-0">
+              {metric.trendUp ? <TrendUpIcon /> : <TrendDownIcon />}
+            </span>
             {metric.trend}
           </span>
         ) : null}
