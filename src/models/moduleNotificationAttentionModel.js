@@ -88,6 +88,8 @@ export function attentionKeysFromRow(row, navId) {
 }
 
 function notificationTargetsNav(notification, navId, availableNavIds, role) {
+  // Removals never target a module (no badge, highlight, or Mark as read).
+  if (isRemovalOnlyNotification(notification)) return false;
   return navIdsForNotification(notification, availableNavIds, { role }).includes(
     navId,
   );

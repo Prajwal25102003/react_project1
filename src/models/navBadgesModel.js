@@ -11,42 +11,58 @@ const PERSONAL_LEAVE_OUTCOME_STATUSES = new Set(["Rejected", "Approved"]);
 
 /** Deletions stay in the header feed only — never badge a sidebar module. */
 export function isRemovalOnlyNotification(notification) {
-  const category = String(notification?.category || "");
-  const status = String(notification?.status || "");
-  const eventType = String(notification?.eventType || "");
+  const category = String(notification?.category || "").toLowerCase();
+  const status = String(notification?.status || "").toLowerCase();
+  const eventType = String(notification?.eventType || "").toLowerCase();
   const title = String(notification?.title || "").toLowerCase();
+  const description = String(notification?.description || "").toLowerCase();
+  const text = `${title} ${description}`;
 
+  // Any explicit *.removed / *.deleted event for module categories.
   if (
-    category === "Attendance" &&
-    (eventType === "attendance.removed" ||
-      status === "Removed" ||
-      title.includes("attendance removed") ||
-      title.includes("removed attendance"))
+    (eventType.endsWith(".removed") || eventType.endsWith(".deleted")) &&
+    (category === "attendance" ||
+      category === "employees" ||
+      category === "departments")
   ) {
     return true;
   }
 
-  if (
-    category === "Employees" &&
-    (eventType === "employee.removed" ||
+  if (category === "attendance") {
+    if (
+      status === "removed" ||
+      eventType === "attendance.removed" ||
+      title.includes("attendance removed") ||
+      title.includes("removed attendance") ||
+      (text.includes("attendance") && text.includes("removed"))
+    ) {
+      return true;
+    }
+  }
+
+  if (category === "employees") {
+    if (
+      eventType === "employee.removed" ||
       eventType === "admin.removed" ||
-      status === "Removed" ||
+      status === "removed" ||
       title.includes("employee removed") ||
       title.includes("admin removed") ||
       title.includes("you removed employee") ||
-      title.includes("you removed admin"))
-  ) {
-    return true;
+      title.includes("you removed admin")
+    ) {
+      return true;
+    }
   }
 
-  if (
-    category === "Departments" &&
-    (eventType === "department.removed" ||
-      status === "Removed" ||
+  if (category === "departments") {
+    if (
+      eventType === "department.removed" ||
+      status === "removed" ||
       title.includes("department removed") ||
-      title.includes("department deleted"))
-  ) {
-    return true;
+      title.includes("department deleted")
+    ) {
+      return true;
+    }
   }
 
   return false;
@@ -74,6 +90,16 @@ export function navIdsForNotification(
 
   // Removals: header notifications only (HR, Admin, and employees) — no module badge.
   if (isRemovalOnlyNotification(notification)) {
+    return [];
+  }
+
+  // Own attendance actions (import / mark / remove) stay in the header only.
+  // Sidebar badges are for inbound updates that need attention.
+  if (
+    category === "Attendance" &&
+    (direction === "sent" ||
+      String(notification?.directionLabel || "").toLowerCase() === "sent")
+  ) {
     return [];
   }
 
@@ -180,6 +206,8 @@ export function countNavBadgesFromNotifications(
 
   for (const notification of notifications || []) {
     if (!notification?.isNew) continue;
+    // Removals: header / dashboard text only — never count toward module badges.
+    if (isRemovalOnlyNotification(notification)) continue;
     for (const navId of navIdsForNotification(notification, availableNavIds, {
       role,
     })) {
