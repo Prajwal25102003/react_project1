@@ -178,8 +178,15 @@ export function useLeaveRequests() {
     () => ({
       employeeId: user?.employeeId,
       role: user?.role,
+      isDepartmentHead: Boolean(user?.isDepartmentHead),
+      isNamedLeaveApprover: Boolean(user?.isNamedLeaveApprover),
     }),
-    [user?.employeeId, user?.role],
+    [
+      user?.employeeId,
+      user?.role,
+      user?.isDepartmentHead,
+      user?.isNamedLeaveApprover,
+    ],
   );
 
   const scopeBadgeCounts = useMemo(
