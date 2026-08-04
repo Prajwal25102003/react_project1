@@ -108,17 +108,12 @@ export async function findEmployeeIdsByDepartmentId(departmentId) {
 export async function createDepartment(department) {
   const result = await query(
     `INSERT INTO departments (
-      id, name, head_employee_id, description
+      id, name, head_employee_id
     ) VALUES (
-      $1, $2, $3, $4
+      $1, $2, $3
     )
     RETURNING id`,
-    [
-      department.id,
-      department.name,
-      department.headEmployeeId,
-      department.description,
-    ],
+    [department.id, department.name, department.headEmployeeId],
   )
 
   return findDepartmentById(result.rows[0].id)
@@ -128,16 +123,10 @@ export async function updateDepartment(id, department) {
   const result = await query(
     `UPDATE departments SET
       name = $2,
-      head_employee_id = $3,
-      description = $4
+      head_employee_id = $3
     WHERE id = $1
     RETURNING id`,
-    [
-      id,
-      department.name,
-      department.headEmployeeId,
-      department.description,
-    ],
+    [id, department.name, department.headEmployeeId],
   )
 
   if (result.rowCount === 0) return null

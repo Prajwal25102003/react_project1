@@ -27,9 +27,6 @@ const AttendanceFormPage = lazy(
 const LeaveRequestsPage = lazy(
   () => import("./views/pages/LeaveRequestsPage.jsx"),
 );
-const LeaveApprovalsPage = lazy(
-  () => import("./views/pages/LeaveApprovalsPage.jsx"),
-);
 const LeaveFormPage = lazy(() => import("./views/pages/LeaveFormPage.jsx"));
 const HolidaysPage = lazy(() => import("./views/pages/HolidaysPage.jsx"));
 const LeaveApprovalHierarchyPage = lazy(
@@ -102,7 +99,6 @@ function AppRoutes() {
               }
             >
               <Route path="leave-requests" element={<LeaveRequestsPage />} />
-              <Route path="leave-approvals" element={<LeaveApprovalsPage />} />
             </Route>
 
             <Route

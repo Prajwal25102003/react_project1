@@ -8,3 +8,4 @@ server/uploads/*
 !server/uploads/.gitkeep
 *.local
 .DS_Store
+.cursor/mcp.json

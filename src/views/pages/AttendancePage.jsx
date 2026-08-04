@@ -91,6 +91,7 @@ function AttendancePage() {
     fileInputRef,
     openImportPicker,
     handleImportFile,
+    handleExportCsv,
     onRecordInteract,
   } = useAttendance();
 
@@ -173,7 +174,7 @@ function AttendancePage() {
           filterDefs={filterDefs}
           onColumnFilterChange={table.setColumnFilter}
           onClearFilters={table.clearColumnFilters}
-          onExportCsv={() => table.exportCsv("attendance.csv")}
+          onExportCsv={handleExportCsv}
           onRowClick={onRecordInteract}
           getRowClassName={(row) =>
             row.needsAttention

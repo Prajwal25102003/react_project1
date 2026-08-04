@@ -1,11 +1,5 @@
 /** Client-side leave balance rules (mirrors server leaveBalancesModel). */
 
-export const DEFAULT_LEAVE_BALANCES = {
-  casualLeaveBalance: 0,
-  sickLeaveBalance: 0,
-  lopDays: 0,
-};
-
 export function normalizeLeaveBalances(source = {}) {
   const casualLeaveBalance = Math.max(0, Number(source.casualLeaveBalance ?? 0));
   const sickLeaveBalance = Math.max(0, Number(source.sickLeaveBalance ?? 0));
@@ -22,11 +16,6 @@ export function normalizeLeaveBalances(source = {}) {
         ? null
         : Math.max(0, Number(source.pendingLeaveCount)),
   };
-}
-
-/** Total paid leave days still available. */
-export function totalLeavesAvailable(source = {}) {
-  return normalizeLeaveBalances(source).totalAvailable;
 }
 
 /**

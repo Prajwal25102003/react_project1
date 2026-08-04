@@ -2,40 +2,18 @@
 CREATE TABLE IF NOT EXISTS departments (
   id VARCHAR(20) PRIMARY KEY,
   name VARCHAR(120) NOT NULL,
-  head_employee_id VARCHAR(20),
-  employee_count INTEGER NOT NULL DEFAULT 0,
-  description TEXT NOT NULL
+  head_employee_id VARCHAR(20)
 );
 
-INSERT INTO departments (id, name, head_employee_id, employee_count, description) VALUES
-  (
-    'DEP-01', 'Development', NULL, 20,
-    'Builds and maintains product features, cloud infrastructure, and development quality for India operations.'
-  ),
-  (
-    'DEP-02', 'Human Resources', NULL, 5,
-    'Manages hiring, employee relations, PF/ESI compliance, leave policies, and people operations.'
-  ),
-  (
-    'DEP-03', 'Marketing', NULL, 20,
-    'Handles brand communication, digital campaigns, regional content, and market research across India.'
-  ),
-  (
-    'DEP-04', 'Sales', NULL, 20,
-    'Drives revenue through enterprise sales, channel partners, and account management in metro cities.'
-  ),
-  (
-    'DEP-05', 'Finance', NULL, 20,
-    'Oversees budgeting, payroll, GST compliance, financial reporting, and statutory filings.'
-  ),
-  (
-    'DEP-06', 'Operations', NULL, 20,
-    'Coordinates day-to-day business operations, vendor management, and cross-team delivery.'
-  )
+INSERT INTO departments (id, name, head_employee_id) VALUES
+  ('DEP-01', 'Development', NULL),
+  ('DEP-02', 'Human Resources', NULL),
+  ('DEP-03', 'Marketing', NULL),
+  ('DEP-04', 'Sales', NULL),
+  ('DEP-05', 'Finance', NULL),
+  ('DEP-06', 'Operations', NULL)
 ON CONFLICT (id) DO UPDATE SET
-  name = EXCLUDED.name,
-  employee_count = EXCLUDED.employee_count,
-  description = EXCLUDED.description;
+  name = EXCLUDED.name;
 
 CREATE TABLE IF NOT EXISTS employees (
   id VARCHAR(20) PRIMARY KEY,

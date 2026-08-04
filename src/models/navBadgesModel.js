@@ -6,7 +6,7 @@ export const NOTIFICATION_CATEGORY_NAV_IDS = {
   Holidays: ["holidays"],
 };
 
-const LEAVE_APPROVAL_STATUSES = new Set(["Pending", "TeamLeadApproved"]);
+const LEAVE_APPROVAL_STATUSES = new Set(["Pending"]);
 const PERSONAL_LEAVE_OUTCOME_STATUSES = new Set(["Rejected", "Approved"]);
 
 /** Deletions stay in the header feed only — never badge a sidebar module. */

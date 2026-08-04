@@ -131,7 +131,6 @@ export function attachmentFileLabel(url, fallbackName = "") {
 
 const LEAVE_STATUS = {
   Pending: STATUS_TONE.warning,
-  TeamLeadApproved: STATUS_TONE.info,
   Approved: STATUS_TONE.success,
   Rejected: STATUS_TONE.error,
   Cancelled: STATUS_TONE.warning,
@@ -139,7 +138,6 @@ const LEAVE_STATUS = {
 
 export const LEAVE_STATUS_LABEL = {
   Pending: "Pending",
-  TeamLeadApproved: "Awaiting next",
   Approved: "Approved",
   Rejected: "Rejected",
   Cancelled: "Cancelled",
@@ -436,8 +434,6 @@ export function buildLeaveApprovalSteps(request) {
     } else {
       currentIndex = 1;
     }
-  } else if (status === "TeamLeadApproved") {
-    currentIndex = Math.min(2, defs.length - 1);
   } else if (status === "Approved") {
     currentIndex = defs.length - 1;
   } else if (status === "Rejected") {
@@ -581,43 +577,9 @@ export function mapLeaveRequest(request) {
   };
 }
 
-/** @deprecated Prefer actorMatchesCurrentStep */
-export function isTeamLeadForRequest(request, employeeId) {
-  return actorMatchesCurrentStep(request, {
-    employeeId,
-    role: "employee",
-  }) && currentHierarchyStep(request)?.approverKind === "department_head";
-}
-
-/** @deprecated Prefer actorMatchesCurrentStep */
-export function canHrApproveRequest(request) {
-  return actorMatchesCurrentStep(request, { role: "hr" });
-}
-
-/** @deprecated Prefer actorMatchesCurrentStep */
-export function canHrRejectRequest(request) {
-  return canHrApproveRequest(request);
-}
-
-/** @deprecated Prefer actorMatchesCurrentStep */
-export function canAdminApproveRequest(request) {
-  return actorMatchesCurrentStep(request, { role: "admin" });
-}
-
-export function canAdminRejectRequest(request) {
-  return canAdminApproveRequest(request);
-}
-
 /** True when the signed-in user can approve or reject this leave request. */
 export function isActionableLeaveApproval(request, { employeeId, role } = {}) {
   return actorMatchesCurrentStep(request, { employeeId, role });
-}
-
-/** How many approval-queue rows still need this user's decision. */
-export function countActionableLeaveApprovals(requests, userContext) {
-  return (requests || []).filter((request) =>
-    isActionableLeaveApproval(request, userContext),
-  ).length;
 }
 
 /** Leave request ids that still need this user's decision. */

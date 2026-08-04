@@ -154,7 +154,7 @@ export function bannerNotificationTitle(message) {
       ) {
         return `Leave Request Received${lopSuffix}`;
       }
-      if (status === "Approved" || status === "TeamLeadApproved") {
+      if (status === "Approved") {
         return `Leave Request Approved${lopSuffix}`;
       }
       if (status === "Rejected") return "Leave Request Rejected";

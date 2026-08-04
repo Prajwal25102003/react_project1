@@ -41,7 +41,6 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   reason TEXT NOT NULL,
   status VARCHAR(20) NOT NULL CHECK (status IN (
     'Pending',
-    'TeamLeadApproved',
     'Approved',
     'Rejected',
     'Cancelled'

@@ -61,11 +61,7 @@ export function attentionKeysFromNotification(notification, navId) {
         if (direction !== "received") return [];
         return [notification.leaveRequestId].filter(Boolean).map(String);
       }
-      if (
-        status === "Pending" ||
-        status === "TeamLeadApproved" ||
-        LEAVE_APPROVAL_STATUSES.has(status)
-      ) {
+      if (status === "Pending") {
         return [notification.leaveRequestId].filter(Boolean).map(String);
       }
       return [];

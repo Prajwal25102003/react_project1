@@ -64,27 +64,3 @@ export function PersonPlusIcon({ size = ADD_ICON_SIZE, className }) {
     </span>
   );
 }
-
-export function PencilIcon(props) {
-  return <ActionIcon name="pencil" {...props} />;
-}
-
-export function EyeIcon(props) {
-  return <ActionIcon name="eye" {...props} />;
-}
-
-export function TrashBinIcon(props) {
-  return <ActionIcon name="trash" {...props} />;
-}
-
-export function CheckCircleIcon(props) {
-  return <ActionIcon name="check-circle" {...props} />;
-}
-
-export function XCircleIcon(props) {
-  return <ActionIcon name="x-circle" {...props} />;
-}
-
-export function ExportIcon(props) {
-  return <ActionIcon name="export" {...props} />;
-}

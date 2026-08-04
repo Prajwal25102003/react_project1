@@ -13,29 +13,12 @@ const LEAVE_SELECT = `
   e.department_id AS "departmentId",
   d.head_employee_id AS "departmentHeadId",
   head.name AS "departmentHeadName",
-  (
-    SELECT e_hr.name
-    FROM users u_hr
-    INNER JOIN employees e_hr ON e_hr.id = u_hr.employee_id
-    WHERE u_hr.role = 'hr'
-    ORDER BY u_hr.id
-    LIMIT 1
-  ) AS "hrApproverName",
+  hr."hrApproverName",
   e.casual_leave_balance AS "casualLeaveBalance",
   e.sick_leave_balance AS "sickLeaveBalance",
   e.lop_days AS "lopDays",
-  EXISTS (
-    SELECT 1
-    FROM users u
-    WHERE u.employee_id = lr.employee_id
-      AND u.role = 'hr'
-  ) AS "requesterIsHr",
-  EXISTS (
-    SELECT 1
-    FROM users u
-    WHERE u.employee_id = lr.employee_id
-      AND u.role = 'admin'
-  ) AS "requesterIsAdmin",
+  COALESCE(ur."requesterIsHr", false) AS "requesterIsHr",
+  COALESCE(ur."requesterIsAdmin", false) AS "requesterIsAdmin",
   lr.leave_type AS "leaveType",
   TO_CHAR(lr.start_date, 'YYYY-MM-DD') AS "startDate",
   TO_CHAR(lr.end_date, 'YYYY-MM-DD') AS "endDate",
@@ -55,6 +38,23 @@ const LEAVE_FROM = `
   INNER JOIN employees e ON e.id = lr.employee_id
   LEFT JOIN departments d ON d.id = e.department_id
   LEFT JOIN employees head ON head.id = d.head_employee_id
+  LEFT JOIN (
+    SELECT e_hr.name AS "hrApproverName"
+    FROM users u_hr
+    INNER JOIN employees e_hr ON e_hr.id = u_hr.employee_id
+    WHERE u_hr.role = 'hr'
+    ORDER BY u_hr.id
+    LIMIT 1
+  ) hr ON TRUE
+  LEFT JOIN (
+    SELECT
+      u.employee_id,
+      BOOL_OR(u.role = 'hr') AS "requesterIsHr",
+      BOOL_OR(u.role = 'admin') AS "requesterIsAdmin"
+    FROM users u
+    WHERE u.employee_id IS NOT NULL
+    GROUP BY u.employee_id
+  ) ur ON ur.employee_id = lr.employee_id
 `
 
 const HISTORY_SELECT = `
@@ -424,25 +424,6 @@ export async function findLeaveRequestsWhereActorIsFutureStep({
   return withSteps(result.rows)
 }
 
-/** Leave requests whose frozen snapshot includes a given role approver step. */
-export async function findLeaveRequestsWithApproverRole(approverRole) {
-  const result = await query(
-    `SELECT ${LEAVE_SELECT}
-    ${LEAVE_FROM}
-    WHERE EXISTS (
-      SELECT 1
-      FROM leave_request_hierarchy_steps s
-      WHERE s.leave_request_id = lr.id
-        AND s.approver_kind = 'role'
-        AND s.approver_role = $1
-    )
-    ORDER BY lr.id DESC`,
-    [approverRole],
-  )
-
-  return withSteps(result.rows)
-}
-
 /** Team leave for a department head (all statuses; excludes the head's own requests). */
 export async function findLeaveRequestsForTeamApprovals(headEmployeeId) {
   const result = await query(
@@ -457,16 +438,66 @@ export async function findLeaveRequestsForTeamApprovals(headEmployeeId) {
   return withSteps(result.rows)
 }
 
-/** @deprecated Prefer findLeaveRequestsAwaitingActor */
-export async function findLeaveRequestsForAdminApprovals() {
-  return findLeaveRequestsAwaitingActor({ role: 'admin' })
-}
+/**
+ * Single-query unified leave list for approvers (HR / dept head / named).
+ * Matches the previous multi-fetch + Map merge semantics.
+ */
+export async function findLeaveRequestsUnified({
+  employeeId = null,
+  asHr = false,
+  isHead = false,
+  role = null,
+} = {}) {
+  if (asHr) {
+    return findAllLeaveRequests()
+  }
 
-/** @deprecated Prefer findLeaveRequestsAwaitingActor */
-export async function findLeaveRequestsForHrApprovals(excludeEmployeeId = null) {
-  const rows = await findLeaveRequestsAwaitingActor({ role: 'hr' })
-  if (!excludeEmployeeId) return rows
-  return rows.filter((row) => row.employeeId !== excludeEmployeeId)
+  const actorRole = role === 'employee' ? null : role || null
+
+  const result = await query(
+    `SELECT ${LEAVE_SELECT}
+    ${LEAVE_FROM}
+    WHERE
+      ($1::text IS NOT NULL AND lr.employee_id = $1)
+      OR (
+        $2::boolean
+        AND $1::text IS NOT NULL
+        AND d.head_employee_id = $1
+        AND lr.employee_id <> $1
+      )
+      OR (
+        lr.status = 'Pending'
+        AND lr.current_step IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM leave_request_hierarchy_steps s
+          WHERE s.leave_request_id = lr.id
+            AND s.step_order >= lr.current_step
+            AND (
+              (
+                s.approver_kind = 'department_head'
+                AND $1::text IS NOT NULL
+                AND d.head_employee_id = $1
+                AND lr.employee_id <> $1
+              )
+              OR (
+                s.approver_kind = 'role'
+                AND $3::text IS NOT NULL
+                AND s.approver_role = $3
+              )
+              OR (
+                s.approver_kind = 'employee'
+                AND $1::text IS NOT NULL
+                AND s.approver_employee_id = $1
+              )
+            )
+        )
+      )
+    ORDER BY lr.id DESC`,
+    [employeeId || null, Boolean(isHead), actorRole],
+  )
+
+  return withSteps(result.rows)
 }
 
 export async function findLeaveRequestById(id, client = null) {
