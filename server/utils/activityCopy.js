@@ -164,13 +164,13 @@ export function formatRelativePhrase(isoDate) {
 
 /**
  * Actor label for "updated by …" style copy.
- * Examples: HR Admin Rahul, Admin Priya, Team Lead Sarah
+ * Examples: HR Rahul, Admin Priya, Team Lead Sarah
  */
 export function formatActorLabel({ role, name } = {}) {
   const person = firstName(name)
   const key = String(role || '').toLowerCase()
 
-  if (key === 'hr') return person ? `HR Admin ${person}` : 'HR Admin'
+  if (key === 'hr') return person ? `HR ${person}` : 'HR'
   if (key === 'admin') return person ? `Admin ${person}` : 'Admin'
   if (key === 'team_lead' || key === 'teamlead') {
     return person ? `Team Lead ${person}` : 'Team Lead'

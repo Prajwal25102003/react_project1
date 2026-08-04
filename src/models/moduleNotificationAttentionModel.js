@@ -1,4 +1,5 @@
 import {
+  isEmployeeAddNotification,
   isRemovalOnlyNotification,
   navIdsForNotification,
 } from "./navBadgesModel.js";
@@ -17,7 +18,9 @@ export function attentionKeysFromNotification(notification, navId) {
 
   switch (navId) {
     case "employees": {
+      // Only new hires highlight / badge; removals and orphaned adds do not.
       if (isRemovalOnlyNotification(notification)) return [];
+      if (!isEmployeeAddNotification(notification)) return [];
       return [notification.subjectEmployeeId].filter(Boolean).map(String);
     }
     case "attendance": {

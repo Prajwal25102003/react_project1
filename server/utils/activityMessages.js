@@ -854,9 +854,7 @@ function employeeProfileCopy({
     }
     return {
       title: 'New Employee Added',
-      description:
-        stored ||
-        `${subjectName} joined the ${dept} Department as ${designation}. Added by ${byLabel}.`,
+      description: `${subjectName} joined the ${dept} Department as ${designation}. Added by ${byLabel}.`,
     }
   }
 

@@ -43,7 +43,10 @@ export function mapHeaderUser(authUser) {
   };
 }
 
-/** Soft header bar tint by login role (dept head = employee + flag). */
+/**
+ * Soft chrome tint by login role (header + sidebar).
+ * Dept head = employee role with isDepartmentHead.
+ */
 export function getHeaderBarClass(authUser) {
   const role = authUser?.role;
   if (role === ROLES.ADMIN) return "bg-error-50";

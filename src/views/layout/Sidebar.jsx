@@ -49,7 +49,13 @@ function NavBadge({ count, sidebarToggle }) {
   );
 }
 
-function SidebarMenuItem({ item, sidebarToggle, onClose, isItemActive }) {
+function SidebarMenuItem({
+  item,
+  sidebarToggle,
+  onClose,
+  isItemActive,
+  tinted,
+}) {
   const active = isItemActive(item);
   const iconClass = active ? tw.menuItemIconActive : tw.menuItemIconInactive;
   const labelClass = cn(
@@ -58,17 +64,20 @@ function SidebarMenuItem({ item, sidebarToggle, onClose, isItemActive }) {
       ? "inline lg:hidden lg:group-hover/sidebar:inline"
       : "inline",
   );
+  const itemTone = active
+    ? tinted
+      ? "bg-white text-brand-500 shadow-theme-xs"
+      : tw.menuItemActive
+    : tinted
+      ? "text-gray-700 hover:bg-white/60 hover:text-gray-700"
+      : tw.menuItemInactive;
 
   return (
     <li>
       <NavLink
         to={item.path}
         onClick={onClose}
-        className={cn(
-          tw.menuItem,
-          "group",
-          active ? tw.menuItemActive : tw.menuItemInactive,
-        )}
+        className={cn(tw.menuItem, "group", itemTone)}
       >
         <NavIcon name={item.icon} className={iconClass} />
         <span className={labelClass}>{item.label}</span>
@@ -78,8 +87,10 @@ function SidebarMenuItem({ item, sidebarToggle, onClose, isItemActive }) {
   );
 }
 
-function Sidebar({ groups, sidebarToggle, onClose }) {
+function Sidebar({ groups, sidebarToggle, onClose, barClassName = "bg-white" }) {
   const { isItemActive } = useSidebarNav();
+  const surfaceClass = barClassName || "bg-white";
+  const tinted = surfaceClass !== "bg-white";
 
   return (
     <>
@@ -94,7 +105,8 @@ function Sidebar({ groups, sidebarToggle, onClose }) {
 
       <aside
         className={cn(
-          "group/sidebar fixed left-0 top-0 z-9999 flex h-screen flex-col overflow-y-hidden border-r border-gray-200 bg-white px-5 transition-[width] duration-300 lg:static lg:translate-x-0",
+          "group/sidebar fixed left-0 top-0 z-9999 flex h-screen flex-col overflow-y-hidden border-r border-gray-200 px-5 transition-[width] duration-300 lg:static lg:translate-x-0",
+          surfaceClass,
           sidebarToggle
             ? "w-[290px] translate-x-0 lg:w-[90px] lg:hover:w-[290px]"
             : "-translate-x-full w-[290px] lg:translate-x-0",
@@ -143,6 +155,7 @@ function Sidebar({ groups, sidebarToggle, onClose }) {
                       sidebarToggle={sidebarToggle}
                       onClose={onClose}
                       isItemActive={isItemActive}
+                      tinted={tinted}
                     />
                   ))}
                 </ul>

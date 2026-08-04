@@ -719,11 +719,7 @@ export async function deleteEmployeeHandler(req, res) {
       return res.json({ message: 'Admin removed' })
     }
 
-    const deleted = await deleteEmployeeById(req.params.id)
-    if (!deleted) {
-      return res.status(404).json({ message: 'Employee not found' })
-    }
-
+    // Log before delete — subject_employee_id FK cannot reference a removed employee.
     const actorLabel = formatActorLabel(actorFromUser(req.user))
     const removedAudience = await buildEmployeeAudienceMeta(existing)
     await createRecentActivity({
@@ -744,6 +740,11 @@ export async function deleteEmployeeHandler(req, res) {
         actorRole: req.user?.role || null,
       },
     })
+
+    const deleted = await deleteEmployeeById(req.params.id)
+    if (!deleted) {
+      return res.status(404).json({ message: 'Employee not found' })
+    }
 
     res.json({ message: 'Employee deleted' })
   } catch (error) {
