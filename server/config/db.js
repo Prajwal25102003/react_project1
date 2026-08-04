@@ -14,6 +14,9 @@ const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'employee_management',
+  max: Number(process.env.DB_POOL_MAX) || 20,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 10_000,
 })
 
 export async function query(text, params) {

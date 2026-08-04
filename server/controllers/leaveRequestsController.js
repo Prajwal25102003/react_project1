@@ -9,10 +9,8 @@ import {
   findLeaveRequestById,
   findLeaveRequestsAwaitingActor,
   findLeaveRequestsByEmployeeId,
-  findLeaveRequestsForTeamApprovals,
+  findLeaveRequestsUnified,
   findLeaveRequestsVisibleToEmployee,
-  findLeaveRequestsWhereActorIsFutureStep,
-  findLeaveRequestsWithApproverRole,
   generateNextLeaveRequestId,
   updateLeaveRequestStatus,
 } from '../models/leaveRequestsModel.js'
@@ -315,54 +313,12 @@ export async function getLeaveRequests(req, res) {
         })
       }
 
-      const byId = new Map()
-
-      if (employeeId) {
-        for (const row of await findLeaveRequestsByEmployeeId(employeeId)) {
-          byId.set(row.id, row)
-        }
-      }
-
-      if (asHr) {
-        // HR keeps org-wide visibility; action buttons still gate on current step.
-        for (const row of await findAllLeaveRequests()) {
-          byId.set(row.id, row)
-        }
-      } else if (isHead) {
-        // Dept heads keep full team history after they approve (request moves to next step).
-        for (const row of await findLeaveRequestsForTeamApprovals(employeeId)) {
-          byId.set(row.id, row)
-        }
-        // Named-approver rows outside their team still appear when awaiting them
-        // or when they are later in the chain.
-        for (const row of await findLeaveRequestsAwaitingActor({
-          employeeId,
-        })) {
-          byId.set(row.id, row)
-        }
-        for (const row of await findLeaveRequestsWhereActorIsFutureStep({
-          employeeId,
-        })) {
-          byId.set(row.id, row)
-        }
-      } else {
-        for (const row of await findLeaveRequestsAwaitingActor({
-          role: role === 'employee' ? null : role,
-          employeeId,
-        })) {
-          byId.set(row.id, row)
-        }
-        for (const row of await findLeaveRequestsWhereActorIsFutureStep({
-          role: role === 'employee' ? null : role,
-          employeeId,
-        })) {
-          byId.set(row.id, row)
-        }
-      }
-
-      const leaveRequests = [...byId.values()].sort((a, b) =>
-        String(b.id).localeCompare(String(a.id), undefined, { numeric: true }),
-      )
+      const leaveRequests = await findLeaveRequestsUnified({
+        employeeId,
+        asHr,
+        isHead,
+        role,
+      })
       return res.json({ leaveRequests, scope: 'unified' })
     }
 
@@ -612,7 +568,7 @@ export async function updateLeaveRequestStatusHandler(req, res) {
     }
 
     const isReject = status === 'Rejected'
-    const isApprove = status === 'Approved' || status === 'TeamLeadApproved'
+    const isApprove = status === 'Approved'
 
     if (!isReject && !isApprove) {
       return res.status(400).json({

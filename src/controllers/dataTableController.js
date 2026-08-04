@@ -29,7 +29,16 @@ export function useDataTable(rows, options = {}) {
     initialColumnFilters = EMPTY_COLUMN_FILTERS,
     /** When set, keep this row's page in view (e.g. notification deep-link). */
     focusRowId = null,
+    /**
+     * Server-driven mode: `rows` is already one page.
+     * Pass total row count from the API; client search/filter/sort/page still
+     * update local state so the parent can refetch.
+     */
+    serverTotal = null,
   } = options;
+
+  const serverMode =
+    serverTotal != null && Number.isFinite(Number(serverTotal));
 
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState({ id: null, direction: null });
@@ -50,14 +59,32 @@ export function useDataTable(rows, options = {}) {
     });
   }, [initialColumnFilters]);
 
-  const table = processTableRows(rows, {
-    search,
-    searchKeys,
-    columnFilters,
-    sort,
-    page,
-    pageSize,
-  });
+  const table = serverMode
+    ? (() => {
+        const total = Math.max(0, Number(serverTotal) || 0);
+        const size = Math.max(1, pageSize);
+        const totalPages = Math.max(1, Math.ceil(total / size) || 1);
+        const safePage = Math.min(Math.max(1, page), totalPages);
+        const startIndex = total === 0 ? 0 : (safePage - 1) * size + 1;
+        const endIndex = total === 0 ? 0 : Math.min(safePage * size, total);
+        return {
+          rows,
+          page: safePage,
+          pageSize: size,
+          totalPages,
+          total,
+          startIndex,
+          endIndex,
+        };
+      })()
+    : processTableRows(rows, {
+        search,
+        searchKeys,
+        columnFilters,
+        sort,
+        page,
+        pageSize,
+      });
 
   useEffect(() => {
     if (focusRowId) return;
@@ -65,7 +92,7 @@ export function useDataTable(rows, options = {}) {
   }, [search, sort.id, sort.direction, pageSize, columnFilters, focusRowId]);
 
   useEffect(() => {
-    if (!focusRowId) return;
+    if (serverMode || !focusRowId) return;
     const targetPage = pageForRowId(rows, focusRowId, {
       search,
       searchKeys,
@@ -81,6 +108,7 @@ export function useDataTable(rows, options = {}) {
     rows,
     search,
     searchKeys,
+    serverMode,
     sort,
   ]);
 
@@ -128,16 +156,19 @@ export function useDataTable(rows, options = {}) {
     );
   }
 
-  function exportCsv(filename) {
+  function exportCsv(filename, exportRows = null) {
     const visibleColumns = getVisibleColumns(columns, visibleColumnIds);
-    const filtered = processTableRows(rows, {
-      search,
-      searchKeys,
-      columnFilters,
-      sort,
-      page: 1,
-      pageSize: Math.max(rows.length, 1),
-    });
+    const sourceRows = Array.isArray(exportRows) ? exportRows : rows;
+    const filtered = serverMode
+      ? { rows: sourceRows }
+      : processTableRows(sourceRows, {
+          search,
+          searchKeys,
+          columnFilters,
+          sort,
+          page: 1,
+          pageSize: Math.max(sourceRows.length, 1),
+        });
     downloadCsv(filename, rowsToCsv(visibleColumns, filtered.rows));
   }
 

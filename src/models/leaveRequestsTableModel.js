@@ -27,16 +27,12 @@ export const LEAVE_REQUEST_COLUMN_FILTERS = [
     label: "Status",
     options: [
       "Pending",
-      "TeamLeadApproved",
       "Approved",
       "Rejected",
       "Cancelled",
     ].map((value) => ({
       value,
-      label:
-        value === "TeamLeadApproved"
-          ? "Awaiting HR"
-          : value,
+      label: value,
     })),
   },
   {

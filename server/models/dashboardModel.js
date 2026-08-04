@@ -42,28 +42,6 @@ export async function getDashboardStats(period = 'month') {
   }
 }
 
-export async function findRecentActivities(limit = 25) {
-  const result = await query(
-    `SELECT
-      id,
-      title,
-      description,
-      category,
-      activity_time AS "activityTime",
-      status,
-      event_type AS "eventType",
-      subject_employee_id AS "subjectEmployeeId",
-      actor_employee_id AS "actorEmployeeId",
-      meta
-    FROM recent_activities
-    ORDER BY activity_time DESC
-    LIMIT $1`,
-    [limit],
-  )
-
-  return result.rows
-}
-
 export async function getDepartmentBreakdown() {
   const result = await query(
     `SELECT
@@ -240,7 +218,6 @@ export async function findActivityRowsForEmployees(employeeIds, limit = 25) {
             WHEN 'Pending' THEN 'Leave Request Submitted'
             WHEN 'Cancelled' THEN 'Leave Request Cancelled'
             WHEN 'Approved' THEN 'Leave Request Approved'
-            WHEN 'TeamLeadApproved' THEN 'Leave Request Approved'
             WHEN 'Rejected' THEN 'Leave Request Rejected'
             ELSE 'Leave Request Updated'
           END AS title,
@@ -266,13 +243,6 @@ export async function findActivityRowsForEmployees(employeeIds, limit = 25) {
                 THEN ' - ' || TO_CHAR(lr.end_date, 'DD Mon YYYY')
                 ELSE ''
               END || ') has been approved.'
-            WHEN 'TeamLeadApproved' THEN
-              e.name || '''s ' || lr.leave_type || ' request (' ||
-              TO_CHAR(lr.start_date, 'DD Mon YYYY') ||
-              CASE WHEN lr.end_date <> lr.start_date
-                THEN ' - ' || TO_CHAR(lr.end_date, 'DD Mon YYYY')
-                ELSE ''
-              END || ') has been approved by Team Lead.'
             ELSE
               e.name || '''s ' || lr.leave_type || ' request (' ||
               TO_CHAR(lr.start_date, 'DD Mon YYYY') ||
@@ -298,14 +268,12 @@ export async function findActivityRowsForEmployees(employeeIds, limit = 25) {
             WHEN lr.status = 'Approved' THEN 'Approved'
             WHEN lr.status = 'Rejected' THEN 'Rejected'
             WHEN lr.status = 'Cancelled' THEN 'Cancelled'
-            WHEN lr.status = 'TeamLeadApproved' THEN 'TeamLeadApproved'
             ELSE 'Pending'
           END AS status,
           CASE lr.status
             WHEN 'Pending' THEN 'leave.submitted'
             WHEN 'Cancelled' THEN 'leave.cancelled'
             WHEN 'Approved' THEN 'leave.approved'
-            WHEN 'TeamLeadApproved' THEN 'leave.approved'
             ELSE 'leave.rejected'
           END AS "eventType",
           lr.employee_id AS "subjectEmployeeId",
@@ -344,13 +312,5 @@ export async function findEmployeeActivityRows(employeeId, limit = 25) {
 export async function findTeamActivityRows(headEmployeeId, limit = 10) {
   const teamIds = await findTeamEmployeeIds(headEmployeeId)
   return findActivityRowsForEmployees(teamIds, limit)
-}
-
-export async function getEmployeeRecentActivities(employeeId) {
-  return findEmployeeActivityRows(employeeId, 25)
-}
-
-export async function getTeamRecentActivities(headEmployeeId) {
-  return findTeamActivityRows(headEmployeeId, 25)
 }
 

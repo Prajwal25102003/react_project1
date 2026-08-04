@@ -1,4 +1,5 @@
 import pool, { query } from '../config/db.js'
+import { removeEmployeeFromAttendanceImportFiles } from './attendanceImportFilesModel.js'
 
 const LEAVE_BALANCE_SELECT = `
   e.casual_leave_balance AS "casualLeaveBalance",
@@ -12,7 +13,7 @@ const PENDING_LEAVE_JOIN = `
     SELECT COUNT(*)::integer AS pending_count
     FROM leave_requests lr
     WHERE lr.employee_id = e.id
-      AND lr.status IN ('Pending', 'TeamLeadApproved')
+      AND lr.status = 'Pending'
   ) pending ON TRUE
 `
 
@@ -280,6 +281,7 @@ export async function deleteEmployeeById(id) {
       [id],
     )
     await client.query(`DELETE FROM attendance WHERE employee_id = $1`, [id])
+    await removeEmployeeFromAttendanceImportFiles(id, client)
     await client.query(`DELETE FROM leave_requests WHERE employee_id = $1`, [id])
     await client.query(
       `DELETE FROM users WHERE employee_id = $1 AND role IN ('employee', 'hr')`,

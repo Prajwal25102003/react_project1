@@ -232,8 +232,7 @@ export function resolveActivityDirection(row, viewer = {}) {
     if (status === 'Pending' || status === 'Cancelled') return 'sent'
     if (
       status === 'Approved' ||
-      status === 'Rejected' ||
-      status === 'TeamLeadApproved'
+      status === 'Rejected'
     ) {
       return 'received'
     }
@@ -982,7 +981,7 @@ function legacyLeaveTitle(title, status) {
     lower.includes('leave request sent')
   ) {
     if (status === 'Cancelled') return 'Leave Request Cancelled'
-    if (status === 'Approved' || status === 'TeamLeadApproved') {
+    if (status === 'Approved') {
       return 'Leave Request Approved'
     }
     if (status === 'Rejected') return 'Leave Request Rejected'

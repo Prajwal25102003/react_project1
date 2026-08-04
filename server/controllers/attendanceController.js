@@ -1,13 +1,13 @@
 import {
   deleteAttendanceById,
-  findAllAttendance,
-  findAttendanceByEmployeeId,
   findAttendanceById,
+  findAttendancePage,
   findExistingAttendanceKeys,
   importAttendanceRecords,
   normalizeAttendanceDays,
   updateAttendance,
 } from '../models/attendanceModel.js'
+import { removeAttendanceEntriesFromImportFiles } from '../models/attendanceImportFilesModel.js'
 import {
   findEmployeeById,
   findEmployeeIdsWithLoginRoles,
@@ -26,6 +26,7 @@ import {
 } from '../utils/notificationAudience.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 import { calculateWorkingHours } from '../utils/workingHours.js'
+import pool from '../config/db.js'
 
 const ATTENDANCE_STATUSES = new Set(['Present', 'Absent', 'Half Day'])
 
@@ -123,6 +124,15 @@ function isHrEditingOwnAttendance(user, subjectEmployeeId) {
 export async function getAttendance(req, res) {
   try {
     const days = normalizeAttendanceDays(req.query.days)
+    const page = Number(req.query.page) || 1
+    const pageSize = Number(req.query.pageSize) || 5
+    const search = String(req.query.search || '').trim() || null
+    const status = String(req.query.status || '').trim() || null
+    const dateFrom = String(req.query.dateFrom || '').trim() || null
+    const dateTo = String(req.query.dateTo || '').trim() || null
+    const sortId = String(req.query.sortId || 'date').trim() || 'date'
+    const sortDir = String(req.query.sortDir || 'desc').trim() || 'desc'
+    let employeeId = String(req.query.employeeId || '').trim() || null
 
     if (req.user?.role === 'employee') {
       if (!req.user.employeeId) {
@@ -130,14 +140,29 @@ export async function getAttendance(req, res) {
           message: 'Your account is not linked to an employee record',
         })
       }
-      const rows = await findAttendanceByEmployeeId(req.user.employeeId, {
-        days,
-      })
-      return res.json({ records: rows.map(mapAttendanceRow), days })
+      employeeId = req.user.employeeId
     }
 
-    const rows = await findAllAttendance({ days })
-    res.json({ records: rows.map(mapAttendanceRow), days })
+    const result = await findAttendancePage({
+      days,
+      page,
+      pageSize,
+      employeeId,
+      status,
+      search,
+      dateFrom,
+      dateTo,
+      sortId,
+      sortDir,
+    })
+
+    res.json({
+      records: result.rows.map(mapAttendanceRow),
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+      days: result.days,
+    })
   } catch (error) {
     res.status(500).json({ message: formatDbError(error) })
   }
@@ -263,7 +288,29 @@ export async function deleteAttendanceHandler(req, res) {
       })
     }
 
-    await deleteAttendanceById(req.params.id)
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      await deleteAttendanceById(req.params.id, client)
+      // Keep attendance_import_files in sync: drop the imported row, or the
+      // whole file when every imported attendance from that batch is gone.
+      await removeAttendanceEntriesFromImportFiles(
+        [
+          {
+            attendanceId: existing.id,
+            employeeId: existing.employeeId,
+            date: existing.date,
+          },
+        ],
+        client,
+      )
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
 
     const actorLabel = formatActorLabel(actorFromUser(req.user))
     const dateLabel = formatDisplayDate(existing.date)
@@ -300,6 +347,9 @@ export async function deleteAttendanceHandler(req, res) {
 export async function importAttendanceHandler(req, res) {
   try {
     const records = Array.isArray(req.body?.records) ? req.body.records : null
+    const filename = String(req.body?.filename ?? '')
+      .trim()
+      .slice(0, 255)
     if (!records || records.length === 0) {
       return res.status(400).json({ message: 'No attendance records to import' })
     }
@@ -430,7 +480,10 @@ export async function importAttendanceHandler(req, res) {
     let employeeIds = []
 
     try {
-      const result = await importAttendanceRecords(accepted)
+      const result = await importAttendanceRecords(accepted, {
+        filename: filename || 'attendance-import.xlsx',
+        uploadedBy: req.user?.employeeId || req.user?.email || null,
+      })
       imported = accepted.length
       attendanceIds = result.attendanceIds
       employeeIds = result.employeeIds

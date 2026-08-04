@@ -49,7 +49,6 @@ import { useModuleNotificationAttention } from "./moduleNotificationAttentionCon
 
 const LEAVE_STATUS_FILTERS = new Set([
   "Pending",
-  "TeamLeadApproved",
   "Approved",
   "Rejected",
   "Cancelled",

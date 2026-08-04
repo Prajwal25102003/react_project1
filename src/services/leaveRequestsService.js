@@ -1,13 +1,62 @@
 import { fetchFormData, fetchJson } from "./apiService.js";
 import { mapLeaveRequest } from "../models/leaveRequestsModel.js";
 
+/** Short-lived shared cache so nav badges and leave page share one in-flight request. */
+const CACHE_TTL_MS = 8000;
+let leaveListCache = {
+  scope: null,
+  promise: null,
+  data: null,
+  at: 0,
+};
+
+export function invalidateLeaveRequestsCache() {
+  leaveListCache = {
+    scope: null,
+    promise: null,
+    data: null,
+    at: 0,
+  };
+}
+
 export async function fetchLeaveRequests(scope = "mine") {
-  const query = scope ? `?scope=${encodeURIComponent(scope)}` : "";
-  const data = await fetchJson(
-    `/api/leave-requests${query}`,
-    "Failed to load leave requests",
-  );
-  return (data.leaveRequests || []).map(mapLeaveRequest);
+  const key = String(scope || "mine");
+  const now = Date.now();
+
+  if (
+    leaveListCache.scope === key &&
+    leaveListCache.data &&
+    now - leaveListCache.at < CACHE_TTL_MS
+  ) {
+    return leaveListCache.data;
+  }
+
+  if (leaveListCache.scope === key && leaveListCache.promise) {
+    return leaveListCache.promise;
+  }
+
+  leaveListCache.scope = key;
+  leaveListCache.promise = (async () => {
+    const query = key ? `?scope=${encodeURIComponent(key)}` : "";
+    const data = await fetchJson(
+      `/api/leave-requests${query}`,
+      "Failed to load leave requests",
+    );
+    const mapped = (data.leaveRequests || []).map(mapLeaveRequest);
+    leaveListCache.data = mapped;
+    leaveListCache.at = Date.now();
+    leaveListCache.promise = null;
+    return mapped;
+  })().catch((error) => {
+    if (leaveListCache.scope === key) {
+      leaveListCache.promise = null;
+      leaveListCache.data = null;
+      leaveListCache.at = 0;
+    }
+    throw error;
+  });
+
+  return leaveListCache.promise;
 }
 
 export async function fetchLeaveRequestById(id) {
@@ -19,6 +68,7 @@ export async function fetchLeaveRequestById(id) {
 }
 
 export async function createLeaveRequest(payload) {
+  invalidateLeaveRequestsCache();
   const data = await fetchJson(
     "/api/leave-requests",
     "Failed to create leave request",
@@ -44,6 +94,7 @@ export async function uploadLeaveMedicalDocument(file) {
 }
 
 export async function updateLeaveRequestStatus(id, status, remarks) {
+  invalidateLeaveRequestsCache();
   const data = await fetchJson(
     `/api/leave-requests/${encodeURIComponent(id)}/status`,
     "Failed to update leave request",
@@ -56,6 +107,7 @@ export async function updateLeaveRequestStatus(id, status, remarks) {
 }
 
 export async function cancelLeaveRequest(id, cancellationReason) {
+  invalidateLeaveRequestsCache();
   const data = await fetchJson(
     `/api/leave-requests/${encodeURIComponent(id)}/cancel`,
     "Failed to cancel leave request",

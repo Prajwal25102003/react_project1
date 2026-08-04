@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "./authContext.jsx";
 import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
-import { useListData } from "./listController.js";
 import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
 import { fetchEmployeeById, fetchEmployees } from "../services/employeesService.js";
 import {
@@ -34,6 +33,27 @@ import {
 import { ROLES } from "../models/authModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
 
+/** Map DataTable period filter values to inclusive SQL date bounds. */
+function periodFilterToDateBounds(period) {
+  const value = String(period || "").trim();
+  if (!value) return { dateFrom: null, dateTo: null };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return { dateFrom: value, dateTo: value };
+  }
+  if (/^\d{4}-\d{2}$/.test(value)) {
+    const [year, month] = value.split("-").map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    return {
+      dateFrom: `${value}-01`,
+      dateTo: `${value}-${String(lastDay).padStart(2, "0")}`,
+    };
+  }
+  if (/^\d{4}$/.test(value)) {
+    return { dateFrom: `${value}-01-01`, dateTo: `${value}-12-31` };
+  }
+  return { dateFrom: null, dateTo: null };
+}
+
 export function useAttendance() {
   const { user } = useAuth();
   const toast = useToast();
@@ -49,10 +69,12 @@ export function useAttendance() {
     user?.id || user?.email || user?.employeeId || "";
   const [searchParams] = useSearchParams();
   const deepLinkAckedRef = useRef("");
-  const { rows, loading, error, reload } = useListData(
-    fetchAttendanceRecords,
-    "Failed to load attendance",
-  );
+  const [rows, setRows] = useState([]);
+  const [serverTotal, setServerTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadToken, setReloadToken] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const {
     acknowledgeAttention,
@@ -122,11 +144,7 @@ export function useAttendance() {
       });
     }
     return defs;
-  }, [
-    canFilterByEmployee,
-    employeeFilterOptions,
-    showingMyAttendance,
-  ]);
+  }, [canFilterByEmployee, employeeFilterOptions, showingMyAttendance]);
 
   const canManageRecord = useCallback(
     (record) => {
@@ -139,23 +157,87 @@ export function useAttendance() {
     [isEmployee, isHr, myEmployeeId],
   );
 
-  const scopedRows = useMemo(() => {
-    if (!showingMyAttendance || !myEmployeeId) {
-      return rows || [];
-    }
-    return (rows || []).filter((row) => row.employeeId === myEmployeeId);
-  }, [myEmployeeId, rows, showingMyAttendance]);
-
   const tableSourceRows = useMemo(
-    () => withAttention(scopedRows),
-    [scopedRows, withAttention],
+    () => withAttention(rows || []),
+    [rows, withAttention],
   );
 
   const table = useDataTable(tableSourceRows, {
     columns: ATTENDANCE_COLUMNS,
     searchKeys: ATTENDANCE_SEARCH_KEYS,
     initialVisibleColumnIds: getAttendanceDefaultVisibleIds(showingMyAttendance),
+    serverTotal,
   });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(table.search);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [table.search]);
+
+  const listQuery = useMemo(() => {
+    const { dateFrom, dateTo } = periodFilterToDateBounds(
+      table.columnFilters?.date,
+    );
+    const filterEmployeeId = showingMyAttendance
+      ? myEmployeeId
+      : table.columnFilters?.employeeId || null;
+
+    return {
+      page: table.page,
+      pageSize: table.pageSize,
+      search: debouncedSearch,
+      status: table.columnFilters?.status || null,
+      employeeId: filterEmployeeId || null,
+      dateFrom,
+      dateTo,
+      sortId: table.sort?.id || "date",
+      sortDir: table.sort?.direction || "desc",
+    };
+  }, [
+    debouncedSearch,
+    myEmployeeId,
+    showingMyAttendance,
+    table.columnFilters,
+    table.page,
+    table.pageSize,
+    table.sort?.direction,
+    table.sort?.id,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRows() {
+      try {
+        setLoading(true);
+        setError("");
+        const data = await fetchAttendanceRecords(listQuery);
+        if (cancelled) return;
+        setRows(data.records || []);
+        setServerTotal(data.total || 0);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Failed to load attendance");
+          setRows([]);
+          setServerTotal(0);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadRows();
+    return () => {
+      cancelled = true;
+    };
+  }, [listQuery, reloadToken]);
+
+  function reload() {
+    setReloadToken((token) => token + 1);
+  }
+
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -196,21 +278,37 @@ export function useAttendance() {
     acknowledgeRecord(record);
   }
 
-  // Deep-link from notification: /attendance?id=… or ?employeeId=…
   useEffect(() => {
     const recordId = String(searchParams.get("id") || "").trim();
     const employeeId = String(searchParams.get("employeeId") || "").trim();
     const key = recordId || employeeId;
-    if (!key || loading || !rows?.length) return;
+    if (!key || loading) return;
     if (deepLinkAckedRef.current === key) return;
 
     const match = recordId
       ? rows.find((row) => String(row.id) === recordId)
       : rows.find((row) => String(row.employeeId) === employeeId);
-    if (!match) return;
 
-    deepLinkAckedRef.current = key;
-    acknowledgeRecord(match);
+    if (match) {
+      deepLinkAckedRef.current = key;
+      acknowledgeRecord(match);
+      return;
+    }
+
+    if (!recordId) return;
+
+    let cancelled = false;
+    fetchAttendanceById(recordId)
+      .then((record) => {
+        if (cancelled || !record) return;
+        deepLinkAckedRef.current = key;
+        acknowledgeRecord(record);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [acknowledgeRecord, loading, rows, searchParams]);
 
   async function confirmDelete() {
@@ -219,12 +317,13 @@ export function useAttendance() {
       setDeleting(true);
       setDeleteError("");
       await deleteAttendance(deleteTarget.id);
-      toast.crudSuccess("Attendance", "delete");
+      toast.success("Attendance record deleted");
       setDeleteTarget(null);
       reload();
       requestEmsRefresh();
     } catch (err) {
       setDeleteError(err.message || "Failed to delete attendance");
+      toast.error(err.message || "Failed to delete attendance");
     } finally {
       setDeleting(false);
     }
@@ -254,7 +353,7 @@ export function useAttendance() {
       setImportStats(null);
 
       const buffer = await file.arrayBuffer();
-      const parsed = parseAttendanceImportFile(buffer);
+      const parsed = await parseAttendanceImportFile(buffer);
       if (!parsed.ok) {
         setImportErrors(
           parsed.errors?.length
@@ -265,7 +364,9 @@ export function useAttendance() {
       }
 
       const stats = summarizeImportResult(
-        await importAttendanceRecords(parsed.rows),
+        await importAttendanceRecords(parsed.rows, {
+          filename: file.name,
+        }),
       );
 
       setImportStats(stats);
@@ -279,6 +380,30 @@ export function useAttendance() {
       );
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleExportCsv() {
+    try {
+      const pageSize = 100;
+      let page = 1;
+      let all = [];
+      let total = Infinity;
+      while (all.length < total) {
+        const data = await fetchAttendanceRecords({
+          ...listQuery,
+          page,
+          pageSize,
+        });
+        total = data.total || 0;
+        all = all.concat(data.records || []);
+        if (!data.records?.length) break;
+        page += 1;
+        if (page > 200) break;
+      }
+      table.exportCsv("attendance.csv", all);
+    } catch (err) {
+      toast.error(err.message || "Failed to export attendance");
     }
   }
 
@@ -320,6 +445,7 @@ export function useAttendance() {
     fileInputRef,
     openImportPicker,
     handleImportFile,
+    handleExportCsv,
   };
 }
 

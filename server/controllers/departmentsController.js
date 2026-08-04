@@ -37,8 +37,6 @@ function parseDepartmentPayload(body) {
     department: {
       name,
       headEmployeeId,
-      // DB column remains NOT NULL; description is no longer collected in the UI.
-      description: '',
     },
   }
 }

@@ -387,10 +387,9 @@ export async function seedEmployees() {
   for (const dept of DEPARTMENT_TARGETS) {
     await query(
       `UPDATE departments
-       SET head_employee_id = $2,
-           employee_count = $3
+       SET head_employee_id = $2
        WHERE id = $1`,
-      [dept.id, dept.headId, dept.count],
+      [dept.id, dept.headId],
     )
   }
 

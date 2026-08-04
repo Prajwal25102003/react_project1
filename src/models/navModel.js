@@ -132,9 +132,7 @@ export function isNavItemActive(item, pathname) {
   if (item.path === "/leave-requests") {
     return (
       pathname === "/leave-requests" ||
-      pathname.startsWith("/leave-requests/") ||
-      pathname === "/leave-approvals" ||
-      pathname.startsWith("/leave-approvals/")
+      pathname.startsWith("/leave-requests/")
     );
   }
 

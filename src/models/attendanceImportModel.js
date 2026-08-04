@@ -1,4 +1,3 @@
-import * as XLSX from "xlsx";
 import { ATTENDANCE_STATUSES, calculateWorkingHours } from "./attendanceModel.js";
 import { formatDateDisplay } from "./datePickerModel.js";
 
@@ -26,11 +25,11 @@ function normalizeHeader(value) {
     .replace(/\s+/g, "");
 }
 
-function excelDateToIso(value) {
+function excelDateToIso(value, XLSXLib) {
   if (value === null || value === undefined || value === "") return "";
 
   if (typeof value === "number" && Number.isFinite(value)) {
-    const parsed = XLSX.SSF.parse_date_code(value);
+    const parsed = XLSXLib.SSF.parse_date_code(value);
     if (!parsed) return "";
     const month = String(parsed.m).padStart(2, "0");
     const day = String(parsed.d).padStart(2, "0");
@@ -79,16 +78,19 @@ function normalizeStatus(value) {
 /**
  * Parse an Excel/CSV attendance file into validated rows + parse errors.
  * Expected columns: employeeId, date, status, checkIn, checkOut
+ * Loads `xlsx` on demand so the attendance route chunk stays smaller.
  */
-export function parseAttendanceImportFile(fileBuffer) {
-  const workbook = XLSX.read(fileBuffer, { type: "array", cellDates: false });
+export async function parseAttendanceImportFile(fileBuffer) {
+  const mod = await import("xlsx");
+  const XLSXLib = mod.default ?? mod;
+  const workbook = XLSXLib.read(fileBuffer, { type: "array", cellDates: false });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
     return { ok: false, rows: [], errors: ["Excel file has no sheets."] };
   }
 
   const sheet = workbook.Sheets[sheetName];
-  const rawRows = XLSX.utils.sheet_to_json(sheet, {
+  const rawRows = XLSXLib.utils.sheet_to_json(sheet, {
     defval: "",
     raw: true,
   });
@@ -104,7 +106,10 @@ export function parseAttendanceImportFile(fileBuffer) {
     if (alias) mappedKeys[key] = alias;
   }
 
-  if (!Object.values(mappedKeys).includes("employeeId") || !Object.values(mappedKeys).includes("date")) {
+  if (
+    !Object.values(mappedKeys).includes("employeeId") ||
+    !Object.values(mappedKeys).includes("date")
+  ) {
     return {
       ok: false,
       rows: [],
@@ -117,7 +122,6 @@ export function parseAttendanceImportFile(fileBuffer) {
   const rows = [];
   const errors = [];
 
-  // Pass 1: flag repeated employee + date pairs anywhere in the file.
   /** @type {Map<string, number[]>} */
   const employeeDateLines = new Map();
   rawRows.forEach((raw, index) => {
@@ -127,7 +131,7 @@ export function parseAttendanceImportFile(fileBuffer) {
       mapped[alias] = raw[key];
     }
     const employeeId = String(mapped.employeeId ?? "").trim().toUpperCase();
-    const date = excelDateToIso(mapped.date);
+    const date = excelDateToIso(mapped.date, XLSXLib);
     if (!employeeId || !date) return;
     const key = `${employeeId}|${date}`;
     const lines = employeeDateLines.get(key) || [];
@@ -149,7 +153,7 @@ export function parseAttendanceImportFile(fileBuffer) {
     }
 
     const employeeId = String(mapped.employeeId ?? "").trim().toUpperCase();
-    const date = excelDateToIso(mapped.date);
+    const date = excelDateToIso(mapped.date, XLSXLib);
     const status = normalizeStatus(mapped.status) || "Present";
     const checkIn = normalizeClock(mapped.checkIn);
     const checkOut = normalizeClock(mapped.checkOut);
@@ -222,7 +226,6 @@ export function parseAttendanceImportFile(fileBuffer) {
     });
   });
 
-  // Reject the whole file if any row has field errors.
   if (errors.length > 0) {
     return { ok: false, rows: [], errors };
   }
