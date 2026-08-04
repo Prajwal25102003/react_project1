@@ -9,6 +9,28 @@ export const NOTIFICATION_CATEGORY_NAV_IDS = {
 const LEAVE_APPROVAL_STATUSES = new Set(["Pending"]);
 const PERSONAL_LEAVE_OUTCOME_STATUSES = new Set(["Rejected", "Approved"]);
 
+/** New hire / admin grant — the only Employees events that badge the module. */
+export function isEmployeeAddNotification(notification) {
+  const category = String(notification?.category || "").toLowerCase();
+  if (category !== "employees") return false;
+
+  const eventType = String(notification?.eventType || "").toLowerCase();
+  const status = String(notification?.status || "").toLowerCase();
+  const title = String(notification?.title || "").toLowerCase();
+
+  if (eventType === "employee.added" || eventType === "admin.added") return true;
+  if (status === "added") return true;
+  if (
+    title.includes("new employee added") ||
+    title.includes("admin added") ||
+    title.includes("you added employee") ||
+    title.includes("you added admin")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** Deletions stay in the header feed only — never badge a sidebar module. */
 export function isRemovalOnlyNotification(notification) {
   const category = String(notification?.category || "").toLowerCase();
@@ -147,6 +169,15 @@ export function navIdsForNotification(
     available.has("leave-requests")
   ) {
     return ["leave-requests"];
+  }
+
+  // Employees sidebar: badge only for new hires that still exist.
+  // Removals / updates / orphaned adds (subject deleted) stay header-only.
+  if (category === "Employees") {
+    if (!available.has("employees")) return [];
+    if (!isEmployeeAddNotification(notification)) return [];
+    if (!notification?.subjectEmployeeId) return [];
+    return ["employees"];
   }
 
   // Admin maintains the calendar — header notifications only, no sidebar badge.

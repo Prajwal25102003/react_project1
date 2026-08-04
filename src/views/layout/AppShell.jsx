@@ -15,6 +15,7 @@ function AppShell() {
         groups={groups}
         sidebarToggle={sidebarToggle}
         onClose={closeSidebar}
+        barClassName={header.barClassName}
       />
 
       <div className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto">

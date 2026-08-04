@@ -15,6 +15,7 @@ import {
 } from "../../models/formLayoutModel.js";
 import Breadcrumb from "../components/Breadcrumb.jsx";
 import PageCard from "../components/PageCard.jsx";
+import DateField from "../components/forms/DateField.jsx";
 import { FieldError, RequiredMark } from "../components/forms/FormHelpers.jsx";
 import PasswordField from "../components/forms/PasswordField.jsx";
 import SelectField from "../components/forms/SelectField.jsx";
@@ -380,17 +381,15 @@ function EmployeeFormPage() {
                       <label className={LABEL_CLASS}>
                         Joining Date <RequiredMark />
                       </label>
-                      <input
-                        type="date"
+                      <DateField
                         value={form.joiningDate}
-                        onChange={(event) =>
-                          updateField("joiningDate", event.target.value)
+                        onChange={(nextValue) =>
+                          updateField("joiningDate", nextValue)
                         }
-                        className={
-                          fieldErrors.joiningDate
-                            ? INPUT_ERROR_CLASS
-                            : INPUT_CLASS
-                        }
+                        ariaLabel="Joining Date"
+                        hasError={Boolean(fieldErrors.joiningDate)}
+                        placeholder="Select joining date"
+                        compact
                       />
                       <FieldError message={fieldErrors.joiningDate} />
                       <p className="mt-1.5 text-theme-xs text-gray-500">
