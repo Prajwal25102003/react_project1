@@ -116,10 +116,10 @@ function EmployeeFormPage() {
           subtitle={
             isEdit
               ? isAdminAccount
-                ? "Update name, email, password, or profile photo."
+                ? "Update name, email, password, status, or profile photo."
                 : "Update employee details in the directory."
               : canCreateAdmin
-                ? "Add a staff employee or another admin. Admins only need name, email, password, and photo."
+                ? "Add a staff employee or another admin. Admins need name, email, password, status, and photo."
                 : "Add a new employee and create their login for the employee dashboard."
           }
           bodyClassName="p-5 sm:p-6"
@@ -239,6 +239,25 @@ function EmployeeFormPage() {
                         At least {MIN_EMPLOYEE_PASSWORD_LENGTH} characters.
                       </p>
                       <FieldError message={fieldErrors.password} />
+                    </div>
+
+                    <div>
+                      <label className={LABEL_CLASS}>
+                        Status <RequiredMark />
+                      </label>
+                      <SelectField
+                        value={form.status}
+                        onChange={(nextValue) =>
+                          updateField("status", nextValue)
+                        }
+                        ariaLabel="Status"
+                        hasError={Boolean(fieldErrors.status)}
+                        options={EMPLOYEE_STATUSES.map((status) => ({
+                          value: status,
+                          label: status,
+                        }))}
+                      />
+                      <FieldError message={fieldErrors.status} />
                     </div>
                   </div>
 

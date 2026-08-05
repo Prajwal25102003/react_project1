@@ -9,6 +9,7 @@ import {
   periodFilterTitle,
 } from "../../models/datePickerModel.js";
 import { INPUT_CLASS } from "../../models/formLayoutModel.js";
+import { formatNavBadgeCount } from "../../models/navBadgesModel.js";
 import { ActionIcon } from "../icons/ActionIcons.jsx";
 import DateField from "./forms/DateField.jsx";
 import HoverTooltip from "./HoverTooltip.jsx";
@@ -17,10 +18,10 @@ import StatusPill from "./StatusPill.jsx";
 import UserAvatar from "./UserAvatar.jsx";
 
 const TOOLBAR_BTN =
-  "inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
 
 const TOOLBAR_BTN_ACTIVE =
-  "inline-flex items-center justify-center rounded-lg border border-brand-500 bg-brand-50 px-3 py-2 text-theme-sm font-medium text-brand-500 shadow-theme-xs hover:bg-brand-50";
+  "inline-flex items-center justify-center gap-1.5 rounded-lg border border-brand-500 bg-brand-50 px-3 py-2 text-theme-sm font-medium text-brand-500 shadow-theme-xs hover:bg-brand-50";
 
 /** Keep outer table edge gap equal to the gap between columns. */
 function cellPadClass({ dense, fitWidth, vertical, columnIndex, columnCount }) {
@@ -510,6 +511,7 @@ function DataTable({
                 const activeValue = filter.activeValue ?? "true";
                 const isActive =
                   String(columnFilters[filter.id] || "") === String(activeValue);
+                const badge = formatNavBadgeCount(filter.badge);
                 return (
                   <button
                     key={filter.id}
@@ -521,10 +523,22 @@ function DataTable({
                       )
                     }
                     aria-pressed={isActive}
-                    aria-label={filter.label}
+                    aria-label={
+                      badge
+                        ? `${filter.label}, ${badge} notifications`
+                        : filter.label
+                    }
                     className={`w-full sm:w-auto ${isActive ? TOOLBAR_BTN_ACTIVE : TOOLBAR_BTN}`}
                   >
                     {filter.label}
+                    {badge ? (
+                      <span
+                        className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-error-50 px-1.5 text-theme-xs font-medium text-error-600"
+                        aria-hidden="true"
+                      >
+                        {badge}
+                      </span>
+                    ) : null}
                   </button>
                 );
               }

@@ -88,6 +88,17 @@ export function useEmployees() {
     [rows, withAttention],
   );
 
+  /** Unread admin-add notifications that badge Employees — show on Admin filter. */
+  const adminAttentionCount = useMemo(
+    () =>
+      (tableSourceRows || []).filter(
+        (row) =>
+          row.needsAttention &&
+          (row.isAdminAccount || row.loginRole === "admin"),
+      ).length,
+    [tableSourceRows],
+  );
+
   const table = useDataTable(tableSourceRows, {
     columns: EMPLOYEE_COLUMNS,
     searchKeys: EMPLOYEE_SEARCH_KEYS,
@@ -123,6 +134,7 @@ export function useEmployees() {
               label: "Admin",
               type: "toggle",
               activeValue: "true",
+              badge: adminAttentionCount,
             },
           ]
         : []),
@@ -136,7 +148,7 @@ export function useEmployees() {
           ]
         : []),
     ],
-    [departmentFilterOptions, isAdminUser],
+    [adminAttentionCount, departmentFilterOptions, isAdminUser],
   );
 
   const assignableEmployees = useMemo(

@@ -167,6 +167,7 @@ export function toEmployeePayload(form, options = {}) {
       accountType: "admin",
       name: String(form.name ?? "").trim(),
       email,
+      status: String(form.status ?? "").trim() || "Active",
       avatar: String(form.avatar ?? "").trim() || null,
     };
     if (includeCredentials && email) {
@@ -253,6 +254,11 @@ export function validateEmployeeForm(form, options = {}) {
     if (!email) fieldErrors.email = "Email is required";
     else if (!EMAIL_PATTERN.test(email))
       fieldErrors.email = "Enter a valid email address";
+
+    if (!status) fieldErrors.status = "Status is required";
+    else if (!EMPLOYEE_STATUSES.includes(status)) {
+      fieldErrors.status = "Select a valid status";
+    }
 
     if (avatar && !avatar.startsWith("/") && !/^https?:\/\//i.test(avatar)) {
       fieldErrors.avatar = "Please select a valid image file";

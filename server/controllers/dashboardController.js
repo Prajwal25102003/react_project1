@@ -57,8 +57,9 @@ function buildOrgPrimaryMetrics(
       id: 'total-employees',
       label: 'Total Employees',
       value: String(total),
-      trend: `${stats.newEmployees} new ${periodLabel}`,
-      trendUp: stats.newEmployees > 0,
+      trend: 'live',
+      trendVariant: 'live',
+      trendUp: true,
       href: '/employees',
     },
     {
