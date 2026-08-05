@@ -162,18 +162,31 @@ function MetricCardBody({ metric, Icon, compact, tone }) {
         </div>
 
         {metric.trend ? (
-          <span
-            className={`inline-flex max-w-[12rem] items-center gap-1 rounded-full py-0.5 pl-2 pr-2.5 text-right text-sm font-medium leading-snug ${
-              metric.trendUp
-                ? "bg-success-50 text-success-600 "
-                : "bg-error-50 text-error-600"
-            }`}
-          >
-            <span className="shrink-0">
-              {metric.trendUp ? <TrendUpIcon /> : <TrendDownIcon />}
+          metric.trendVariant === "live" || metric.trend === "live" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-success-50 py-0.5 pl-2 pr-2.5 text-sm font-medium text-success-600">
+              <span
+                className="relative flex h-2 w-2 shrink-0"
+                aria-hidden="true"
+              >
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success-400 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-success-500" />
+              </span>
+              live
             </span>
-            {metric.trend}
-          </span>
+          ) : (
+            <span
+              className={`inline-flex max-w-[12rem] items-center gap-1 rounded-full py-0.5 pl-2 pr-2.5 text-right text-sm font-medium leading-snug ${
+                metric.trendUp
+                  ? "bg-success-50 text-success-600 "
+                  : "bg-error-50 text-error-600"
+              }`}
+            >
+              <span className="shrink-0">
+                {metric.trendUp ? <TrendUpIcon /> : <TrendDownIcon />}
+              </span>
+              {metric.trend}
+            </span>
+          )
         ) : null}
       </div>
     </>

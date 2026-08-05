@@ -7,6 +7,7 @@ import {
   updateEmployeeUserCredentials,
 } from '../models/authModel.js'
 import {
+  countAdminUsers,
   createAdminUser,
   deleteAdminUser,
 } from '../models/adminUsersModel.js'
@@ -82,13 +83,14 @@ function parseLoginEmail(body, { required }) {
   return { errors, loginEmail }
 }
 
-/** Minimal admin profile — name, email, optional photo. Other DB fields use defaults. */
+/** Minimal admin profile — name, email, status, optional photo. Other DB fields use defaults. */
 function parseAdminPayload(body, { previous = null } = {}) {
   const errors = []
   const name = String(body?.name ?? '').trim()
   const email = String(body?.email ?? body?.loginEmail ?? body?.gmail ?? '')
     .trim()
     .toLowerCase()
+  const status = String(body?.status ?? previous?.status ?? 'Active').trim()
   const avatarRaw = body?.avatar
   const avatar =
     avatarRaw === null || avatarRaw === undefined || avatarRaw === ''
@@ -98,6 +100,8 @@ function parseAdminPayload(body, { previous = null } = {}) {
   if (!name) errors.push('Name is required')
   if (!email) errors.push('Email is required')
   else if (!isValidEmail(email)) errors.push('Email is invalid')
+  if (!status) errors.push('Status is required')
+  else if (!STATUSES.has(status)) errors.push('Status must be Active or Inactive')
 
   const today = new Date().toISOString().slice(0, 10)
   const phoneSource =
@@ -118,7 +122,7 @@ function parseAdminPayload(body, { previous = null } = {}) {
       designation: previous?.designation || 'System Administrator',
       joiningDate: previous?.joiningDate || today,
       salary: 0,
-      status: previous?.status || 'Active',
+      status,
       avatar,
       casualLeaveBalance: 0,
       sickLeaveBalance: 0,
@@ -679,23 +683,21 @@ export async function deleteEmployeeHandler(req, res) {
         return res.status(404).json({ message: 'Admin account not found' })
       }
 
-      const result = await deleteAdminUser(adminUser.id, {
-        actorUserId: req.user?.id,
-      })
-      if (!result.ok) {
-        if (result.reason === 'self') {
-          return res.status(400).json({
-            message: 'You cannot remove your own admin account',
-          })
-        }
-        if (result.reason === 'last_admin') {
-          return res.status(400).json({
-            message: 'At least one admin account must remain',
-          })
-        }
-        return res.status(400).json({ message: 'Unable to remove admin' })
+      if (req.user?.id && Number(req.user.id) === Number(adminUser.id)) {
+        return res.status(400).json({
+          message: 'You cannot remove your own admin account',
+        })
       }
 
+      const adminCount = await countAdminUsers()
+      if (adminCount <= 1) {
+        return res.status(400).json({
+          message: 'At least one admin account must remain',
+        })
+      }
+
+      // Log before delete — subject_employee_id FK cannot reference a removed employee,
+      // and deleteAdminUser may also remove the admin-only employee profile.
       const actorLabel = formatActorLabel(actorFromUser(req.user))
       const adminAudience = await buildEmployeeAudienceMeta(existing)
       await createRecentActivity({
@@ -715,6 +717,13 @@ export async function deleteEmployeeHandler(req, res) {
           actorRole: req.user?.role || null,
         },
       })
+
+      const result = await deleteAdminUser(adminUser.id, {
+        actorUserId: req.user?.id,
+      })
+      if (!result.ok) {
+        return res.status(400).json({ message: 'Unable to remove admin' })
+      }
 
       return res.json({ message: 'Admin removed' })
     }
