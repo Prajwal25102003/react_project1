@@ -9,6 +9,7 @@
     "server": "nodemon server/index.js",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --test server/tests/**/*.test.js",
     "seed:users": "node server/scripts/seedUsers.js",
     "seed:employees": "node server/scripts/seedEmployees.js",
     "seed:attendance": "node server/scripts/seedAttendance.js",

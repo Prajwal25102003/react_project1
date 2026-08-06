@@ -83,7 +83,7 @@ function parseLoginEmail(body, { required }) {
   return { errors, loginEmail }
 }
 
-/** Minimal admin profile — name, email, status, optional photo. Other DB fields use defaults. */
+/** Minimal admin profile — name, email, status, address, optional photo. */
 function parseAdminPayload(body, { previous = null } = {}) {
   const errors = []
   const name = String(body?.name ?? '').trim()
@@ -96,12 +96,18 @@ function parseAdminPayload(body, { previous = null } = {}) {
     avatarRaw === null || avatarRaw === undefined || avatarRaw === ''
       ? null
       : String(avatarRaw).trim()
+  const country = String(body?.country ?? previous?.country ?? '').trim()
+  const cityState = String(body?.cityState ?? previous?.cityState ?? '').trim()
+  const postalCode = String(body?.postalCode ?? previous?.postalCode ?? '').trim()
 
   if (!name) errors.push('Name is required')
   if (!email) errors.push('Email is required')
   else if (!isValidEmail(email)) errors.push('Email is invalid')
   if (!status) errors.push('Status is required')
   else if (!STATUSES.has(status)) errors.push('Status must be Active or Inactive')
+  if (!country) errors.push('Country is required')
+  if (!cityState) errors.push('City / State is required')
+  if (!postalCode) errors.push('Postal code is required')
 
   const today = new Date().toISOString().slice(0, 10)
   const phoneSource =
@@ -124,6 +130,9 @@ function parseAdminPayload(body, { previous = null } = {}) {
       salary: 0,
       status,
       avatar,
+      country: country || null,
+      cityState: cityState || null,
+      postalCode: postalCode || null,
       casualLeaveBalance: 0,
       sickLeaveBalance: 0,
     },
@@ -131,7 +140,10 @@ function parseAdminPayload(body, { previous = null } = {}) {
   }
 }
 
-function parseEmployeePayload(body, { requireDepartment = true } = {}) {
+function parseEmployeePayload(
+  body,
+  { requireDepartment = true, previous = null } = {},
+) {
   const errors = []
 
   const name = String(body?.name ?? '').trim()
@@ -147,6 +159,9 @@ function parseEmployeePayload(body, { requireDepartment = true } = {}) {
     avatarRaw === null || avatarRaw === undefined || avatarRaw === ''
       ? null
       : String(avatarRaw).trim()
+  const country = String(body?.country ?? previous?.country ?? '').trim()
+  const cityState = String(body?.cityState ?? previous?.cityState ?? '').trim()
+  const postalCode = String(body?.postalCode ?? previous?.postalCode ?? '').trim()
 
   if (!name) errors.push('Name is required')
   if (!email) errors.push('Email is required')
@@ -171,6 +186,10 @@ function parseEmployeePayload(body, { requireDepartment = true } = {}) {
   }
   if (!status) errors.push('Status is required')
   else if (!STATUSES.has(status)) errors.push('Status must be Active or Inactive')
+
+  if (!country) errors.push('Country is required')
+  if (!cityState) errors.push('City / State is required')
+  if (!postalCode) errors.push('Postal code is required')
 
   const salary = Number(body?.salary)
   if (body?.salary === undefined || body?.salary === null || body?.salary === '') {
@@ -200,6 +219,9 @@ function parseEmployeePayload(body, { requireDepartment = true } = {}) {
       salary,
       status,
       avatar,
+      country: country || null,
+      cityState: cityState || null,
+      postalCode: postalCode || null,
       casualLeaveBalance,
       sickLeaveBalance,
     },
@@ -484,6 +506,7 @@ export async function updateEmployeeHandler(req, res) {
     } else {
       const { errors, employee: nextEmployee } = parseEmployeePayload(req.body, {
         requireDepartment: true,
+        previous,
       })
       const { errors: loginEmailErrors, loginEmail: nextLoginEmail } =
         parseLoginEmail(req.body, { required: false })

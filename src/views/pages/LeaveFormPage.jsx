@@ -5,6 +5,7 @@ import {
   MAX_MEDICAL_ATTACHMENTS,
   attachmentFileLabel,
 } from "../../models/leaveRequestsModel.js";
+import { resolveUploadUrl } from "../../utils/uploadUrl.js";
 import {
   FORM_GRID_CLASS,
   FORM_STACK_CLASS,
@@ -285,7 +286,7 @@ function LeaveFormPage() {
                             className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
                           >
                             <a
-                              href={file.url}
+                              href={resolveUploadUrl(file.url)}
                               target="_blank"
                               rel="noreferrer"
                               className="min-w-0 flex-1 truncate text-theme-sm font-medium text-brand-500 hover:text-brand-600"

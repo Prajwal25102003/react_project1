@@ -123,7 +123,7 @@ function normalizeAttachmentItem(item) {
 
 export function attachmentFileLabel(url, fallbackName = "") {
   if (fallbackName) return fallbackName;
-  const path = String(url || "").trim();
+  const path = String(url || "").trim().split("?")[0];
   if (!path) return "";
   const parts = path.split("/");
   return parts[parts.length - 1] || "Attached document";

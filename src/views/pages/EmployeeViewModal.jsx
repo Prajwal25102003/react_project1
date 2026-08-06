@@ -75,6 +75,15 @@ function EmployeeViewModal({ employee, onClose }) {
               </DetailItem>
             </>
           )}
+          <DetailItem label="Country">
+            {employee.country || "—"}
+          </DetailItem>
+          <DetailItem label="City / State">
+            {employee.cityState || "—"}
+          </DetailItem>
+          <DetailItem label="Postal Code">
+            {employee.postalCode || "—"}
+          </DetailItem>
           <DetailItem label="Status">
             <StatusPill
               label={employee.status}

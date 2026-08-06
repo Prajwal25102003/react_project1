@@ -80,6 +80,9 @@ export const EMPTY_EMPLOYEE_FORM = {
   salary: "0",
   status: "Active",
   avatar: "",
+  country: "",
+  cityState: "",
+  postalCode: "",
   gmail: "",
   password: "",
   // Optional paid leave quotas (casual + sick). Empty = 0; can be set later on edit.
@@ -134,6 +137,9 @@ export function toEmployeeFormValues(employee) {
         : String(employee.salary),
     status: employee.status || "Active",
     avatar: employee.avatar || "",
+    country: employee.country || "",
+    cityState: employee.cityState || "",
+    postalCode: employee.postalCode || "",
     gmail: employee.loginEmail || "",
     password: "",
     hasLoginAccount: Boolean(employee.hasLoginAccount),
@@ -169,6 +175,9 @@ export function toEmployeePayload(form, options = {}) {
       email,
       status: String(form.status ?? "").trim() || "Active",
       avatar: String(form.avatar ?? "").trim() || null,
+      country: String(form.country ?? "").trim() || null,
+      cityState: String(form.cityState ?? "").trim() || null,
+      postalCode: String(form.postalCode ?? "").trim() || null,
     };
     if (includeCredentials && email) {
       payload.loginEmail = email;
@@ -192,6 +201,9 @@ export function toEmployeePayload(form, options = {}) {
     salary: Number.isNaN(salaryValue) ? 0 : salaryValue,
     status: form.status,
     avatar: form.avatar.trim() || null,
+    country: String(form.country ?? "").trim() || null,
+    cityState: String(form.cityState ?? "").trim() || null,
+    postalCode: String(form.postalCode ?? "").trim() || null,
     casualLeaveBalance: parseOptionalLeaveDays(form.casualLeaveBalance),
     sickLeaveBalance: parseOptionalLeaveDays(form.sickLeaveBalance),
   };
@@ -260,6 +272,13 @@ export function validateEmployeeForm(form, options = {}) {
       fieldErrors.status = "Select a valid status";
     }
 
+    const country = String(form?.country ?? "").trim();
+    const cityState = String(form?.cityState ?? "").trim();
+    const postalCode = String(form?.postalCode ?? "").trim();
+    if (!country) fieldErrors.country = "Country is required";
+    if (!cityState) fieldErrors.cityState = "City / State is required";
+    if (!postalCode) fieldErrors.postalCode = "Postal code is required";
+
     if (avatar && !avatar.startsWith("/") && !/^https?:\/\//i.test(avatar)) {
       fieldErrors.avatar = "Please select a valid image file";
     }
@@ -311,6 +330,13 @@ export function validateEmployeeForm(form, options = {}) {
   else if (!EMPLOYEE_STATUSES.includes(status)) {
     fieldErrors.status = "Select a valid status";
   }
+
+  const country = String(form?.country ?? "").trim();
+  const cityState = String(form?.cityState ?? "").trim();
+  const postalCode = String(form?.postalCode ?? "").trim();
+  if (!country) fieldErrors.country = "Country is required";
+  if (!cityState) fieldErrors.cityState = "City / State is required";
+  if (!postalCode) fieldErrors.postalCode = "Postal code is required";
 
   if (avatar && !avatar.startsWith("/") && !/^https?:\/\//i.test(avatar)) {
     fieldErrors.avatar = "Please select a valid image file";

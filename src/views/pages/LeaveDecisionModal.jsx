@@ -15,6 +15,7 @@ import {
   leaveTypeSkipsBalanceDeduction,
   nextStepAfterCurrent,
 } from "../../models/leaveRequestsModel.js";
+import { resolveUploadUrl } from "../../utils/uploadUrl.js";
 
 function LeaveDecisionModal({
   request,
@@ -111,7 +112,7 @@ function LeaveDecisionModal({
                 {request.attachments.map((file) => (
                   <li key={file.url}>
                     <a
-                      href={file.url}
+                      href={resolveUploadUrl(file.url)}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
@@ -127,7 +128,7 @@ function LeaveDecisionModal({
             <div className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
               <p className={LABEL_CLASS}>Medical Document</p>
               <a
-                href={request.attachmentUrl}
+                href={resolveUploadUrl(request.attachmentUrl)}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-1 inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
