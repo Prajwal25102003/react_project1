@@ -10,6 +10,7 @@ import {
   clearSession,
   getStoredToken,
   getStoredUser,
+  isAccountActive,
   storeSession,
 } from "../models/authModel.js";
 import { fetchCurrentUser, signIn as signInRequest } from "../services/authService.js";
@@ -137,6 +138,7 @@ export function useAuthProviderValue() {
       token,
       loading,
       isAuthenticated: Boolean(user && token),
+      accountActive: isAccountActive(user),
       login,
       logout,
       refreshUser,

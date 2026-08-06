@@ -6,13 +6,18 @@ import {
   uploadLeaveMedicalHandler,
   uploadErrorHandler,
 } from '../controllers/uploadsController.js'
-import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
+import {
+  requireActiveAccount,
+  requireAuth,
+  requireRole,
+} from '../middleware/authMiddleware.js'
 
 const router = Router()
 
 router.post(
   '/avatar',
   requireAuth,
+  requireActiveAccount,
   requireRole('hr', 'admin'),
   (req, res, next) => {
     avatarUpload.single('avatar')(req, res, (error) => {
@@ -33,6 +38,7 @@ router.post(
 router.post(
   '/leave-medical',
   requireAuth,
+  requireActiveAccount,
   (req, res, next) => {
     leaveMedicalUpload.single('document')(req, res, (error) => {
       if (error) {

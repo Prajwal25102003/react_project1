@@ -55,14 +55,22 @@ export async function findUserById(id) {
 
 export async function findUserByEmployeeId(employeeId) {
   const result = await query(
-    `SELECT id, email, password_hash, role, employee_id, name
-     FROM users
-     WHERE employee_id = $1
-     ORDER BY CASE role
-       WHEN 'admin' THEN 0
-       WHEN 'hr' THEN 1
-       ELSE 2
-     END
+    `SELECT u.id, u.email, u.password_hash, u.role, u.employee_id, u.name
+     FROM users u
+     LEFT JOIN employees e ON e.id = u.employee_id
+     WHERE u.employee_id = $1
+     ORDER BY
+       CASE
+         WHEN e.email IS NOT NULL
+           AND lower(u.email) = lower(e.email) THEN 0
+         ELSE 1
+       END,
+       CASE u.role
+         WHEN 'admin' THEN 0
+         WHEN 'hr' THEN 1
+         ELSE 2
+       END,
+       u.id ASC
      LIMIT 1`,
     [employeeId],
   )
@@ -106,6 +114,10 @@ export async function createEmployeeUser(
  * Password hash is unchanged when passwordHash is omitted.
  * When role is provided, every non-admin login linked to this employee is updated
  * so duplicate emails (e.g. hr@… and name@…) stay in sync.
+ *
+ * Prefer the login that already owns the submitted email so a status-only (or
+ * other) save does not reassign that address onto a sibling row and trip the
+ * users.email unique constraint.
  */
 export async function updateEmployeeUserCredentials(
   employeeId,
@@ -114,12 +126,22 @@ export async function updateEmployeeUserCredentials(
   const linked = await findUsersByEmployeeId(employeeId)
   if (linked.length === 0) return null
 
+  const normalizedEmail =
+    email !== undefined ? String(email).trim().toLowerCase() : ''
+  const emailOwner = normalizedEmail
+    ? linked.find(
+        (user) => String(user.email || '').trim().toLowerCase() === normalizedEmail,
+      )
+    : null
+
   const primary =
+    emailOwner ||
     linked.find((user) => user.role === 'admin') ||
     linked.find((user) => user.role === 'hr') ||
     linked[0]
 
-  const nextEmail = email !== undefined ? email : primary.email
+  const nextEmail =
+    email !== undefined && !emailOwner ? email : primary.email
   const nextName = name !== undefined ? name : primary.name
   const nextHash =
     passwordHash !== undefined ? passwordHash : primary.passwordHash

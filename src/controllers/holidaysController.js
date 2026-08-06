@@ -5,7 +5,7 @@ import { useToast } from "./toastContext.jsx";
 import { useNotifications } from "./notificationsContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
-import { ROLES } from "../models/authModel.js";
+import { ROLES, isAccountActive } from "../models/authModel.js";
 import {
   buildReleaseYearOptions,
   buildYearOptions,
@@ -58,7 +58,8 @@ const MONTH_NAMES = [
 export function useHolidays() {
   const { user } = useAuth();
   const { notifications } = useNotifications();
-  const canManage = user?.role === ROLES.ADMIN;
+  const isHolidayAdmin = user?.role === ROLES.ADMIN;
+  const canManage = isHolidayAdmin && isAccountActive(user);
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
@@ -80,16 +81,16 @@ export function useHolidays() {
   const toast = useToast();
 
   const recentChanges = useMemo(() => {
-    if (canManage || !seenUserKey) return [];
+    if (isHolidayAdmin || !seenUserKey) return [];
     return mapHolidayChangeNotifications(notifications);
-  }, [canManage, notifications, seenUserKey]);
+  }, [isHolidayAdmin, notifications, seenUserKey]);
 
   const { acknowledgeAttention, withAttention } = useModuleNotificationAttention({
     navId: "holidays",
     role: user?.role,
     seenUserKey,
-    enabled: !canManage && Boolean(seenUserKey),
-    acknowledgeOrphansOnMount: !canManage && Boolean(seenUserKey),
+    enabled: !isHolidayAdmin && Boolean(seenUserKey),
+    acknowledgeOrphansOnMount: !isHolidayAdmin && Boolean(seenUserKey),
   });
 
   const showActionFlash = useCallback(
@@ -110,7 +111,7 @@ export function useHolidays() {
     [toast],
   );
 
-  const columns = useMemo(() => getHolidayColumns(canManage), [canManage]);
+  const columns = useMemo(() => getHolidayColumns(isHolidayAdmin), [isHolidayAdmin]);
   const filteredHolidays = useMemo(() => {
     if (!selectedCalendarDate) return holidays;
     return holidays.filter((holiday) => holiday.date === selectedCalendarDate);

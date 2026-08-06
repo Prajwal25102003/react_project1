@@ -1,7 +1,9 @@
 import { useCallback, useState } from "react";
+import { useAuth } from "./authContext.jsx";
 import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
+import { isAccountActive } from "../models/authModel.js";
 import {
   fetchLeaveApprovalHierarchies,
   updateLeaveApprovalHierarchy,
@@ -35,6 +37,8 @@ function remapStepFieldErrors(fieldErrors, mapIndex) {
 
 export function useLeaveApprovalHierarchy() {
   const toast = useToast();
+  const { user } = useAuth();
+  const canWrite = isAccountActive(user);
   const loadHierarchies = useCallback(() => fetchLeaveApprovalHierarchies(), []);
   const { rows, loading, error, reload } = useListData(
     loadHierarchies,
@@ -58,6 +62,7 @@ export function useLeaveApprovalHierarchy() {
   const [saving, setSaving] = useState(false);
 
   function openEditModal(hierarchy) {
+    if (!canWrite) return;
     const { steps, remapped } = stepsToForm(
       hierarchy.steps,
       hierarchy.category,
@@ -166,7 +171,7 @@ export function useLeaveApprovalHierarchy() {
 
   async function submitForm(event) {
     event?.preventDefault?.();
-    if (!editing?.category) return;
+    if (!editing?.category || !canWrite) return;
 
     const validation = validateHierarchyForm(form, editing.category);
     if (!validation.ok) {
@@ -205,6 +210,7 @@ export function useLeaveApprovalHierarchy() {
     error,
     reload,
     table,
+    canWrite,
     formOpen,
     editing,
     form,
@@ -217,6 +223,7 @@ export function useLeaveApprovalHierarchy() {
     updateStep,
     addStep,
     canAddStep:
+      canWrite &&
       (form.steps || []).length < maxStepsForCategory(editingCategory),
     stepApproverOptions,
     removeStep,

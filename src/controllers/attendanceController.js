@@ -30,7 +30,7 @@ import {
   getAttendanceDefaultVisibleIds,
   getAttendanceDisplayColumns,
 } from "../models/attendanceTableModel.js";
-import { ROLES } from "../models/authModel.js";
+import { ROLES, isAccountActive } from "../models/authModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
 
 /** Map DataTable period filter values to inclusive SQL date bounds. */
@@ -148,14 +148,18 @@ export function useAttendance() {
 
   const canManageRecord = useCallback(
     (record) => {
+      if (!isAccountActive(user)) return false;
       if (isEmployee) return false;
       if (isHr && myEmployeeId && record?.employeeId === myEmployeeId) {
         return false;
       }
       return true;
     },
-    [isEmployee, isHr, myEmployeeId],
+    [isEmployee, isHr, myEmployeeId, user],
   );
+
+  const canImportAttendance =
+    !isEmployee && isAccountActive(user) && (isHr || isAdmin);
 
   const tableSourceRows = useMemo(
     () => withAttention(rows || []),
@@ -430,6 +434,7 @@ export function useAttendance() {
     listScopeOptions,
     showingMyAttendance,
     canManageRecord,
+    canImportAttendance,
     hasUnread,
     markAllAsRead,
     deleteTarget,
@@ -453,6 +458,7 @@ export function useAttendanceForm(attendanceId) {
   const navigate = useNavigate();
   const toast = useToast();
   const { user } = useAuth();
+  const canWrite = isAccountActive(user);
   const [form, setForm] = useState({ ...EMPTY_ATTENDANCE_FORM });
   const [fieldErrors, setFieldErrors] = useState({});
   const [employees, setEmployees] = useState([]);
@@ -473,6 +479,14 @@ export function useAttendanceForm(attendanceId) {
         setLoading(true);
         setError("");
         setFieldErrors({});
+
+        if (!isAccountActive(user)) {
+          setError(
+            "Your account is temporarily inactive. You can view information but cannot make changes.",
+          );
+          setLoading(false);
+          return;
+        }
         const [employeeRows, record] = await Promise.all([
           fetchEmployees({
             excludeLoginRoles: ["admin"],
@@ -564,7 +578,7 @@ export function useAttendanceForm(attendanceId) {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (!attendanceId) return;
+    if (!attendanceId || !canWrite) return;
 
     const validation = validateAttendanceForm(form);
     if (!validation.ok) {
@@ -596,6 +610,7 @@ export function useAttendanceForm(attendanceId) {
     form,
     fieldErrors,
     employees,
+    canWrite,
     loading,
     saving,
     error,

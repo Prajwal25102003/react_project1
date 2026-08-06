@@ -19,6 +19,7 @@ function DepartmentFormPage() {
     form,
     fieldErrors,
     headCandidates,
+    canWrite,
     loading,
     saving,
     error,
@@ -134,24 +135,26 @@ function DepartmentFormPage() {
               ) : null}
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60"
-                >
-                  {saving
-                    ? "Saving…"
-                    : isEdit
-                      ? "Save Changes"
-                      : "Create Department"}
-                </button>
+                {canWrite ? (
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60"
+                  >
+                    {saving
+                      ? "Saving…"
+                      : isEdit
+                        ? "Save Changes"
+                        : "Create Department"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleCancel}
                   disabled={saving}
                   className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:opacity-60"
                 >
-                  Cancel
+                  {canWrite ? "Cancel" : "Back"}
                 </button>
               </div>
             </form>

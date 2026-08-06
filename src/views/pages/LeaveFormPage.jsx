@@ -31,6 +31,7 @@ function LeaveFormPage() {
     halfDaySelected,
     maternityHelp,
     balances,
+    canWrite,
     loading,
     saving,
     uploadingAttachment,
@@ -326,20 +327,22 @@ function LeaveFormPage() {
               ) : null}
 
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <button
-                  type="submit"
-                  disabled={saving || uploadingAttachment}
-                  className="w-full rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60 sm:w-auto"
-                >
-                  {saving ? "Submitting…" : "Submit Request"}
-                </button>
+                {canWrite ? (
+                  <button
+                    type="submit"
+                    disabled={saving || uploadingAttachment}
+                    className="w-full rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-60 sm:w-auto"
+                  >
+                    {saving ? "Submitting…" : "Submit Request"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={handleCancel}
                   disabled={saving || uploadingAttachment}
                   className="w-full rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 disabled:opacity-60 sm:w-auto"
                 >
-                  Cancel
+                  {canWrite ? "Cancel" : "Back"}
                 </button>
               </div>
             </form>

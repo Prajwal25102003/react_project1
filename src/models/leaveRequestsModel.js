@@ -338,6 +338,40 @@ function resolveApprovalStepName(stepDef, request, history) {
   return null;
 }
 
+function isStatusInactive(status) {
+  return String(status || "").trim().toLowerCase() === "inactive";
+}
+
+/** True when the person who should act on this step is Inactive. */
+export function isApprovalStepApproverInactive(stepDef, request) {
+  if (!stepDef || !request) return false;
+
+  if (stepDef.approverKind === "department_head") {
+    return isStatusInactive(request.departmentHeadStatus);
+  }
+
+  if (stepDef.approverKind === "role" && stepDef.approverRole === "hr") {
+    return isStatusInactive(request.hrApproverStatus);
+  }
+
+  return false;
+}
+
+/** Copy shown on the stepper when Team Lead / HR cannot act. */
+export function inactiveApproverStepMessage(stepDef) {
+  if (!stepDef) return null;
+
+  if (stepDef.approverKind === "department_head") {
+    return "Team Lead is inactive. Contact admin.";
+  }
+
+  if (stepDef.approverKind === "role" && stepDef.approverRole === "hr") {
+    return "HR is inactive. Contact admin.";
+  }
+
+  return null;
+}
+
 /**
  * Multilevel approval steps for the leave details stepper.
  * Prefer request.hierarchySteps when present; fall back to legacy paths.
@@ -501,6 +535,14 @@ export function buildLeaveApprovalSteps(request) {
       label = "Approved";
     }
 
+    const inactiveApprover =
+      status === "Pending" &&
+      state === "current" &&
+      isApprovalStepApproverInactive(step, request);
+    if (inactiveApprover) {
+      state = "inactive";
+    }
+
     return {
       id: step.id,
       label,
@@ -509,6 +551,7 @@ export function buildLeaveApprovalSteps(request) {
           ? null
           : resolveApprovalStepName(step, request, history),
       state,
+      error: inactiveApprover ? inactiveApproverStepMessage(step) : null,
     };
   });
 }
@@ -559,6 +602,8 @@ export function mapLeaveRequest(request) {
     hierarchyId: request.hierarchyId ?? null,
     currentStep,
     hierarchySteps,
+    departmentHeadStatus: request.departmentHeadStatus || null,
+    hrApproverStatus: request.hrApproverStatus || null,
     statusLabel:
       status === "Pending"
         ? pendingStatusLabel({

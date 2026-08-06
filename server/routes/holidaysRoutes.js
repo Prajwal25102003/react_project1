@@ -9,19 +9,44 @@ import {
   releaseHolidayCalendarHandler,
   updateHolidayHandler,
 } from '../controllers/holidaysController.js'
-import { requireAuth, requireRole } from '../middleware/authMiddleware.js'
+import {
+  requireActiveAccount,
+  requireAuth,
+  requireRole,
+} from '../middleware/authMiddleware.js'
+import { validateBody } from '../middleware/validateBody.js'
+import {
+  holidayReleaseSchema,
+  holidayWriteSchema,
+} from '../models/requestSchemas.js'
 
 const router = Router()
 const adminOnly = [requireAuth, requireRole('admin')]
+const adminWrite = [requireAuth, requireActiveAccount, requireRole('admin')]
 
 router.get('/calendars', requireAuth, getHolidayCalendars)
 router.get('/calendars/:year/template', ...adminOnly, getHolidayCalendarTemplate)
-router.post('/calendars/:year/release', ...adminOnly, releaseHolidayCalendarHandler)
+router.post(
+  '/calendars/:year/release',
+  ...adminWrite,
+  validateBody(holidayReleaseSchema),
+  releaseHolidayCalendarHandler,
+)
 
 router.get('/', requireAuth, getHolidays)
 router.get('/:id', requireAuth, getHolidayById)
-router.post('/', ...adminOnly, createHolidayHandler)
-router.put('/:id', ...adminOnly, updateHolidayHandler)
-router.delete('/:id', ...adminOnly, deleteHolidayHandler)
+router.post(
+  '/',
+  ...adminWrite,
+  validateBody(holidayWriteSchema),
+  createHolidayHandler,
+)
+router.put(
+  '/:id',
+  ...adminWrite,
+  validateBody(holidayWriteSchema),
+  updateHolidayHandler,
+)
+router.delete('/:id', ...adminWrite, deleteHolidayHandler)
 
 export default router

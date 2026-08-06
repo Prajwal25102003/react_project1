@@ -77,6 +77,7 @@ function AttendancePage() {
     listScopeOptions,
     showingMyAttendance,
     canManageRecord,
+    canImportAttendance,
     hasUnread,
     markAllAsRead,
     deleteTarget,
@@ -182,7 +183,7 @@ function AttendancePage() {
               : "bg-white hover:bg-gray-50/80"
           }
           toolbarStart={
-            isEmployee ? null : (
+            canImportAttendance ? (
               <>
                 <input
                   ref={fileInputRef}
@@ -200,7 +201,7 @@ function AttendancePage() {
                   {importing ? "Importing…" : "Import Excel"}
                 </button>
               </>
-            )
+            ) : null
           }
           getActions={
             isEmployee || showingMyAttendance

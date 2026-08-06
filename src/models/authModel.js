@@ -50,6 +50,20 @@ export const ROLE_NAV_IDS = {
 
 export const HR_ADMIN_ROLES = [ROLES.HR, ROLES.ADMIN];
 
+/** Shown in the header when the linked employee/admin profile is Inactive. */
+export const ACCOUNT_INACTIVE_BANNER =
+  "Your account is temporarily inactive — view only";
+
+export const ACCOUNT_INACTIVE_MESSAGE =
+  "Your account is temporarily inactive. You can view information but cannot make changes.";
+
+/** Inactive profiles may sign in and read; mutations are blocked. */
+export function isAccountActive(user) {
+  if (!user) return false;
+  const status = String(user.status || "Active").trim().toLowerCase();
+  return status !== "inactive";
+}
+
 const TOKEN_KEY = "ems_auth_token";
 const USER_KEY = "ems_auth_user";
 

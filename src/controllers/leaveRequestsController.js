@@ -42,7 +42,11 @@ import {
   LEAVE_REQUEST_SEARCH_KEYS,
   getLeaveRequestDefaultVisibleIds,
 } from "../models/leaveRequestsTableModel.js";
-import { ROLES } from "../models/authModel.js";
+import {
+  ACCOUNT_INACTIVE_MESSAGE,
+  ROLES,
+  isAccountActive,
+} from "../models/authModel.js";
 import { userCanApproveLeaves } from "../models/navModel.js";
 import { requestEmsRefresh } from "../utils/emsRefresh.js";
 import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
@@ -67,13 +71,17 @@ export function useLeaveRequests() {
   const isAdmin = user?.role === ROLES.ADMIN;
   const isDepartmentHead = Boolean(user?.isDepartmentHead);
   const isNamedLeaveApprover = Boolean(user?.isNamedLeaveApprover);
-  const canApproveLeaves = userCanApproveLeaves(user?.role, {
-    isDepartmentHead,
-    isNamedLeaveApprover,
-  });
+  const canApproveLeaves =
+    isAccountActive(user) &&
+    userCanApproveLeaves(user?.role, {
+      isDepartmentHead,
+      isNamedLeaveApprover,
+    });
   // Admin maintains modules and is not an employee leave requester.
   const canRequestLeave =
-    Boolean(user?.employeeId) && user?.role !== ROLES.ADMIN;
+    isAccountActive(user) &&
+    Boolean(user?.employeeId) &&
+    user?.role !== ROLES.ADMIN;
   // Admin reviews leave whenever hierarchy current step is Admin (any category).
   const listApiScope = isAdmin
     ? "admin"
@@ -371,7 +379,8 @@ export function useLeaveRequests() {
   }
 
   const canApproveViewTarget = Boolean(
-    viewTarget &&
+    isAccountActive(user) &&
+      viewTarget &&
       actorMatchesCurrentStep(viewTarget, {
         employeeId: user?.employeeId,
         role: user?.role,
@@ -478,6 +487,8 @@ export function useLeaveRequests() {
   }
 
   function getLeaveActions(request) {
+    if (!isAccountActive(user)) return [];
+
     const actions = [];
     const canAct = actorMatchesCurrentStep(request, {
       employeeId: user?.employeeId,
@@ -580,6 +591,7 @@ export function useLeaveForm() {
   const [saving, setSaving] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [error, setError] = useState("");
+  const canWrite = isAccountActive(user);
 
   const availableLeaveTypes = leaveTypesForGender(gender, LEAVE_TYPES);
   const maternitySelected = isMaternityLeave(form.leaveType);
@@ -595,6 +607,10 @@ export function useLeaveForm() {
 
         if (user?.role === ROLES.ADMIN) {
           throw new Error("Admin accounts cannot submit leave requests");
+        }
+
+        if (!isAccountActive(user)) {
+          throw new Error(ACCOUNT_INACTIVE_MESSAGE);
         }
 
         if (!user?.employeeId) {
@@ -862,6 +878,12 @@ export function useLeaveForm() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (!canWrite) {
+      setError(ACCOUNT_INACTIVE_MESSAGE);
+      return;
+    }
+
     const validation = validateLeaveForm(form, { gender, holidayDates });
     if (!validation.ok) {
       setFieldErrors(validation.fieldErrors);
@@ -900,6 +922,7 @@ export function useLeaveForm() {
     halfDaySelected: !maternitySelected && form.duration === "half",
     maternityHelp: MATERNITY_LEAVE_HELP,
     balances,
+    canWrite,
     loading,
     saving,
     uploadingAttachment,
