@@ -11,6 +11,7 @@ import {
   buildLeaveApprovalSteps,
   formatLeaveDaysLabel,
 } from "../../models/leaveRequestsModel.js";
+import { resolveUploadUrl } from "../../utils/uploadUrl.js";
 
 function DetailItem({ label, children, valueAlign = "start" }) {
   return (
@@ -217,7 +218,7 @@ function LeaveViewModal({
               {request.attachments.map((file) => (
                 <li key={file.url}>
                   <a
-                    href={file.url}
+                    href={resolveUploadUrl(file.url)}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"
@@ -233,7 +234,7 @@ function LeaveViewModal({
           <div className="min-w-0 rounded-2xl border border-gray-200 bg-white px-4 py-3">
             <p className={LABEL_CLASS}>Medical Document</p>
             <a
-              href={request.attachmentUrl}
+              href={resolveUploadUrl(request.attachmentUrl)}
               target="_blank"
               rel="noreferrer"
               className="mt-1 inline-flex text-theme-sm font-medium text-brand-500 hover:text-brand-600"

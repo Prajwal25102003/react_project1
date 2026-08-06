@@ -1,4 +1,5 @@
 import { getNameInitials } from "../../utils/nameInitials.js";
+import { resolveUploadUrl } from "../../utils/uploadUrl.js";
 import { cn } from "../../utils/cn.js";
 
 const SIZE_CLASS = {
@@ -23,6 +24,7 @@ function UserAvatar({
   const sizeClass = SIZE_CLASS[size] || SIZE_CLASS.sm;
   const label = alt || name || "User";
   const hasImage = Boolean(src && String(src).trim());
+  const imageSrc = hasImage ? resolveUploadUrl(src) : "";
 
   if (hasImage) {
     return (
@@ -34,7 +36,7 @@ function UserAvatar({
         )}
       >
         <img
-          src={src}
+          src={imageSrc}
           alt={label}
           className="h-full w-full object-cover"
         />

@@ -52,6 +52,9 @@ const EMPLOYEE_SELECT = `
   e.salary,
   e.status,
   e.avatar,
+  e.country,
+  e.city_state AS "cityState",
+  e.postal_code AS "postalCode",
   ${LEAVE_BALANCE_SELECT},
   ${LOGIN_ROLE_SELECT}
 `
@@ -69,6 +72,9 @@ const EMPLOYEE_LIST_SELECT = `
   TO_CHAR(e.joining_date, 'YYYY-MM-DD') AS "joiningDate",
   e.status,
   e.avatar,
+  e.country,
+  e.city_state AS "cityState",
+  e.postal_code AS "postalCode",
   ${LEAVE_BALANCE_SELECT},
   ${LOGIN_ROLE_SELECT}
 `
@@ -200,10 +206,12 @@ export async function createEmployee(employee, client = null) {
     `INSERT INTO employees (
       id, name, email, phone, gender, department_id, designation,
       joining_date, salary, status, avatar,
+      country, city_state, postal_code,
       casual_leave_balance, sick_leave_balance, lop_days
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-      COALESCE($12, 0), COALESCE($13, 0), COALESCE($14, 0)
+      $12, $13, $14,
+      COALESCE($15, 0), COALESCE($16, 0), COALESCE($17, 0)
     )
     RETURNING id`,
     [
@@ -218,6 +226,9 @@ export async function createEmployee(employee, client = null) {
       employee.salary,
       employee.status,
       employee.avatar,
+      employee.country || null,
+      employee.cityState || null,
+      employee.postalCode || null,
       employee.casualLeaveBalance ?? 0,
       employee.sickLeaveBalance ?? 0,
       employee.lopDays ?? 0,
@@ -243,8 +254,11 @@ export async function updateEmployee(id, employee) {
       salary = $9,
       status = $10,
       avatar = $11,
-      casual_leave_balance = $12,
-      sick_leave_balance = $13
+      country = $12,
+      city_state = $13,
+      postal_code = $14,
+      casual_leave_balance = $15,
+      sick_leave_balance = $16
     WHERE id = $1
     RETURNING id`,
     [
@@ -259,6 +273,9 @@ export async function updateEmployee(id, employee) {
       employee.salary,
       employee.status,
       employee.avatar,
+      employee.country || null,
+      employee.cityState || null,
+      employee.postalCode || null,
       employee.casualLeaveBalance ?? 0,
       employee.sickLeaveBalance ?? 0,
     ],

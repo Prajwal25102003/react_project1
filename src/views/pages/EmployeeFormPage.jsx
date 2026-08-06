@@ -271,6 +271,85 @@ function EmployeeFormPage() {
                     onClear={clearAvatar}
                     nameFallback="Admin"
                   />
+
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
+                    <h3 className="text-theme-sm font-medium text-gray-800">
+                      Address
+                    </h3>
+                    <p className="mt-1 text-theme-xs text-gray-500">
+                      Required. Shown on the admin&apos;s Profile page when they
+                      sign in.
+                    </p>
+                    <div className={`${FORM_GRID_CLASS} mt-4`}>
+                      <div>
+                        <label className={LABEL_CLASS} htmlFor="admin-country">
+                          Country <RequiredMark />
+                        </label>
+                        <input
+                          id="admin-country"
+                          type="text"
+                          value={form.country}
+                          onChange={(event) =>
+                            updateField("country", event.target.value)
+                          }
+                          className={
+                            fieldErrors.country ? INPUT_ERROR_CLASS : INPUT_CLASS
+                          }
+                          placeholder="e.g. India"
+                          autoComplete="country-name"
+                        />
+                        <FieldError message={fieldErrors.country} />
+                      </div>
+                      <div>
+                        <label
+                          className={LABEL_CLASS}
+                          htmlFor="admin-city-state"
+                        >
+                          City / State <RequiredMark />
+                        </label>
+                        <input
+                          id="admin-city-state"
+                          type="text"
+                          value={form.cityState}
+                          onChange={(event) =>
+                            updateField("cityState", event.target.value)
+                          }
+                          className={
+                            fieldErrors.cityState
+                              ? INPUT_ERROR_CLASS
+                              : INPUT_CLASS
+                          }
+                          placeholder="e.g. Bengaluru, Karnataka"
+                          autoComplete="address-level1"
+                        />
+                        <FieldError message={fieldErrors.cityState} />
+                      </div>
+                      <div>
+                        <label
+                          className={LABEL_CLASS}
+                          htmlFor="admin-postal-code"
+                        >
+                          Postal Code <RequiredMark />
+                        </label>
+                        <input
+                          id="admin-postal-code"
+                          type="text"
+                          value={form.postalCode}
+                          onChange={(event) =>
+                            updateField("postalCode", event.target.value)
+                          }
+                          className={
+                            fieldErrors.postalCode
+                              ? INPUT_ERROR_CLASS
+                              : INPUT_CLASS
+                          }
+                          placeholder="e.g. 560001"
+                          autoComplete="postal-code"
+                        />
+                        <FieldError message={fieldErrors.postalCode} />
+                      </div>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <>
@@ -446,6 +525,85 @@ function EmployeeFormPage() {
                       onClear={clearAvatar}
                       nameFallback="Employee"
                     />
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">
+                    <h3 className="text-theme-sm font-medium text-gray-800">
+                      Address
+                    </h3>
+                    <p className="mt-1 text-theme-xs text-gray-500">
+                      Required. Shown on the employee&apos;s Profile page when
+                      they sign in.
+                    </p>
+                    <div className={`${FORM_GRID_CLASS} mt-4`}>
+                      <div>
+                        <label className={LABEL_CLASS} htmlFor="employee-country">
+                          Country <RequiredMark />
+                        </label>
+                        <input
+                          id="employee-country"
+                          type="text"
+                          value={form.country}
+                          onChange={(event) =>
+                            updateField("country", event.target.value)
+                          }
+                          className={
+                            fieldErrors.country ? INPUT_ERROR_CLASS : INPUT_CLASS
+                          }
+                          placeholder="e.g. India"
+                          autoComplete="country-name"
+                        />
+                        <FieldError message={fieldErrors.country} />
+                      </div>
+                      <div>
+                        <label
+                          className={LABEL_CLASS}
+                          htmlFor="employee-city-state"
+                        >
+                          City / State <RequiredMark />
+                        </label>
+                        <input
+                          id="employee-city-state"
+                          type="text"
+                          value={form.cityState}
+                          onChange={(event) =>
+                            updateField("cityState", event.target.value)
+                          }
+                          className={
+                            fieldErrors.cityState
+                              ? INPUT_ERROR_CLASS
+                              : INPUT_CLASS
+                          }
+                          placeholder="e.g. Bengaluru, Karnataka"
+                          autoComplete="address-level1"
+                        />
+                        <FieldError message={fieldErrors.cityState} />
+                      </div>
+                      <div>
+                        <label
+                          className={LABEL_CLASS}
+                          htmlFor="employee-postal-code"
+                        >
+                          Postal Code <RequiredMark />
+                        </label>
+                        <input
+                          id="employee-postal-code"
+                          type="text"
+                          value={form.postalCode}
+                          onChange={(event) =>
+                            updateField("postalCode", event.target.value)
+                          }
+                          className={
+                            fieldErrors.postalCode
+                              ? INPUT_ERROR_CLASS
+                              : INPUT_CLASS
+                          }
+                          placeholder="e.g. 560001"
+                          autoComplete="postal-code"
+                        />
+                        <FieldError message={fieldErrors.postalCode} />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 sm:p-5">

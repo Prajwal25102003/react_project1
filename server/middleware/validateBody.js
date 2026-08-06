@@ -1,6 +1,6 @@
 /**
  * Validate JSON body against a Zod schema.
- * On success, replaces req.body with the parsed value (unknown keys kept via .passthrough()).
+ * On success, replaces req.body with the parsed value (unknown keys stripped).
  */
 export function validateBody(schema) {
   return (req, res, next) => {

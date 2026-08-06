@@ -108,6 +108,14 @@ export async function getProfileHandler(req, res) {
     const nameParts = String(publicUser.name || '').trim().split(/\s+/)
     const firstName = nameParts[0] || publicUser.name || ''
     const lastName = nameParts.slice(1).join(' ') || ''
+    const displayOrDash = (value) => {
+      const text = String(value ?? '').trim()
+      return text || '—'
+    }
+    const bioParts = [
+      employee?.designation,
+      employee?.department,
+    ].filter((part) => String(part || '').trim())
 
     res.json({
       profile: {
@@ -121,14 +129,16 @@ export async function getProfileHandler(req, res) {
           firstName,
           lastName,
           email: employee?.email || publicUser.email,
-          phone: employee?.phone || '—',
-          bio: `${publicUser.role.toUpperCase()} — Employee Management System`,
+          phone: displayOrDash(employee?.phone),
+          bio: bioParts.length
+            ? bioParts.join(' · ')
+            : `${String(publicUser.role || '').toUpperCase()} — Employee Management System`,
         },
         address: {
-          country: 'India',
-          cityState: 'Bengaluru, Karnataka',
-          postalCode: '560001',
-          taxId: employee?.id || '—',
+          country: displayOrDash(employee?.country),
+          cityState: displayOrDash(employee?.cityState),
+          postalCode: displayOrDash(employee?.postalCode),
+          taxId: displayOrDash(employee?.id),
         },
         employee,
       },
