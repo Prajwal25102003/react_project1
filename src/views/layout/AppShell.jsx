@@ -34,6 +34,7 @@ function AppShell() {
           onAcknowledgeNotification={header.acknowledgeNotification}
           user={header.user}
           barClassName={header.barClassName}
+          accountInactiveBanner={header.accountInactiveBanner}
           userOpen={header.userOpen}
           onToggleUserMenu={header.toggleUserMenu}
           userMenuItems={header.userMenuItems}

@@ -4,6 +4,56 @@ import HoverTooltip from "../components/HoverTooltip.jsx";
 import StatusPill from "../components/StatusPill.jsx";
 import UserAvatar from "../components/UserAvatar.jsx";
 import { notificationDotTone } from "../../models/headerModel.js";
+import {
+  TOAST_ICON,
+  TOAST_SHELL,
+  TOAST_TEXT,
+} from "../../models/toastModel.js";
+
+function WarningAlertIcon() {
+  return (
+    <svg
+      className="fill-current"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M10.392 4.343c.72-1.247 2.496-1.247 3.216 0l7.54 13.064c.72 1.247-.18 2.808-1.608 2.808H4.46c-1.428 0-2.328-1.561-1.608-2.808L10.392 4.343ZM12 8.1a.9.9 0 0 1 .9.9v3.6a.9.9 0 1 1-1.8 0V9a.9.9 0 0 1 .9-.9Zm0 8.1a1.05 1.05 0 1 0 0-2.1 1.05 1.05 0 0 0 0 2.1Z"
+      />
+    </svg>
+  );
+}
+
+function AccountInactiveNotice({ message, compact = false }) {
+  if (!message) return null;
+
+  return (
+    <div
+      className={`flex w-full items-center justify-center gap-2.5 rounded-xl border py-0 shadow-theme-xs ${TOAST_SHELL.warning} ${
+        compact ? "h-10 px-3" : "h-11 px-4"
+      }`}
+      role="status"
+    >
+      <span
+        className={`inline-flex shrink-0 items-center justify-center ${TOAST_ICON.warning}`}
+        aria-hidden="true"
+      >
+        <WarningAlertIcon />
+      </span>
+      <p
+        className={`truncate text-center font-medium leading-5 ${TOAST_TEXT.warning} ${
+          compact ? "text-theme-sm" : "text-base"
+        }`}
+      >
+        {message}
+      </p>
+    </div>
+  );
+}
 
 function Header({
   sidebarToggle,
@@ -20,6 +70,7 @@ function Header({
   onAcknowledgeNotification,
   user,
   barClassName,
+  accountInactiveBanner,
   userOpen,
   onToggleUserMenu,
   userMenuItems,
@@ -30,8 +81,8 @@ function Header({
     <header
       className={`sticky top-0 z-99999 flex w-full min-w-0 max-w-full border-gray-200 ${barClassName || "bg-white"} lg:border-b`}
     >
-      <div className="flex grow flex-col items-center justify-between lg:flex-row lg:px-6">
-        <div className="flex w-full items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 sm:gap-4 lg:justify-normal lg:border-b-0 lg:px-0 lg:py-4">
+      <div className="flex grow flex-col items-center justify-between lg:flex-row lg:items-center lg:px-6">
+        <div className="flex w-full items-center justify-between gap-2 border-b border-gray-200 px-3 py-3 sm:gap-4 lg:w-auto lg:justify-normal lg:border-b-0 lg:px-0 lg:py-4">
           <button
             type="button"
             onClick={onToggleSidebar}
@@ -132,11 +183,27 @@ function Header({
           </button>
         </div>
 
+        {accountInactiveBanner ? (
+          <div className="hidden min-w-0 flex-1 items-center self-stretch px-3 lg:flex">
+            <AccountInactiveNotice message={accountInactiveBanner} />
+          </div>
+        ) : (
+          <div className="hidden flex-1 lg:block" aria-hidden="true" />
+        )}
+
         <div
-          className={`shadow-theme-md w-full items-center justify-between gap-4 px-5 py-4 lg:flex lg:justify-end lg:px-0 lg:shadow-none ${
+          className={`shadow-theme-md w-full items-center justify-between gap-4 px-5 py-4 lg:flex lg:w-auto lg:justify-end lg:px-0 lg:shadow-none ${
             menuToggle ? "flex" : "hidden"
           }`}
         >
+          {accountInactiveBanner ? (
+            <div className="min-w-0 flex-1 lg:hidden">
+              <AccountInactiveNotice
+                message={accountInactiveBanner}
+                compact
+              />
+            </div>
+          ) : null}
           <div className="2xsm:gap-3 flex items-center gap-2">
             <div className="relative" ref={notificationsRef}>
               <button

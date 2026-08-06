@@ -543,6 +543,9 @@ export async function updateEmployeeHandler(req, res) {
         credentialUpdate.role = loginRole
       }
 
+      // Pass login email so credential updates target the matching users row.
+      // updateEmployeeUserCredentials will not reassign an email already owned
+      // by another login for this employee (avoids false unique violations).
       if (manageLogin && loginEmail) {
         credentialUpdate.email = loginEmail
       }

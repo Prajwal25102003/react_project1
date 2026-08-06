@@ -17,6 +17,7 @@ function LeaveApprovalHierarchyPage() {
     formError,
     saving,
     openEditModal,
+    canWrite,
     closeFormModal,
     updateField,
     updateStep,
@@ -64,13 +65,17 @@ function LeaveApprovalHierarchyPage() {
           columnsOpen={table.columnsOpen}
           onColumnsOpenChange={table.setColumnsOpen}
           onExportCsv={() => table.exportCsv("leave-approval-hierarchies.csv")}
-          getActions={(hierarchy) => [
-            {
-              label: "Edit",
-              icon: "pencil",
-              onClick: () => openEditModal(hierarchy),
-            },
-          ]}
+          getActions={
+            canWrite
+              ? (hierarchy) => [
+                  {
+                    label: "Edit",
+                    icon: "pencil",
+                    onClick: () => openEditModal(hierarchy),
+                  },
+                ]
+              : undefined
+          }
           emptyMessage="No leave approval hierarchies found."
         />
       </ListPageShell>

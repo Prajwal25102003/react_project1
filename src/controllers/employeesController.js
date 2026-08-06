@@ -5,7 +5,12 @@ import { useToast } from "./toastContext.jsx";
 import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
 import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
-import { HR_ADMIN_ROLES, ROLES } from "../models/authModel.js";
+import {
+  ACCOUNT_INACTIVE_MESSAGE,
+  HR_ADMIN_ROLES,
+  ROLES,
+  isAccountActive,
+} from "../models/authModel.js";
 import { fetchDepartments } from "../services/departmentsService.js";
 import {
   createEmployee,
@@ -43,6 +48,8 @@ export function useEmployees() {
   const toast = useToast();
   const { user } = useAuth();
   const isAdminUser = user?.role === ROLES.ADMIN;
+  const accountActive = isAccountActive(user);
+  const canWrite = accountActive;
   const seenUserKey =
     user?.id || user?.email || user?.employeeId || "";
   const loadEmployees = useMemo(
@@ -382,6 +389,8 @@ export function useEmployees() {
   );
 
   function getEmployeeActions(employee) {
+    if (!canWrite) return [];
+
     const isAdminAccount =
       employee?.isAdminAccount || employee?.loginRole === "admin";
 
@@ -435,6 +444,7 @@ export function useEmployees() {
     reload,
     table,
     filterDefs,
+    canWrite,
     viewTarget,
     openViewModal,
     closeViewModal,
@@ -471,8 +481,11 @@ export function useEmployeeForm(employeeId) {
   const { user } = useAuth();
   const toast = useToast();
   const isEdit = Boolean(employeeId);
-  const canManageCredentials = HR_ADMIN_ROLES.includes(user?.role);
-  const canCreateAdmin = user?.role === ROLES.ADMIN;
+  const accountActive = isAccountActive(user);
+  const canManageCredentials =
+    accountActive && HR_ADMIN_ROLES.includes(user?.role);
+  const canCreateAdmin = accountActive && user?.role === ROLES.ADMIN;
+  const canWrite = accountActive;
   const showPasswordFields = !isEdit || canManageCredentials;
 
   const [form, setForm] = useState({ ...EMPTY_EMPLOYEE_FORM });
@@ -623,6 +636,11 @@ export function useEmployeeForm(employeeId) {
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (!canWrite) {
+      setError(ACCOUNT_INACTIVE_MESSAGE);
+      return;
+    }
+
     const validation = validateEmployeeForm(form, {
       isEdit,
       canManageCredentials,
@@ -676,6 +694,7 @@ export function useEmployeeForm(employeeId) {
     departments,
     isAdminAccount,
     canCreateAdmin,
+    canWrite,
     loading,
     saving,
     uploadingAvatar,

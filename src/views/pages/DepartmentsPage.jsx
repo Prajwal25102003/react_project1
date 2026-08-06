@@ -13,6 +13,7 @@ function DepartmentsPage() {
     error,
     table,
     filterDefs,
+    canWrite,
     deleteTarget,
     deleting,
     deleteError,
@@ -30,14 +31,16 @@ function DepartmentsPage() {
         error={error}
         loadingLabel="Loading departments…"
         actions={
-          <Link
-            to="/departments/new"
-            title="Add Department"
-            aria-label="Add Department"
-            className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
-          >
-            <PlusIcon />
-          </Link>
+          canWrite ? (
+            <Link
+              to="/departments/new"
+              title="Add Department"
+              aria-label="Add Department"
+              className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
+            >
+              <PlusIcon />
+            </Link>
+          ) : null
         }
       >
         <DataTable
@@ -73,20 +76,24 @@ function DepartmentsPage() {
               ? "bg-brand-25 hover:bg-brand-25"
               : "bg-white hover:bg-gray-50/80"
           }
-          getActions={(department) => [
-            {
-              label: "Edit",
-              icon: "pencil",
-              to: `/departments/${department.id}/edit`,
-              onClick: () => onDepartmentInteract(department),
-            },
-            {
-              label: "Delete",
-              icon: "trash",
-              tone: "danger",
-              onClick: () => openDeleteModal(department),
-            },
-          ]}
+          getActions={
+            canWrite
+              ? (department) => [
+                  {
+                    label: "Edit",
+                    icon: "pencil",
+                    to: `/departments/${department.id}/edit`,
+                    onClick: () => onDepartmentInteract(department),
+                  },
+                  {
+                    label: "Delete",
+                    icon: "trash",
+                    tone: "danger",
+                    onClick: () => openDeleteModal(department),
+                  },
+                ]
+              : undefined
+          }
           emptyMessage="No departments found."
         />
       </ListPageShell>

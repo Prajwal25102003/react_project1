@@ -19,7 +19,7 @@ function StepIcon({ state, index }) {
     );
   }
 
-  if (state === "rejected") {
+  if (state === "rejected" || state === "inactive") {
     return (
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-error-500 text-white shadow-theme-xs ring-4 ring-error-50">
         <svg
@@ -67,7 +67,7 @@ function StepIcon({ state, index }) {
 }
 
 function connectorClass(leftState) {
-  // Green path through accepted steps; reject/cancel stops the green trail.
+  // Green path through accepted steps; reject/cancel/inactive stops the green trail.
   if (leftState === "completed") return "bg-success-500";
   return "bg-gray-200";
 }
@@ -79,7 +79,7 @@ function labelClass(state) {
   if (state === "current") {
     return "text-success-600";
   }
-  if (state === "rejected") {
+  if (state === "rejected" || state === "inactive") {
     return "text-error-600";
   }
   if (state === "cancelled") {
@@ -103,6 +103,8 @@ function LeaveApprovalStepper({ steps = [] }) {
             : steps.length === 6
               ? "grid-cols-6"
               : "grid-cols-7";
+
+  const inactiveError = steps.find((step) => step.error)?.error || null;
 
   return (
     <div
@@ -160,6 +162,17 @@ function LeaveApprovalStepper({ steps = [] }) {
           </li>
         ))}
       </ol>
+
+      {inactiveError ? (
+        <div
+          className="mt-3 rounded-xl border border-error-500 bg-error-50 px-3 py-2 text-center"
+          role="alert"
+        >
+          <p className="text-theme-xs font-medium text-error-700 sm:text-theme-sm">
+            {inactiveError}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

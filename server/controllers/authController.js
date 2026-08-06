@@ -17,6 +17,7 @@ async function toPublicUserWithAvatar(user) {
     return {
       ...publicUser,
       avatar: null,
+      status: 'Active',
       isDepartmentHead: false,
       isNamedLeaveApprover: false,
     }
@@ -31,6 +32,7 @@ async function toPublicUserWithAvatar(user) {
   return {
     ...publicUser,
     avatar: employee?.avatar || null,
+    status: employee?.status || 'Active',
     isDepartmentHead,
     isNamedLeaveApprover: namedApprover,
   }

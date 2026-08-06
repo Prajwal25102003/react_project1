@@ -23,6 +23,7 @@ function EmployeesPage() {
     closeDeleteModal,
     confirmDelete,
     getEmployeeActions,
+    canWrite,
     assignOpen,
     assignForm,
     assignFieldErrors,
@@ -51,23 +52,25 @@ function EmployeesPage() {
         error={error}
         loadingLabel="Loading employees…"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={openAssignLeavesModal}
-              className="inline-flex h-9 items-center justify-center rounded-lg bg-brand-500 px-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
-            >
-              Assign Leaves
-            </button>
-            <Link
-              to="/employees/new"
-              title="Add Employee"
-              aria-label="Add Employee"
-              className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
-            >
-              <PersonPlusIcon />
-            </Link>
-          </div>
+          canWrite ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openAssignLeavesModal}
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-brand-500 px-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
+              >
+                Assign Leaves
+              </button>
+              <Link
+                to="/employees/new"
+                title="Add Employee"
+                aria-label="Add Employee"
+                className="inline-flex items-center justify-center rounded-md p-0.5 transition hover:opacity-80 hover:scale-105"
+              >
+                <PersonPlusIcon />
+              </Link>
+            </div>
+          ) : null
         }
       >
         <DataTable

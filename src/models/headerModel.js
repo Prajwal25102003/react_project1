@@ -1,4 +1,8 @@
-import { ROLES } from "./authModel.js";
+import {
+  ACCOUNT_INACTIVE_BANNER,
+  isAccountActive,
+  ROLES,
+} from "./authModel.js";
 import { STATUS_TONE, getStatusClass } from "./statusStylesModel.js";
 import { isRemovalOnlyNotification } from "./navBadgesModel.js";
 import { createSeenStateHelpers } from "../utils/seenState.js";
@@ -41,6 +45,12 @@ export function mapHeaderUser(authUser) {
     email: authUser.email || "",
     avatar: authUser.avatar || null,
   };
+}
+
+/** Banner copy when the signed-in profile is Inactive (null when active). */
+export function getAccountInactiveBanner(authUser) {
+  if (isAccountActive(authUser)) return null;
+  return ACCOUNT_INACTIVE_BANNER;
 }
 
 /**

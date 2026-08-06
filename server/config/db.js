@@ -14,9 +14,11 @@ const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'employee_management',
-  max: Number(process.env.DB_POOL_MAX) || 20,
+  // Keep low so local tools (pgAdmin, MCP) still have room under max_connections.
+  max: Number(process.env.DB_POOL_MAX) || 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000,
+  application_name: process.env.DB_APP_NAME || 'ems-api',
 })
 
 export async function query(text, params) {

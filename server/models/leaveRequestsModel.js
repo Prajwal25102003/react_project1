@@ -13,7 +13,9 @@ const LEAVE_SELECT = `
   e.department_id AS "departmentId",
   d.head_employee_id AS "departmentHeadId",
   head.name AS "departmentHeadName",
+  head.status AS "departmentHeadStatus",
   hr."hrApproverName",
+  hr."hrApproverStatus",
   e.casual_leave_balance AS "casualLeaveBalance",
   e.sick_leave_balance AS "sickLeaveBalance",
   e.lop_days AS "lopDays",
@@ -39,11 +41,13 @@ const LEAVE_FROM = `
   LEFT JOIN departments d ON d.id = e.department_id
   LEFT JOIN employees head ON head.id = d.head_employee_id
   LEFT JOIN (
-    SELECT e_hr.name AS "hrApproverName"
+    SELECT e_hr.name AS "hrApproverName", e_hr.status AS "hrApproverStatus"
     FROM users u_hr
     INNER JOIN employees e_hr ON e_hr.id = u_hr.employee_id
     WHERE u_hr.role = 'hr'
-    ORDER BY u_hr.id
+    ORDER BY
+      CASE WHEN e_hr.status = 'Active' THEN 0 ELSE 1 END,
+      u_hr.id
     LIMIT 1
   ) hr ON TRUE
   LEFT JOIN (

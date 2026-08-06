@@ -1,5 +1,10 @@
 import jwt from 'jsonwebtoken'
 import { findUserById, syncUserLoginRole } from '../models/authModel.js'
+import { findEmployeeById } from '../models/employeesModel.js'
+import { formatDbError } from '../utils/formatDbError.js'
+
+export const ACCOUNT_INACTIVE_MESSAGE =
+  'Your account is temporarily inactive. You can view information but cannot make changes.'
 
 function getJwtSecret() {
   const secret = String(process.env.JWT_SECRET || '').trim()
@@ -76,5 +81,33 @@ export function requireRole(...roles) {
       return res.status(403).json({ message: 'You do not have access to this resource' })
     }
     next()
+  }
+}
+
+/**
+ * Block create/update/delete for Inactive employee/admin profiles.
+ * Place after requireAuth on mutating routes. GET/read stays allowed.
+ */
+export async function requireActiveAccount(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Authentication required' })
+  }
+
+  if (!req.user.employeeId) {
+    return next()
+  }
+
+  try {
+    const employee = await findEmployeeById(req.user.employeeId)
+    const status = String(employee?.status || 'Active').trim()
+    req.user.status = status
+
+    if (status === 'Inactive') {
+      return res.status(403).json({ message: ACCOUNT_INACTIVE_MESSAGE })
+    }
+
+    return next()
+  } catch (error) {
+    return res.status(500).json({ message: formatDbError(error) })
   }
 }

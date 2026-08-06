@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  getAccountInactiveBanner,
   getHeaderBarClass,
   getUserMenuItems,
   mapHeaderUser,
@@ -93,6 +94,7 @@ export function useHeader() {
     userOpen,
     user: mapHeaderUser(authUser),
     barClassName: getHeaderBarClass(authUser),
+    accountInactiveBanner: getAccountInactiveBanner(authUser),
     notifications,
     notificationsLoading,
     hasUnread,

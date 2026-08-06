@@ -5,6 +5,7 @@ import { useDataTable } from "./dataTableController.js";
 import { useListData } from "./listController.js";
 import { useModuleNotificationAttention } from "./moduleNotificationAttentionController.js";
 import { useToast } from "./toastContext.jsx";
+import { isAccountActive } from "../models/authModel.js";
 import { fetchEmployees } from "../services/employeesService.js";
 import {
   createDepartment,
@@ -30,6 +31,7 @@ import { requestEmsRefresh } from "../utils/emsRefresh.js";
 export function useDepartments() {
   const toast = useToast();
   const { user } = useAuth();
+  const canWrite = isAccountActive(user);
   const seenUserKey =
     user?.id || user?.email || user?.employeeId || "";
   const [searchParams] = useSearchParams();
@@ -115,6 +117,7 @@ export function useDepartments() {
     reload,
     table,
     filterDefs: DEPARTMENT_COLUMN_FILTERS,
+    canWrite,
     deleteTarget,
     deleting,
     deleteError,
@@ -128,6 +131,8 @@ export function useDepartments() {
 export function useDepartmentForm(departmentId) {
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuth();
+  const canWrite = isAccountActive(user);
   const isEdit = Boolean(departmentId);
 
   const [form, setForm] = useState({ ...EMPTY_DEPARTMENT_FORM });
@@ -212,6 +217,13 @@ export function useDepartmentForm(departmentId) {
   async function handleSubmit(event) {
     event.preventDefault();
 
+    if (!canWrite) {
+      setError(
+        "Your account is temporarily inactive. You can view information but cannot make changes.",
+      );
+      return;
+    }
+
     const validation = validateDepartmentForm(form, { headCandidates });
     if (!validation.ok) {
       setFieldErrors(validation.fieldErrors);
@@ -251,6 +263,7 @@ export function useDepartmentForm(departmentId) {
     form,
     fieldErrors,
     headCandidates,
+    canWrite,
     loading,
     saving,
     error,
