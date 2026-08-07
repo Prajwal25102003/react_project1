@@ -45,18 +45,18 @@ function EmployeeDashboard({
 }) {
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 shrink-0">
-          <h2 className="text-xl font-semibold text-gray-800">My Dashboard</h2>
-          <p className="mt-0.5 text-theme-sm text-gray-500">
-            Your attendance and leave at a glance
-          </p>
+      <div className="min-w-0">
+        <h2 className="text-xl font-semibold text-gray-800">My Dashboard</h2>
+        <p className="mt-0.5 text-theme-sm text-gray-500">
+          Your attendance and leave at a glance
+        </p>
+        <div className="mt-3 w-full min-w-0">
+          <DashboardNotifications
+            messages={unreadMessages}
+            onDismiss={onDismissMessage}
+            onOpen={onAcknowledgeMessage}
+          />
         </div>
-        <DashboardNotifications
-          messages={unreadMessages}
-          onDismiss={onDismissMessage}
-          onOpen={onAcknowledgeMessage}
-        />
       </div>
 
       <MetricCards metrics={primaryMetrics} columns={3} />
@@ -100,19 +100,21 @@ function OrgDashboard({
 }) {
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-6 md:space-y-6">
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 shrink-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
           <h2 className="text-xl font-semibold text-gray-800">Dashboard</h2>
           <p className="mt-0.5 text-theme-sm text-gray-500">
             Workforce and leave overview
           </p>
+          <div className="mt-3 w-full min-w-0">
+            <DashboardNotifications
+              messages={unreadMessages}
+              onDismiss={onDismissMessage}
+              onOpen={onAcknowledgeMessage}
+            />
+          </div>
         </div>
-        <DashboardNotifications
-          messages={unreadMessages}
-          onDismiss={onDismissMessage}
-          onOpen={onAcknowledgeMessage}
-        />
-        <div className="ml-auto shrink-0 self-center">
+        <div className="shrink-0 self-start sm:pt-1">
           <PeriodTabs
             value={newEmployeesPeriod}
             onChange={setNewEmployeesPeriod}

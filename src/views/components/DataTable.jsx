@@ -283,9 +283,13 @@ function MobileCard({ columns, row, getActions, onRowClick, rowClassName = "" })
 
   return (
     <article
-      className={`rounded-xl border border-gray-200 bg-white p-4 shadow-theme-xs ${
-        onRowClick ? "cursor-pointer hover:border-gray-300" : ""
-      } ${rowClassName}`.trim()}
+      className={[
+        "rounded-xl border border-gray-200 p-4 shadow-theme-xs",
+        onRowClick ? "cursor-pointer hover:border-gray-300" : "",
+        rowClassName || "bg-white",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       onClick={onRowClick ? () => onRowClick(row) : undefined}
       onKeyDown={
         onRowClick
@@ -547,6 +551,8 @@ function DataTable({
                 <div
                   key={filter.id}
                   className={`min-w-0 w-full ${
+                    filter.mobileFullWidth ? "col-span-2" : ""
+                  } ${
                     filter.type === "date" || filter.type === "month"
                       ? "sm:w-48"
                       : "sm:w-40"
@@ -594,7 +600,7 @@ function DataTable({
               <button
                 type="button"
                 onClick={handleClearFilters}
-                className={`w-full sm:w-auto ${TOOLBAR_BTN}`}
+                className={`col-span-2 w-full sm:w-auto ${TOOLBAR_BTN}`}
               >
                 Clear filters
               </button>
