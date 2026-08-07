@@ -24,3 +24,15 @@ export async function fetchAuthProfile() {
   const data = await fetchJson("/api/auth/profile", "Failed to load profile");
   return data.profile;
 }
+
+/** Revoke server-side session (token_version bump). Best-effort on logout. */
+export async function signOut() {
+  try {
+    await fetchJson("/api/auth/logout", "Failed to sign out", {
+      method: "POST",
+      body: {},
+    });
+  } catch {
+    /* still clear local session */
+  }
+}

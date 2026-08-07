@@ -10,6 +10,7 @@ import {
   countWorkingLeaveDays,
   isWorkingLeaveDay,
 } from "./leaveWorkingDaysModel.js";
+import { canonicalizeUploadPath } from "../utils/uploadUrl.js";
 
 export const LEAVE_TYPES = [
   "Sick Leave",
@@ -26,7 +27,7 @@ export const MEDICAL_LEAVE_TYPE = "Medical Leave";
 export const WORK_FROM_HOME_TYPE = "Work from Home";
 export const MAX_MEDICAL_ATTACHMENTS = 5;
 export const MEDICAL_ATTACHMENT_URL_PATTERN =
-  /^\/uploads\/medical-[^/]+$/i;
+  /^\/uploads\/medical-[A-Za-z0-9._-]+$/i;
 
 export function isMedicalLeave(leaveType) {
   return String(leaveType || "").trim() === MEDICAL_LEAVE_TYPE;
@@ -96,8 +97,9 @@ export function parseMedicalAttachments(raw) {
     }
   }
 
-  if (MEDICAL_ATTACHMENT_URL_PATTERN.test(text)) {
-    return [{ url: text, name: "" }];
+  const legacy = canonicalizeUploadPath(text);
+  if (legacy && MEDICAL_ATTACHMENT_URL_PATTERN.test(legacy)) {
+    return [{ url: text.trim(), name: "" }];
   }
 
   return [];
@@ -105,16 +107,20 @@ export function parseMedicalAttachments(raw) {
 
 function normalizeAttachmentItem(item) {
   if (typeof item === "string") {
-    const url = item.trim();
-    return MEDICAL_ATTACHMENT_URL_PATTERN.test(url)
-      ? { url, name: "" }
+    const raw = item.trim();
+    const canonical = canonicalizeUploadPath(raw);
+    return canonical && MEDICAL_ATTACHMENT_URL_PATTERN.test(canonical)
+      ? { url: raw, name: "" }
       : null;
   }
   if (item && typeof item === "object") {
-    const url = String(item.url || "").trim();
-    if (!MEDICAL_ATTACHMENT_URL_PATTERN.test(url)) return null;
+    const raw = String(item.url || "").trim();
+    const canonical = canonicalizeUploadPath(raw);
+    if (!canonical || !MEDICAL_ATTACHMENT_URL_PATTERN.test(canonical)) {
+      return null;
+    }
     return {
-      url,
+      url: raw,
       name: String(item.name || item.originalName || "").trim(),
     };
   }
@@ -783,7 +789,10 @@ export function toLeavePayload(form) {
 
   if (isMedicalLeave(form.leaveType)) {
     payload.attachments = parseMedicalAttachments(form.attachments).map(
-      ({ url, name }) => ({ url, name: name || "" }),
+      ({ url, name }) => ({
+        url: canonicalizeUploadPath(url) || url,
+        name: name || "",
+      }),
     );
   }
 
@@ -876,9 +885,10 @@ export function validateLeaveForm(form, { gender, holidayDates = [] } = {}) {
     } else if (attachments.length > MAX_MEDICAL_ATTACHMENTS) {
       fieldErrors.attachments = `You can upload up to ${MAX_MEDICAL_ATTACHMENTS} documents`;
     } else if (
-      attachments.some(
-        (item) => !MEDICAL_ATTACHMENT_URL_PATTERN.test(item.url),
-      )
+      attachments.some((item) => {
+        const canonical = canonicalizeUploadPath(item.url);
+        return !canonical || !MEDICAL_ATTACHMENT_URL_PATTERN.test(canonical);
+      })
     ) {
       fieldErrors.attachments = "Upload valid medical documents only";
     }

@@ -15,7 +15,7 @@ function getJwtSecret() {
 }
 
 function getJwtExpiresIn() {
-  return process.env.JWT_EXPIRES_IN || '7d'
+  return process.env.JWT_EXPIRES_IN || '12h'
 }
 
 export function signAuthToken(user) {
@@ -26,6 +26,7 @@ export function signAuthToken(user) {
       employeeId: user.employeeId || null,
       email: user.email,
       name: user.name,
+      tv: Number(user.tokenVersion ?? 0),
     },
     getJwtSecret(),
     { expiresIn: getJwtExpiresIn() },
@@ -51,6 +52,11 @@ export async function requireAuth(req, res, next) {
       return res.status(401).json({ message: 'User not found' })
     }
 
+    const tokenVersion = Number(payload.tv ?? 0)
+    if (tokenVersion !== Number(dbUser.tokenVersion ?? 0)) {
+      return res.status(401).json({ message: 'Session has been revoked' })
+    }
+
     // Prefer live DB role so HR headship promotions apply without forcing re-login.
     const user = await syncUserLoginRole(dbUser)
     req.tokenClaims = {
@@ -58,6 +64,7 @@ export async function requireAuth(req, res, next) {
       employeeId: payload.employeeId || null,
       email: payload.email,
       name: payload.name,
+      tv: tokenVersion,
     }
     req.user = {
       id: user.id,
@@ -65,6 +72,7 @@ export async function requireAuth(req, res, next) {
       employeeId: user.employeeId || null,
       email: user.email,
       name: user.name,
+      tokenVersion: user.tokenVersion,
     }
     next()
   } catch {

@@ -42,7 +42,13 @@ export const employeeWriteSchema = z.object({
   avatar: optionalNullableString,
   casualLeaveBalance: leaveBalanceValue.optional(),
   sickLeaveBalance: leaveBalanceValue.optional(),
-  password: z.string().optional(),
+  password: z
+    .string()
+    .optional()
+    .refine(
+      (value) => value === undefined || value === '' || value.length >= 8,
+      { message: 'Password must be at least 8 characters' },
+    ),
   accountType: z.enum(['admin', 'employee']).optional(),
   role: z.enum(['admin', 'hr', 'employee']).optional(),
   country: z.string().optional(),

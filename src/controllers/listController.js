@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DATA_REFRESH_EVENT } from "../utils/dataRefresh.js";
 
 export function useListData(fetcher, fallbackError) {
   const [rows, setRows] = useState([]);
@@ -35,6 +36,16 @@ export function useListData(fetcher, fallbackError) {
       cancelled = true;
     };
   }, [fetcher, fallbackError, reloadToken]);
+
+  useEffect(() => {
+    function handleDataRefresh() {
+      setReloadToken((token) => token + 1);
+    }
+    window.addEventListener(DATA_REFRESH_EVENT, handleDataRefresh);
+    return () => {
+      window.removeEventListener(DATA_REFRESH_EVENT, handleDataRefresh);
+    };
+  }, []);
 
   function reload() {
     setReloadToken((token) => token + 1);

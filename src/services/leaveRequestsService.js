@@ -37,9 +37,11 @@ export async function fetchLeaveRequests(scope = "mine") {
 
   leaveListCache.scope = key;
   leaveListCache.promise = (async () => {
-    const query = key ? `?scope=${encodeURIComponent(key)}` : "";
+    const params = new URLSearchParams();
+    if (key) params.set("scope", key);
+    params.set("limit", "500");
     const data = await fetchJson(
-      `/api/leave-requests${query}`,
+      `/api/leave-requests?${params.toString()}`,
       "Failed to load leave requests",
     );
     const mapped = (data.leaveRequests || []).map(mapLeaveRequest);

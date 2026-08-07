@@ -5,6 +5,7 @@ import {
   normalizeIndianPhone,
   toIndianPhoneInputValue,
 } from "../utils/indianPhone.js";
+import { canonicalizeUploadPath } from "../utils/uploadUrl.js";
 
 export const EMPLOYEE_GENDERS = ["Male", "Female"];
 export const EMPLOYEE_STATUSES = ["Active", "Inactive"];
@@ -174,7 +175,7 @@ export function toEmployeePayload(form, options = {}) {
       name: String(form.name ?? "").trim(),
       email,
       status: String(form.status ?? "").trim() || "Active",
-      avatar: String(form.avatar ?? "").trim() || null,
+      avatar: canonicalizeUploadPath(form.avatar) || null,
       country: String(form.country ?? "").trim() || null,
       cityState: String(form.cityState ?? "").trim() || null,
       postalCode: String(form.postalCode ?? "").trim() || null,
@@ -200,7 +201,7 @@ export function toEmployeePayload(form, options = {}) {
     joiningDate: form.joiningDate,
     salary: Number.isNaN(salaryValue) ? 0 : salaryValue,
     status: form.status,
-    avatar: form.avatar.trim() || null,
+    avatar: canonicalizeUploadPath(form.avatar) || null,
     country: String(form.country ?? "").trim() || null,
     cityState: String(form.cityState ?? "").trim() || null,
     postalCode: String(form.postalCode ?? "").trim() || null,

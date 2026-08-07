@@ -6,9 +6,11 @@ export async function fetchEmployees({ excludeLoginRoles = [] } = {}) {
   if (excludeLoginRoles.length > 0) {
     params.set("excludeLoginRoles", excludeLoginRoles.join(","));
   }
+  // Large page so client-side table filters keep working.
+  params.set("limit", "500");
   const query = params.toString();
   const data = await fetchJson(
-    query ? `/api/employees?${query}` : "/api/employees",
+    `/api/employees?${query}`,
     "Failed to load employees",
   );
   return (data.employees || []).map(mapEmployee);

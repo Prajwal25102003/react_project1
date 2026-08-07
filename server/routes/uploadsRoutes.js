@@ -39,6 +39,7 @@ router.post(
   '/leave-medical',
   requireAuth,
   requireActiveAccount,
+  requireRole('employee', 'hr', 'admin'),
   (req, res, next) => {
     leaveMedicalUpload.single('document')(req, res, (error) => {
       if (error) {
