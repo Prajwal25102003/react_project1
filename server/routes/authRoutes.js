@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   getMeHandler,
   getProfileHandler,
+  logoutHandler,
   signInHandler,
 } from '../controllers/authController.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
@@ -17,6 +18,7 @@ router.post(
   validateBody(signInSchema),
   signInHandler,
 )
+router.post('/logout', requireAuth, logoutHandler)
 router.get('/me', requireAuth, getMeHandler)
 router.get('/profile', requireAuth, getProfileHandler)
 

@@ -1,10 +1,13 @@
+import { canonicalizeUploadPath } from './uploadAccessToken.js'
+
 const MEDICAL_ATTACHMENT_URL =
   /^\/uploads\/medical-[A-Za-z0-9._-]+$/
 
 export const MAX_MEDICAL_ATTACHMENTS = 5
 
 export function isMedicalAttachmentUrl(url) {
-  return MEDICAL_ATTACHMENT_URL.test(String(url || '').trim())
+  const canonical = canonicalizeUploadPath(url)
+  return Boolean(canonical && MEDICAL_ATTACHMENT_URL.test(canonical))
 }
 
 /**
@@ -36,8 +39,9 @@ export function parseMedicalAttachments(raw) {
     }
   }
 
-  if (isMedicalAttachmentUrl(text)) {
-    return [{ url: text, name: '' }]
+  const legacy = canonicalizeUploadPath(text)
+  if (legacy && isMedicalAttachmentUrl(legacy)) {
+    return [{ url: legacy, name: '' }]
   }
 
   return []
@@ -45,12 +49,12 @@ export function parseMedicalAttachments(raw) {
 
 function normalizeAttachmentItem(item) {
   if (typeof item === 'string') {
-    const url = item.trim()
-    return isMedicalAttachmentUrl(url) ? { url, name: '' } : null
+    const url = canonicalizeUploadPath(item)
+    return url && isMedicalAttachmentUrl(url) ? { url, name: '' } : null
   }
   if (item && typeof item === 'object') {
-    const url = String(item.url || '').trim()
-    if (!isMedicalAttachmentUrl(url)) return null
+    const url = canonicalizeUploadPath(item.url)
+    if (!url || !isMedicalAttachmentUrl(url)) return null
     return {
       url,
       name: String(item.name || item.originalName || '').trim(),
@@ -64,7 +68,7 @@ export function serializeMedicalAttachments(list) {
   if (!attachments.length) return null
   return JSON.stringify(
     attachments.map(({ url, name }) => ({
-      url,
+      url: canonicalizeUploadPath(url) || url,
       name: name || '',
     })),
   )

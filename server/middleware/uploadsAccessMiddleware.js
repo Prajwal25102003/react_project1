@@ -1,25 +1,62 @@
 import path from 'path'
 import { verifyAuthToken } from './authMiddleware.js'
+import { findUserById, syncUserLoginRole } from '../models/authModel.js'
+import { canUserAccessUploadFile } from '../models/uploadsAccessModel.js'
 import { UPLOADS_DIR } from '../config/uploads.js'
+import { verifyUploadAccessSignature } from '../utils/uploadAccessToken.js'
 
 /**
  * Allow access to /uploads files with either:
- * - Authorization: Bearer <jwt>
- * - ?access_token=<jwt> (for <img> / <a> which cannot set headers)
+ * - Short-lived signed file token: ?exp=&sig= (for <img> / <a>)
+ * - Authorization: Bearer <jwt> plus per-file authorization
+ *
+ * Session JWTs in ?access_token= are no longer accepted.
  */
-export function requireUploadAccess(req, res, next) {
+export async function requireUploadAccess(req, res, next) {
+  const filename = path.basename(String(req.params.filename || '').trim())
+  if (!filename || filename === '.' || filename === '..') {
+    return res.status(400).json({ message: 'Invalid file path' })
+  }
+
+  const exp = req.query?.exp
+  const sig = req.query?.sig
+  if (exp != null && sig != null && String(sig).trim()) {
+    if (verifyUploadAccessSignature(filename, exp, sig)) {
+      return next()
+    }
+    return res.status(401).json({ message: 'Invalid or expired file link' })
+  }
+
   const header = req.headers.authorization || ''
   const [scheme, bearer] = header.split(' ')
-  const queryToken = String(req.query?.access_token || '').trim()
-  const token =
-    scheme === 'Bearer' && bearer ? bearer.trim() : queryToken
-
-  if (!token) {
+  if (scheme !== 'Bearer' || !bearer) {
     return res.status(401).json({ message: 'Authentication required' })
   }
 
   try {
-    verifyAuthToken(token)
+    const payload = verifyAuthToken(bearer.trim())
+    const dbUser = await findUserById(payload.sub)
+    if (!dbUser) {
+      return res.status(401).json({ message: 'User not found' })
+    }
+    const user = await syncUserLoginRole(dbUser)
+    let allowed = false
+    try {
+      allowed = await canUserAccessUploadFile(user, filename)
+    } catch (error) {
+      console.error(error)
+      return res.status(500).json({ message: 'Failed to authorize file access' })
+    }
+    if (!allowed) {
+      return res.status(403).json({ message: 'You do not have access to this file' })
+    }
+    req.user = {
+      id: user.id,
+      role: user.role,
+      employeeId: user.employeeId || null,
+      email: user.email,
+      name: user.name,
+    }
     return next()
   } catch {
     return res.status(401).json({ message: 'Invalid or expired token' })

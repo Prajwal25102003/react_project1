@@ -33,6 +33,11 @@ import {
   formatActorLabel,
 } from '../utils/activityCopy.js'
 import { formatDbError } from '../utils/formatDbError.js'
+import {
+  canonicalizeUploadPath,
+  signEmployeeAvatar,
+} from '../utils/uploadAccessToken.js'
+import { paginateArray, parsePagination } from '../utils/pagination.js'
 import { loginRoleForEmployee } from '../utils/loginRole.js'
 import { uniqueConstraintMessage } from '../utils/pgErrors.js'
 import {
@@ -95,7 +100,7 @@ function parseAdminPayload(body, { previous = null } = {}) {
   const avatar =
     avatarRaw === null || avatarRaw === undefined || avatarRaw === ''
       ? null
-      : String(avatarRaw).trim()
+      : canonicalizeUploadPath(avatarRaw)
   const country = String(body?.country ?? previous?.country ?? '').trim()
   const cityState = String(body?.cityState ?? previous?.cityState ?? '').trim()
   const postalCode = String(body?.postalCode ?? previous?.postalCode ?? '').trim()
@@ -158,7 +163,7 @@ function parseEmployeePayload(
   const avatar =
     avatarRaw === null || avatarRaw === undefined || avatarRaw === ''
       ? null
-      : String(avatarRaw).trim()
+      : canonicalizeUploadPath(avatarRaw)
   const country = String(body?.country ?? previous?.country ?? '').trim()
   const cityState = String(body?.cityState ?? previous?.cityState ?? '').trim()
   const postalCode = String(body?.postalCode ?? previous?.postalCode ?? '').trim()
@@ -287,7 +292,15 @@ export async function getEmployees(req, res) {
     }
 
     const employees = await findAllEmployees({ excludeLoginRoles })
-    res.json({ employees })
+    const page = parsePagination(req.query, { defaultLimit: 200, maxLimit: 500 })
+    const paged = paginateArray(employees.map(signEmployeeAvatar), page)
+    res.json({
+      employees: paged.rows,
+      total: paged.total,
+      limit: paged.limit,
+      offset: paged.offset,
+      hasMore: paged.hasMore,
+    })
   } catch (error) {
     res.status(500).json({
       message: formatDbError(error),
@@ -314,7 +327,9 @@ export async function getEmployeeById(req, res) {
       : null
 
     res.json({
-      employee: withLoginInfo(employee, loginUser, includeCredentials),
+      employee: signEmployeeAvatar(
+        withLoginInfo(employee, loginUser, includeCredentials),
+      ),
     })
   } catch (error) {
     res.status(500).json({
@@ -454,7 +469,9 @@ export async function createEmployeeHandler(req, res) {
       : null
 
     res.status(201).json({
-      employee: withLoginInfo(created, loginUser, includeCredentials),
+      employee: signEmployeeAvatar(
+        withLoginInfo(created, loginUser, includeCredentials),
+      ),
     })
   } catch (error) {
     await client.query('ROLLBACK')
@@ -674,7 +691,9 @@ export async function updateEmployeeHandler(req, res) {
       : null
 
     res.json({
-      employee: withLoginInfo(updated, loginUser, manageLogin),
+      employee: signEmployeeAvatar(
+        withLoginInfo(updated, loginUser, manageLogin),
+      ),
     })
   } catch (error) {
     const uniqueMessage = resolveEmployeeUniqueMessage(error)

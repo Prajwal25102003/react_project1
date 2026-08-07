@@ -13,9 +13,14 @@ import {
   isAccountActive,
   storeSession,
 } from "../models/authModel.js";
-import { fetchCurrentUser, signIn as signInRequest } from "../services/authService.js";
+import {
+  fetchCurrentUser,
+  signIn as signInRequest,
+  signOut as signOutRequest,
+} from "../services/authService.js";
 import { AUTH_UNAUTHORIZED_EVENT } from "../utils/authEvents.js";
 import { SESSION_REFRESH_EVENT } from "../utils/sessionRefresh.js";
+import { requestEmsRefresh } from "../utils/emsRefresh.js";
 
 const AuthContext = createContext(null);
 
@@ -91,6 +96,8 @@ export function useAuthProviderValue() {
     function handleVisibility() {
       if (document.visibilityState === "visible") {
         handleSessionRefresh();
+        // Re-sign avatars/attachments via fresh API payloads after long idle.
+        requestEmsRefresh();
       }
     }
 
@@ -102,10 +109,14 @@ export function useAuthProviderValue() {
     };
   }, [token, refreshUser]);
 
-  const logout = useCallback(() => {
-    clearSession();
-    setToken("");
-    setUser(null);
+  const logout = useCallback(async () => {
+    try {
+      await signOutRequest();
+    } finally {
+      clearSession();
+      setToken("");
+      setUser(null);
+    }
   }, []);
 
   useEffect(() => {

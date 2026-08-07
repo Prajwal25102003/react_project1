@@ -95,15 +95,20 @@ export function computeLeaveDeduction(
   }
 }
 
-export async function getEmployeeLeaveBalances(employeeId, client = null) {
+export async function getEmployeeLeaveBalances(
+  employeeId,
+  client = null,
+  { forUpdate = false } = {},
+) {
   const runner = client || { query }
+  const lock = forUpdate && client ? ' FOR UPDATE' : ''
   const result = await runner.query(
     `SELECT
       casual_leave_balance AS "casualLeaveBalance",
       sick_leave_balance AS "sickLeaveBalance",
       lop_days AS "lopDays"
      FROM employees
-     WHERE id = $1`,
+     WHERE id = $1${lock}`,
     [employeeId],
   )
   return result.rows[0] || null
@@ -136,7 +141,9 @@ export async function deductEmployeeLeaveBalances(
   leaveDays,
   client = null,
 ) {
-  const balances = await getEmployeeLeaveBalances(employeeId, client)
+  const balances = await getEmployeeLeaveBalances(employeeId, client, {
+    forUpdate: Boolean(client),
+  })
   if (!balances) {
     const error = new Error('Employee not found for leave balance deduction')
     error.code = 'EMPLOYEE_NOT_FOUND'

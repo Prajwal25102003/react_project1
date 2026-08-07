@@ -1,4 +1,5 @@
 import {
+  bumpUserTokenVersion,
   findUserByEmail,
   findUserById,
   syncUserLoginRole,
@@ -10,6 +11,10 @@ import { isEmployeeDepartmentHead } from '../models/departmentsModel.js'
 import { isNamedLeaveApprover } from '../models/leaveApprovalHierarchyModel.js'
 import { signAuthToken } from '../middleware/authMiddleware.js'
 import { formatDbError } from '../utils/formatDbError.js'
+import {
+  buildSignedUploadUrl,
+  signEmployeeAvatar,
+} from '../utils/uploadAccessToken.js'
 
 async function toPublicUserWithAvatar(user) {
   const publicUser = toPublicUser(user)
@@ -31,7 +36,9 @@ async function toPublicUserWithAvatar(user) {
 
   return {
     ...publicUser,
-    avatar: employee?.avatar || null,
+    avatar: employee?.avatar
+      ? buildSignedUploadUrl(employee.avatar)
+      : null,
     status: employee?.status || 'Active',
     isDepartmentHead,
     isNamedLeaveApprover: namedApprover,
@@ -61,9 +68,21 @@ export async function signInHandler(req, res) {
 
     const syncedUser = await syncUserLoginRole(user)
     const publicUser = await toPublicUserWithAvatar(syncedUser)
-    const token = signAuthToken(publicUser)
+    const token = signAuthToken({
+      ...publicUser,
+      tokenVersion: syncedUser.tokenVersion,
+    })
 
     res.json({ token, user: publicUser })
+  } catch (error) {
+    res.status(500).json({ message: formatDbError(error) })
+  }
+}
+
+export async function logoutHandler(req, res) {
+  try {
+    await bumpUserTokenVersion(req.user.id)
+    res.json({ message: 'Signed out' })
   } catch (error) {
     res.status(500).json({ message: formatDbError(error) })
   }
@@ -81,11 +100,17 @@ export async function getMeHandler(req, res) {
     const needsNewToken =
       syncedUser.role !== claims.role ||
       String(syncedUser.employeeId || '') !== String(claims.employeeId || '') ||
-      syncedUser.email !== claims.email
+      syncedUser.email !== claims.email ||
+      Number(syncedUser.tokenVersion ?? 0) !== Number(claims.tv ?? 0)
 
     res.json({
       user: publicUser,
-      token: needsNewToken ? signAuthToken(publicUser) : undefined,
+      token: needsNewToken
+        ? signAuthToken({
+            ...publicUser,
+            tokenVersion: syncedUser.tokenVersion,
+          })
+        : undefined,
     })
   } catch (error) {
     res.status(500).json({ message: formatDbError(error) })
@@ -124,7 +149,9 @@ export async function getProfileHandler(req, res) {
         email: publicUser.email,
         employeeId: publicUser.employeeId,
         location: employee?.department || 'Head Office',
-        avatar: employee?.avatar || null,
+        avatar: employee?.avatar
+          ? buildSignedUploadUrl(employee.avatar)
+          : null,
         personal: {
           firstName,
           lastName,
@@ -140,7 +167,7 @@ export async function getProfileHandler(req, res) {
           postalCode: displayOrDash(employee?.postalCode),
           taxId: displayOrDash(employee?.id),
         },
-        employee,
+        employee: employee ? signEmployeeAvatar(employee) : null,
       },
     })
   } catch (error) {

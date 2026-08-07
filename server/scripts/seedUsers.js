@@ -1,0 +1,173 @@
+/**
+ * Ensures users table exists and upserts login accounts.
+ *
+ * Password from SEED_PASSWORD in server/.env (min 12 chars recommended).
+ * Local fallback is allowed only when NODE_ENV is not production.
+ *
+ * Usage:
+ *   node server/scripts/seedUsers.js
+ *   node server/scripts/seedUsers.js --force   # DROP + recreate users table
+ */
+import bcrypt from 'bcrypt'
+import dotenv from 'dotenv'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import pool, { connectDatabase, query } from '../config/db.js'
+import { loginRoleForEmployee } from '../utils/loginRole.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: path.join(__dirname, '../.env') })
+
+const forceReset = process.argv.includes('--force')
+const isProduction = String(process.env.NODE_ENV || '').toLowerCase() === 'production'
+const DEMO_PASSWORD = String(process.env.SEED_PASSWORD || '').trim() || (
+  isProduction ? '' : 'ChangeMe-LocalOnly-12'
+)
+
+if (!DEMO_PASSWORD || DEMO_PASSWORD.length < 12) {
+  console.error(
+    'Set SEED_PASSWORD in server/.env (at least 12 characters) before seeding users.',
+  )
+  process.exit(1)
+}
+
+if (!process.env.SEED_PASSWORD) {
+  console.warn(
+    'SEED_PASSWORD unset — using a local-only default. Set SEED_PASSWORD for shared environments.',
+  )
+}
+
+async function resolveEmployeeUsers() {
+  const result = await query(
+    `SELECT
+       e.id,
+       e.name,
+       e.email,
+       d.name AS department_name,
+       d.head_employee_id AS head_employee_id
+     FROM employees e
+     LEFT JOIN departments d ON d.id = e.department_id
+     ORDER BY e.id ASC`,
+  )
+
+  return result.rows
+    .filter((row) => row.id !== 'EMP-1')
+    .map((row) => ({
+      email: row.email,
+      role: loginRoleForEmployee({
+        departmentName: row.department_name,
+        employeeId: row.id,
+        headEmployeeId: row.head_employee_id,
+      }),
+      name: row.name,
+      employeeId: row.id,
+    }))
+}
+
+async function resolveDemoUsers(employees) {
+  const byId = Object.fromEntries(employees.map((row) => [row.employeeId, row]))
+  const hrEmployee =
+    employees.find((row) => row.role === 'hr') || employees[0] || null
+  const selfEmployee =
+    byId['EMP-1001'] ||
+    employees.find((row) => row.employeeId !== hrEmployee?.employeeId) ||
+    employees[0] ||
+    null
+
+  const adminEmployeeResult = await query(
+    `SELECT id, name FROM employees WHERE id = 'EMP-1' LIMIT 1`,
+  )
+  const adminEmployee = adminEmployeeResult.rows[0] || null
+
+  return [
+    {
+      email: 'hr@company.com',
+      role: 'hr',
+      name: hrEmployee?.name || 'Siddharth Menon',
+      employeeId: hrEmployee?.employeeId || null,
+    },
+    {
+      email: 'arjuntejas@company.com',
+      role: 'employee',
+      name: selfEmployee?.name || 'Employee User',
+      employeeId: selfEmployee?.employeeId || null,
+    },
+    {
+      email: 'admin@company.com',
+      role: 'admin',
+      name: adminEmployee?.name || 'System Admin',
+      employeeId: adminEmployee?.id || 'EMP-1',
+    },
+  ]
+}
+
+async function ensureUsersTable() {
+  if (forceReset) {
+    console.warn('--force: dropping users table')
+    await query(`DROP TABLE IF EXISTS users CASCADE`)
+  }
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email VARCHAR(160) NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role VARCHAR(20) NOT NULL CHECK (role IN ('hr', 'employee', 'admin')),
+      employee_id VARCHAR(20) REFERENCES employees(id) ON DELETE SET NULL,
+      name VARCHAR(120) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `)
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_users_employee_id ON users (employee_id)
+  `)
+  await query(`
+    ALTER TABLE users DROP COLUMN IF EXISTS password_vault
+  `)
+}
+
+async function upsertUser(user, passwordHash) {
+  await query(
+    `INSERT INTO users (email, password_hash, role, employee_id, name)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (email) DO UPDATE SET
+       password_hash = EXCLUDED.password_hash,
+       role = EXCLUDED.role,
+       employee_id = EXCLUDED.employee_id,
+       name = EXCLUDED.name`,
+    [user.email, passwordHash, user.role, user.employeeId, user.name],
+  )
+}
+
+async function seed() {
+  await connectDatabase()
+  await ensureUsersTable()
+
+  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10)
+  const employeeUsers = await resolveEmployeeUsers()
+  const demoUsers = await resolveDemoUsers(employeeUsers)
+
+  for (const user of employeeUsers) {
+    await upsertUser(user, passwordHash)
+  }
+  console.log(`Seeded ${employeeUsers.length} employee login(s)`)
+
+  for (const user of demoUsers) {
+    await upsertUser(user, passwordHash)
+    console.log(`Seeded ${user.role}: ${user.email}`)
+  }
+
+  const reset = await query(
+    `UPDATE users SET password_hash = $1 RETURNING email`,
+    [passwordHash],
+  )
+  console.log(`Password set to ${DEMO_PASSWORD} for ${reset.rowCount} user(s)`)
+}
+
+seed()
+  .then(() => pool.end())
+  .catch(async (error) => {
+    console.error(error)
+    await pool.end()
+    process.exit(1)
+  })

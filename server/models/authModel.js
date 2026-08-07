@@ -13,8 +13,12 @@ function mapUser(row) {
     role: row.role,
     employeeId: row.employee_id || null,
     passwordHash: row.password_hash,
+    tokenVersion: Number(row.token_version ?? 0),
   }
 }
+
+const USER_COLUMNS =
+  'id, email, password_hash, role, employee_id, name, COALESCE(token_version, 0) AS token_version'
 
 export function toPublicUser(user) {
   if (!user) return null
@@ -33,7 +37,7 @@ export async function hashPassword(plainPassword) {
 
 export async function findUserByEmail(email) {
   const result = await query(
-    `SELECT id, email, password_hash, role, employee_id, name
+    `SELECT ${USER_COLUMNS}
      FROM users
      WHERE lower(email) = lower($1)
      LIMIT 1`,
@@ -44,7 +48,7 @@ export async function findUserByEmail(email) {
 
 export async function findUserById(id) {
   const result = await query(
-    `SELECT id, email, password_hash, role, employee_id, name
+    `SELECT ${USER_COLUMNS}
      FROM users
      WHERE id = $1
      LIMIT 1`,
@@ -55,7 +59,8 @@ export async function findUserById(id) {
 
 export async function findUserByEmployeeId(employeeId) {
   const result = await query(
-    `SELECT u.id, u.email, u.password_hash, u.role, u.employee_id, u.name
+    `SELECT u.id, u.email, u.password_hash, u.role, u.employee_id, u.name,
+            COALESCE(u.token_version, 0) AS token_version
      FROM users u
      LEFT JOIN employees e ON e.id = u.employee_id
      WHERE u.employee_id = $1
@@ -80,13 +85,25 @@ export async function findUserByEmployeeId(employeeId) {
 export async function findUsersByEmployeeId(employeeId) {
   if (!employeeId) return []
   const result = await query(
-    `SELECT id, email, password_hash, role, employee_id, name
+    `SELECT ${USER_COLUMNS}
      FROM users
      WHERE employee_id = $1
      ORDER BY id ASC`,
     [employeeId],
   )
   return result.rows.map(mapUser)
+}
+
+/** Invalidate all JWTs for this user (logout / password change). */
+export async function bumpUserTokenVersion(userId) {
+  const result = await query(
+    `UPDATE users
+     SET token_version = COALESCE(token_version, 0) + 1
+     WHERE id = $1
+     RETURNING ${USER_COLUMNS}`,
+    [userId],
+  )
+  return mapUser(result.rows[0])
 }
 
 /**
@@ -102,7 +119,7 @@ export async function createEmployeeUser(
   const result = await runner.query(
     `INSERT INTO users (email, password_hash, role, employee_id, name)
      VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, email, password_hash, role, employee_id, name`,
+     RETURNING ${USER_COLUMNS}`,
     [email, passwordHash, loginRole, employeeId, name],
   )
   return mapUser(result.rows[0])
@@ -154,10 +171,24 @@ export async function updateEmployeeUserCredentials(
   // Primary account: full credential update.
   const result = await query(
     `UPDATE users
-     SET email = $2, name = $3, password_hash = $4, role = $5
+     SET email = $2,
+         name = $3,
+         password_hash = $4,
+         role = $5,
+         token_version = CASE
+           WHEN $6::boolean THEN COALESCE(token_version, 0) + 1
+           ELSE COALESCE(token_version, 0)
+         END
      WHERE id = $1
-     RETURNING id, email, password_hash, role, employee_id, name`,
-    [primary.id, nextEmail, nextName, nextHash, nextRole],
+     RETURNING ${USER_COLUMNS}`,
+    [
+      primary.id,
+      nextEmail,
+      nextName,
+      nextHash,
+      nextRole,
+      passwordHash !== undefined,
+    ],
   )
 
   // Keep duplicate logins for the same employee on the same role.

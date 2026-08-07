@@ -10,8 +10,6 @@ build
 server/.env
 server/uploads/*
 !server/uploads/.gitkeep
-server/scripts/
-server/sql/
 *.local
 .DS_Store
 .cursor/mcp.json

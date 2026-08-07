@@ -55,7 +55,14 @@ import { formatDbError } from '../utils/formatDbError.js'
 import {
   serializeMedicalAttachments,
   validateMedicalAttachmentsInput,
+  parseMedicalAttachments,
 } from '../utils/medicalAttachments.js'
+import { signLeaveAttachmentUrls } from '../utils/uploadAccessToken.js'
+import {
+  assertMedicalAttachmentsOwnedByUser,
+  linkUploadFilesToLeaveRequest,
+} from '../models/uploadFilesModel.js'
+import { paginateArray, parsePagination } from '../utils/pagination.js'
 const LEAVE_TYPES = new Set([
   'Sick Leave',
   'Casual Leave',
@@ -227,7 +234,24 @@ function parseLeavePayload(body) {
 async function withHistory(leaveRequest) {
   if (!leaveRequest) return null
   const approvalHistory = await findLeaveApprovalHistory(leaveRequest.id)
-  return { ...leaveRequest, approvalHistory }
+  return signLeaveAttachmentUrls({ ...leaveRequest, approvalHistory })
+}
+
+function withSignedLeaveList(leaveRequests) {
+  return (leaveRequests || []).map(signLeaveAttachmentUrls)
+}
+
+function sendLeaveList(res, leaveRequests, req, scope) {
+  const page = parsePagination(req.query, { defaultLimit: 200, maxLimit: 500 })
+  const paged = paginateArray(withSignedLeaveList(leaveRequests), page)
+  return res.json({
+    leaveRequests: paged.rows,
+    total: paged.total,
+    limit: paged.limit,
+    offset: paged.offset,
+    hasMore: paged.hasMore,
+    scope,
+  })
 }
 
 async function canViewLeaveRequest(req, existing) {
@@ -280,7 +304,7 @@ export async function getLeaveRequests(req, res) {
         })
       }
       const leaveRequests = await findAllLeaveRequests()
-      return res.json({ leaveRequests, scope: "admin" })
+      return sendLeaveList(res, leaveRequests, req, 'admin')
     }
 
     if (scope === 'mine' || (!scope && !canApprove)) {
@@ -290,7 +314,7 @@ export async function getLeaveRequests(req, res) {
         })
       }
       const leaveRequests = await findLeaveRequestsByEmployeeId(employeeId)
-      return res.json({ leaveRequests, scope: 'mine' })
+      return sendLeaveList(res, leaveRequests, req, 'mine')
     }
 
     if (scope === 'approvals' || (!scope && canApprove && asHr)) {
@@ -303,7 +327,7 @@ export async function getLeaveRequests(req, res) {
         role: asHr ? 'hr' : role,
         employeeId,
       })
-      return res.json({ leaveRequests, scope: 'approvals' })
+      return sendLeaveList(res, leaveRequests, req, 'approvals')
     }
 
     if (scope === 'unified') {
@@ -319,18 +343,15 @@ export async function getLeaveRequests(req, res) {
         isHead,
         role,
       })
-      return res.json({ leaveRequests, scope: 'unified' })
+      return sendLeaveList(res, leaveRequests, req, 'unified')
     }
 
     if (asHr) {
-      return res.json({
-        leaveRequests: await findAllLeaveRequests(),
-        scope: 'all',
-      })
+      return sendLeaveList(res, await findAllLeaveRequests(), req, 'all')
     }
 
     const leaveRequests = await findLeaveRequestsVisibleToEmployee(employeeId)
-    return res.json({ leaveRequests, scope: 'visible' })
+    return sendLeaveList(res, leaveRequests, req, 'visible')
   } catch (error) {
     res.status(500).json({ message: formatDbError(error) })
   }
@@ -373,6 +394,17 @@ export async function createLeaveRequestHandler(req, res) {
     const { errors, leaveRequest } = parseLeavePayload(body)
     if (errors.length > 0) {
       return res.status(400).json({ message: errors.join('; ') })
+    }
+
+    if (leaveRequest.leaveType === 'Medical Leave' && leaveRequest.attachmentUrl) {
+      const attachments = parseMedicalAttachments(leaveRequest.attachmentUrl)
+      const ownership = await assertMedicalAttachmentsOwnedByUser(
+        req.user.id,
+        attachments,
+      )
+      if (!ownership.ok) {
+        return res.status(400).json({ message: ownership.message })
+      }
     }
 
     const employee = await findEmployeeById(leaveRequest.employeeId)
@@ -479,6 +511,14 @@ export async function createLeaveRequestHandler(req, res) {
     const id = await generateNextLeaveRequestId()
     const actor = await resolveActorFromRequest(req)
     const created = await createLeaveRequest({ ...leaveRequest, id })
+
+    if (created.leaveType === 'Medical Leave' && created.attachmentUrl) {
+      const attachments = parseMedicalAttachments(created.attachmentUrl)
+      await linkUploadFilesToLeaveRequest(
+        created.id,
+        attachments.map((item) => item.url),
+      )
+    }
 
     await createLeaveApprovalHistoryEntry({
       leaveRequestId: created.id,
