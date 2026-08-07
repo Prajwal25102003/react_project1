@@ -150,6 +150,7 @@ export function useEmployees() {
             {
               id: "department",
               label: "Department",
+              mobileFullWidth: true,
               options: departmentFilterOptions,
             },
           ]

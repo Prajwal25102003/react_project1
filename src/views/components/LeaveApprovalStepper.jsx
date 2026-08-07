@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 function StepIcon({ state, index }) {
   if (state === "completed") {
     return (
@@ -88,7 +90,62 @@ function labelClass(state) {
   return "text-gray-400";
 }
 
+function chipShellClass(state) {
+  if (state === "completed") {
+    return "border-success-200 bg-success-50";
+  }
+  if (state === "current") {
+    return "border-success-200 bg-success-50";
+  }
+  if (state === "rejected" || state === "inactive") {
+    return "border-error-200 bg-error-50";
+  }
+  if (state === "cancelled") {
+    return "border-warning-200 bg-warning-50";
+  }
+  return "border-gray-200 bg-gray-50";
+}
+
+function chipPrefix(state, label) {
+  if (state === "rejected") return "Rejected";
+  if (state === "inactive") return "Unavailable";
+  if (state === "cancelled") {
+    return label === "Cancelled" ? null : "Cancelled";
+  }
+  if (state === "current") return "Awaiting";
+  return null;
+}
+
+/** Prefer outcome / current action over completed “Requested”. */
+function defaultFocusIndex(steps) {
+  const failed = steps.findIndex((step) =>
+    ["rejected", "inactive", "cancelled"].includes(step.state),
+  );
+  if (failed >= 0) return failed;
+
+  const current = steps.findIndex((step) => step.state === "current");
+  if (current >= 0) return current;
+
+  let lastCompleted = 0;
+  steps.forEach((step, index) => {
+    if (step.state === "completed") lastCompleted = index;
+  });
+  return lastCompleted;
+}
+
+function stepAriaLabel(step) {
+  const prefix = chipPrefix(step.state, step.label);
+  return [prefix, step.label, step.name].filter(Boolean).join(" · ");
+}
+
 function LeaveApprovalStepper({ steps = [] }) {
+  const defaultIndex = defaultFocusIndex(steps);
+  const [focusIndex, setFocusIndex] = useState(defaultIndex);
+
+  useEffect(() => {
+    setFocusIndex(defaultIndex);
+  }, [defaultIndex, steps.length]);
+
   if (!steps.length) return null;
 
   const columnClass =
@@ -105,6 +162,15 @@ function LeaveApprovalStepper({ steps = [] }) {
               : "grid-cols-7";
 
   const inactiveError = steps.find((step) => step.error)?.error || null;
+  const safeFocusIndex = steps[focusIndex] ? focusIndex : 0;
+  const focusedStep = steps[safeFocusIndex];
+  const stepPrefix = chipPrefix(focusedStep.state, focusedStep.label);
+  const stepTitle = [stepPrefix, focusedStep.label, focusedStep.name]
+    .filter(Boolean)
+    .join(" · ");
+  // Map focus across the track so edge chips stay inside the form.
+  const chipAlignPct =
+    steps.length <= 1 ? 0 : (safeFocusIndex / (steps.length - 1)) * 100;
 
   return (
     <div
@@ -115,6 +181,7 @@ function LeaveApprovalStepper({ steps = [] }) {
       <div className="flex items-center px-1">
         {steps.map((step, index) => {
           const isLast = index === steps.length - 1;
+          const isFocused = index === safeFocusIndex;
           return (
             <div key={step.id} className="flex min-w-0 flex-1 items-center">
               <div className="flex w-full items-center">
@@ -126,7 +193,21 @@ function LeaveApprovalStepper({ steps = [] }) {
                 ) : (
                   <span className="flex-1" aria-hidden="true" />
                 )}
-                <StepIcon state={step.state} index={index} />
+                <button
+                  type="button"
+                  className="relative shrink-0 rounded-full focus:outline-hidden sm:pointer-events-none sm:cursor-default"
+                  aria-label={stepAriaLabel(step)}
+                  aria-pressed={isFocused}
+                  onClick={() => setFocusIndex(index)}
+                >
+                  <StepIcon state={step.state} index={index} />
+                  <span
+                    className={`absolute -bottom-2 left-1/2 h-0.5 w-4 -translate-x-1/2 rounded-full transition-opacity sm:hidden ${
+                      isFocused ? "bg-gray-700 opacity-100" : "opacity-0"
+                    }`}
+                    aria-hidden="true"
+                  />
+                </button>
                 {!isLast ? (
                   <span
                     className={`h-0.5 flex-1 ${connectorClass(step.state)}`}
@@ -141,19 +222,68 @@ function LeaveApprovalStepper({ steps = [] }) {
         })}
       </div>
 
-      {/* Labels in equal columns so text never overlaps */}
-      <ol className={`mt-2.5 grid gap-x-1 ${columnClass}`}>
-        {steps.map((step) => (
-          <li key={`${step.id}-label`} className="min-w-0 text-center">
+      {/* Mobile: chip under focused step, clamped inside the form */}
+      <div className="relative mt-3 min-h-8 sm:hidden">
+        <div
+          className={`absolute top-0 inline-flex max-w-full items-center gap-1.5 truncate rounded-full border px-3 py-1 ${chipShellClass(focusedStep.state)}`}
+          style={{
+            left: `${chipAlignPct}%`,
+            transform: `translateX(-${chipAlignPct}%)`,
+          }}
+          title={stepTitle}
+        >
+          {stepPrefix ? (
             <span
-              className={`block whitespace-normal break-words text-[10px] font-semibold leading-tight sm:text-theme-xs ${labelClass(step.state)}`}
+              className={`shrink-0 text-theme-xs font-semibold ${labelClass(focusedStep.state)}`}
+            >
+              {stepPrefix}
+            </span>
+          ) : null}
+          {stepPrefix ? (
+            <span
+              className="shrink-0 text-theme-xs text-gray-300"
+              aria-hidden="true"
+            >
+              ·
+            </span>
+          ) : null}
+          <span
+            className={`min-w-0 truncate text-theme-xs font-semibold ${labelClass(focusedStep.state)}`}
+          >
+            {focusedStep.label}
+          </span>
+          {focusedStep.name ? (
+            <>
+              <span
+                className="shrink-0 text-theme-xs text-gray-300"
+                aria-hidden="true"
+              >
+                ·
+              </span>
+              <span className="min-w-0 truncate text-theme-xs font-medium text-gray-500">
+                {focusedStep.name}
+              </span>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Desktop / tablet: labels under each step */}
+      <ol className={`mt-2.5 hidden gap-x-1 sm:grid ${columnClass}`}>
+        {steps.map((step) => (
+          <li
+            key={`${step.id}-label`}
+            className="min-w-0 overflow-hidden text-center"
+          >
+            <span
+              className={`block truncate px-0.5 text-[10px] font-semibold leading-tight sm:text-theme-xs ${labelClass(step.state)}`}
               title={step.label}
             >
               {step.label}
             </span>
             {step.name ? (
               <span
-                className="mt-0.5 block truncate text-[10px] font-medium leading-tight text-gray-500 sm:text-theme-xs"
+                className="mt-0.5 block truncate px-0.5 text-[10px] font-medium leading-tight text-gray-500 sm:text-theme-xs"
                 title={step.name}
               >
                 {step.name}

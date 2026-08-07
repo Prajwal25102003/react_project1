@@ -53,7 +53,7 @@ function UpcomingHolidays({ holidays }) {
         <div
           ref={scrollRef}
           onMouseDown={handleMouseDown}
-          className={`no-scrollbar flex touch-pan-x gap-2 overflow-x-auto ${
+          className={`custom-scrollbar flex touch-pan-x gap-2 overflow-x-auto pb-1.5 ${
             dragging
               ? "cursor-grabbing select-none"
               : "cursor-grab"

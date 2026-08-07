@@ -2,7 +2,7 @@ import { bannerNotificationTitle } from "../../models/dashboardModel.js";
 
 const STACK_DEPTH = 3;
 const PEEK_PX = 4;
-const CARD_H = 44; // h-11
+const CARD_H = 44; // h-11 — desktop stack only
 
 /** Single TailAdmin error/red tone for the dashboard notification stack. */
 const STACK_TONE =
@@ -29,11 +29,34 @@ function CloseIcon() {
   );
 }
 
+function AlertActions({ remaining, onDismiss, front }) {
+  return (
+    <>
+      {remaining > 0 ? (
+        <span className="shrink-0 rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-error-700">
+          +{remaining}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onDismiss?.(front);
+        }}
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-error-500/70 transition hover:bg-white/70 hover:text-error-700 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-error-500/30"
+        aria-label="Dismiss notification"
+      >
+        <CloseIcon />
+      </button>
+    </>
+  );
+}
+
 /**
  * Full-width stacked unread notifications.
- * Latest on top; older cards sit behind with a thin layer peeking below.
- * Clicking the front card opens/acknowledges it (closes the banner);
- * the X only dismisses without navigating.
+ * Mobile: multi-line content that fits the screen.
+ * Desktop: compact single-line stack with peek layers.
  */
 function DashboardNotifications({ messages = [], onDismiss, onOpen }) {
   const list = messages || [];
@@ -45,96 +68,110 @@ function DashboardNotifications({ messages = [], onDismiss, onOpen }) {
   const peekCount = Math.max(0, stack.length - 1);
   const stackHeight = CARD_H + peekCount * PEEK_PX;
   const isInteractive = Boolean(onOpen);
+  const title = bannerNotificationTitle(front);
+
+  const openHandlers = isInteractive
+    ? {
+        role: "button",
+        tabIndex: 0,
+        onClick: () => onOpen?.(front),
+        onKeyDown: (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpen?.(front);
+          }
+        },
+      }
+    : {};
 
   return (
-    <div
-      className="relative w-full min-w-0 flex-1 self-center"
-      style={{ height: `${stackHeight}px` }}
-      aria-live="polite"
-    >
-      {stack.map((message, depth) => {
-        const isFront = depth === 0;
+    <div className="relative w-full min-w-0" aria-live="polite">
+      {/* Mobile: wrap title + description to fit the screen */}
+      <div
+        {...openHandlers}
+        className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 shadow-theme-xs sm:hidden ${STACK_TONE}${
+          isInteractive
+            ? " cursor-pointer transition hover:brightness-[0.98] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-error-500/30"
+            : ""
+        }`}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-theme-sm font-medium leading-snug break-words">
+            {title}
+          </p>
+          {front.description ? (
+            <p className="mt-0.5 text-theme-xs font-normal leading-snug break-words opacity-80">
+              {front.description}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+          <AlertActions
+            remaining={remaining}
+            onDismiss={onDismiss}
+            front={front}
+          />
+        </div>
+      </div>
 
-        return (
-          <div
-            key={message.id}
-            className={`absolute transition-all duration-300 ease-out ${
-              isFront ? "" : "pointer-events-none"
-            }`}
-            style={{
-              // Front at top; older layers step down so a thin edge shows below
-              top: `${depth * PEEK_PX}px`,
-              left: isFront ? 0 : `${depth * 2}px`,
-              right: isFront ? 0 : `${depth * 2}px`,
-              zIndex: STACK_DEPTH - depth,
-              height: `${CARD_H}px`,
-            }}
-            aria-hidden={!isFront}
-          >
+      {/* Desktop / tablet: compact stacked cards */}
+      <div
+        className="relative hidden w-full min-w-0 sm:block"
+        style={{ height: `${stackHeight}px` }}
+      >
+        {stack.map((message, depth) => {
+          const isFront = depth === 0;
+
+          return (
             <div
-              role={isFront && isInteractive ? "button" : undefined}
-              tabIndex={isFront && isInteractive ? 0 : undefined}
-              onClick={
-                isFront && isInteractive
-                  ? () => onOpen?.(front)
-                  : undefined
-              }
-              onKeyDown={
-                isFront && isInteractive
-                  ? (event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        onOpen?.(front);
-                      }
-                    }
-                  : undefined
-              }
-              className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 shadow-theme-xs ${STACK_TONE}${
-                isFront && isInteractive
-                  ? " cursor-pointer transition hover:brightness-[0.98] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-error-500/30"
-                  : ""
+              key={message.id}
+              className={`absolute transition-all duration-300 ease-out ${
+                isFront ? "" : "pointer-events-none"
               }`}
+              style={{
+                top: `${depth * PEEK_PX}px`,
+                left: isFront ? 0 : `${depth * 2}px`,
+                right: isFront ? 0 : `${depth * 2}px`,
+                zIndex: STACK_DEPTH - depth,
+                height: `${CARD_H}px`,
+              }}
+              aria-hidden={!isFront}
             >
-              {isFront ? (
-                <>
-                  <p className="min-w-0 flex-1 truncate text-theme-sm font-medium">
+              <div
+                {...(isFront ? openHandlers : {})}
+                className={`flex h-11 w-full items-center gap-2 rounded-xl border px-3 shadow-theme-xs ${STACK_TONE}${
+                  isFront && isInteractive
+                    ? " cursor-pointer transition hover:brightness-[0.98] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-error-500/30"
+                    : ""
+                }`}
+              >
+                {isFront ? (
+                  <>
+                    <p className="min-w-0 flex-1 truncate text-theme-sm font-medium">
+                      {title}
+                      {front.description ? (
+                        <span className="font-normal opacity-80">
+                          {" "}
+                          — {front.description}
+                        </span>
+                      ) : null}
+                    </p>
+                    <AlertActions
+                      remaining={remaining}
+                      onDismiss={onDismiss}
+                      front={front}
+                    />
+                  </>
+                ) : (
+                  <span className="sr-only">
                     {bannerNotificationTitle(message)}
-                    {message.description ? (
-                      <span className="font-normal opacity-80">
-                        {" "}
-                        — {message.description}
-                      </span>
-                    ) : null}
-                  </p>
-
-                  {remaining > 0 ? (
-                    <span className="shrink-0 rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-medium text-error-700">
-                      +{remaining}
-                    </span>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onDismiss?.(front);
-                    }}
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-error-500/70 transition hover:bg-white/70 hover:text-error-700 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-error-500/30"
-                    aria-label="Dismiss notification"
-                  >
-                    <CloseIcon />
-                  </button>
-                </>
-              ) : (
-                <span className="sr-only">
-                  {bannerNotificationTitle(message)}
-                </span>
-              )}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
