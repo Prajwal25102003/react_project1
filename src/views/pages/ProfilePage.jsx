@@ -11,23 +11,61 @@ function InfoField({ label, value }) {
   );
 }
 
+function MobileBackButton({ onBack }) {
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      className="mb-3 inline-flex items-center gap-1.5 text-sm text-gray-800 lg:hidden"
+      aria-label="Go back"
+    >
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 20 20"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        <path
+          d="M12.5 15.833L6.667 10l5.833-5.833"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      Back
+    </button>
+  );
+}
+
 function ProfilePage() {
-  const { profile, loading, error } = useProfile();
+  const { profile, loading, error, handleBack } = useProfile();
 
   if (loading) {
-    return <p className="text-theme-sm text-gray-500">Loading profile…</p>;
+    return (
+      <>
+        <MobileBackButton onBack={handleBack} />
+        <p className="text-theme-sm text-gray-500">Loading profile…</p>
+      </>
+    );
   }
 
   if (error || !profile) {
     return (
-      <p className="text-theme-sm text-error-600">
-        {error || "Profile not available"}
-      </p>
+      <>
+        <MobileBackButton onBack={handleBack} />
+        <p className="text-theme-sm text-error-600">
+          {error || "Profile not available"}
+        </p>
+      </>
     );
   }
 
   return (
     <>
+      <MobileBackButton onBack={handleBack} />
       <Breadcrumb pageName="Profile" />
       <div className="min-w-0 max-w-full overflow-x-hidden rounded-2xl border border-gray-200 bg-white p-5 lg:p-6">
         <div className="mb-6 rounded-2xl border border-gray-200 p-5 lg:p-6">
