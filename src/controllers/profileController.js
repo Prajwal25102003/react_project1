@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { mapAuthProfile } from "../models/profileModel.js";
 import { fetchAuthProfile } from "../services/authService.js";
 
 export function useProfile() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,9 +35,18 @@ export function useProfile() {
     };
   }, []);
 
+  function handleBack() {
+    if (location.key !== "default") {
+      navigate(-1);
+      return;
+    }
+    navigate("/dashboard");
+  }
+
   return {
     profile,
     loading,
     error,
+    handleBack,
   };
 }
